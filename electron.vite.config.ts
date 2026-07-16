@@ -1,5 +1,6 @@
 import { resolve } from 'path'
-import { defineConfig, type Plugin } from 'electron-vite'
+import { defineConfig } from 'electron-vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import JavaScriptObfuscator from 'javascript-obfuscator'
@@ -13,7 +14,6 @@ function obfuscatePlugin(): Plugin {
       for (const fileName in bundle) {
         const file = bundle[fileName]
         
-        // चेक करें कि क्या यह एक OutputChunk है और इसमें कोड है
         if (fileName.endsWith('.js') && file.type === 'chunk') {
           const chunk = file as OutputChunk
           
@@ -43,10 +43,6 @@ export default defineConfig({
     build: {
       sourcemap: false,
       minify: true,
-      bytecode: {
-        transformArrowFunctions: true,
-        removeBundleJS: true
-      },
       rollupOptions: {
         external: ['vosk-koffi']
       }
@@ -55,11 +51,7 @@ export default defineConfig({
   preload: {
     build: {
       sourcemap: false,
-      minify: true,
-      bytecode: {
-        transformArrowFunctions: true,
-        removeBundleJS: true
-      }
+      minify: true
     }
   },
   renderer: {
@@ -84,3 +76,4 @@ export default defineConfig({
     }
   }
 })
+            
