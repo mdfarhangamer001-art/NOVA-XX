@@ -4,6 +4,7 @@ import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session, protocol,
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { pathToFileURL } from 'url'
+import { cpus, totalmem } from 'os'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import registerSystemHandlers from './lib/system'
@@ -18,6 +19,53 @@ let mainWindowRef: BrowserWindow | null = null
 // Set once the operator explicitly quits from the tray menu, so the
 // window-all-closed / close handlers know not to just hide the window.
 let isQuitting = false
+
+// ---- Low-end / weak-GPU hardware compatibility --------------------------
+// Transparent + frameless + fullscreen windows (used by the UI) are GPU
+// composited. On low-RAM machines, low core-count CPUs, or old/Intel
+// integrated GPUs, this is the #1 cause of a black screen on launch or a
+// renderer crash after a few seconds. Instead of requiring the operator to
+// manually set NOVA_SAFE_MODE every time, we now:
+//   1. Auto-detect likely low-end hardware and enable safe mode by default.
+//   2. If the renderer still crashes / fails to load once, automatically
+//      relaunch exactly one time in safe mode before giving up and showing
+//      a diagnostic dialog (instead of looping forever or just going black).
+// None of this touches the UI/renderer code or visual design — it only
+// changes how the underlying Chromium process renders.
+const LOW_END_MEM_BYTES = 4 * 1024 * 1024 * 1024 // 4GB
+const LOW_END_CPU_CORES = 2
+
+const isLikelyLowEndMachine = totalmem() < LOW_END_MEM_BYTES || cpus().length <= LOW_END_CPU_CORES
+const forcedSafeMode = process.argv.includes('--nova-safe-mode') || !!process.env['NOVA_SAFE_MODE']
+const alreadyAttemptedRecovery = process.argv.includes('--nova-recovered')
+const safeModeActive = forcedSafeMode || isLikelyLowEndMachine
+
+if (safeModeActive) {
+  console.log(
+    `[NOVA-X] Safe mode active (forced=${forcedSafeMode}, lowEndDetected=${isLikelyLowEndMachine}, ` +
+      `mem=${(totalmem() / 1024 ** 3).toFixed(1)}GB, cores=${cpus().length}). Disabling hardware acceleration.`
+  )
+  app.disableHardwareAcceleration()
+  // Extra safety net specifically for transparent-window black-screen
+  // issues on old/Intel GPUs — falls back to software compositing.
+  app.commandLine.appendSwitch('disable-gpu-compositing')
+}
+
+// Attempts a single automatic relaunch into safe mode after a real render
+// failure. Returns true if it handled the relaunch (caller should stop and
+// let the app exit), false if we've already tried that and should instead
+// show the operator a diagnostic dialog.
+function tryAutoRecoverInSafeMode(): boolean {
+  if (safeModeActive || alreadyAttemptedRecovery) {
+    return false
+  }
+  console.warn('[NOVA-X] Renderer failure detected — auto-relaunching once in safe mode.')
+  const extraArgs = process.argv.slice(1).filter((a) => a !== '--nova-safe-mode' && a !== '--nova-recovered')
+  app.relaunch({ args: [...extraArgs, '--nova-safe-mode', '--nova-recovered'] })
+  app.exit(0)
+  return true
+}
+// ---------------------------------------------------------------------
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -41,6 +89,17 @@ function createWindow(): void {
     mainWindow.show()
   })
 
+  // Fallback in case 'ready-to-show' never fires (seen on some weak/old
+  // GPUs where the first paint silently stalls). Forces the window visible
+  // instead of leaving the operator staring at nothing indefinitely.
+  const readyTimeout = setTimeout(() => {
+    if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.warn('[NOVA-X] "ready-to-show" did not fire in time — forcing window visible.')
+      mainWindow.show()
+    }
+  }, 8000)
+  mainWindow.once('ready-to-show', () => clearTimeout(readyTimeout))
+
   // Instead of quitting, hide to the system tray so the wake-word
   // engine (which only runs while the window is alive) can keep
   // listening in the background and bring IRIS back on command.
@@ -59,28 +118,33 @@ function createWindow(): void {
   // ---- Black-screen diagnostics -------------------------------------
   // With transparent:true + frame:false, any load failure or renderer
   // crash previously showed as an unexplained black window with zero
-  // signal to the operator. These handlers surface the real cause.
+  // signal to the operator. These handlers surface the real cause, and
+  // now also attempt one automatic safe-mode recovery before bothering
+  // the operator with a dialog.
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     console.error(
       `[NOVA-X] Renderer failed to load (code ${errorCode}): ${errorDescription} — url: ${validatedURL}`
     )
+    if (tryAutoRecoverInSafeMode()) return
     mainWindow.show()
     dialog.showErrorBox(
       'NOVA-X failed to load its interface',
       `The app window could not load its UI and would otherwise appear as a black screen.\n\n` +
         `Error ${errorCode}: ${errorDescription}\nURL: ${validatedURL}\n\n` +
-        `Most common cause: the renderer was never built (run "npm run build" / "electron-vite build" before packaging), ` +
-        `or "out/renderer/index.html" is missing/corrupted. Set NOVA_DEBUG=1 to auto-open DevTools on next launch.`
+        `An automatic safe-mode retry already ran and still failed. Most common remaining cause: the renderer ` +
+        `was never built (run "npm run build" / "electron-vite build" before packaging), or ` +
+        `"out/renderer/index.html" is missing/corrupted. Set NOVA_DEBUG=1 to open DevTools on next launch.`
     )
   })
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[NOVA-X] Renderer process crashed:', details.reason, details.exitCode)
+    if (tryAutoRecoverInSafeMode()) return
     dialog.showErrorBox(
       'NOVA-X renderer crashed',
       `The interface process crashed (reason: ${details.reason}). This also shows up as a black screen. ` +
-        `If this keeps happening, try launching with NOVA_DEBUG=1 to inspect the console, or with ` +
-        `NOVA_SAFE_MODE=1 to disable GPU/hardware acceleration (helps on some Intel/older GPU drivers).`
+        `An automatic safe-mode retry already ran and it still crashed — this machine's GPU/drivers may need ` +
+        `attention. You can also try launching with NOVA_DEBUG=1 to inspect the console.`
     )
   })
 
@@ -139,14 +203,6 @@ function createTray(): void {
   ])
   tray.setContextMenu(contextMenu)
   tray.on('click', () => showAndFocusWindow())
-}
-
-// Transparent, GPU-composited windows are the single most common cause of a
-// black screen on first launch on laptops with older/Intel integrated GPUs
-// or outdated drivers. NOVA_SAFE_MODE=1 lets the operator rule this in/out
-// without editing code.
-if (process.env['NOVA_SAFE_MODE']) {
-  app.disableHardwareAcceleration()
 }
 
 app.whenReady().then(() => {
