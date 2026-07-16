@@ -8,8 +8,10 @@ import registerNotesHandlers from './lib/notes'
 import registerGalleryHandlers from './lib/gallery'
 import registerAdbHandlers from './lib/adb'
 
+let mainWindow: BrowserWindow | null = null
+
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
     show: false,
@@ -71,6 +73,28 @@ app.whenReady().then(() => {
   registerNotesHandlers(ipcMain)
   registerGalleryHandlers(ipcMain)
   registerAdbHandlers(ipcMain)
+
+  ipcMain.removeAllListeners('window-min')
+  ipcMain.on('window-min', () => {
+    mainWindow?.minimize()
+  })
+
+  ipcMain.removeAllListeners('window-max')
+  ipcMain.on('window-max', () => {
+    if (!mainWindow) return
+    if (mainWindow.isMaximized() || mainWindow.isFullScreen()) {
+      if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false)
+      mainWindow.unmaximize()
+    } else {
+      mainWindow.maximize()
+    }
+  })
+
+  ipcMain.removeAllListeners('window-close')
+  ipcMain.on('window-close', () => {
+    mainWindow?.close()
+  })
+
   createWindow()
 
   app.on('activate', function () {
