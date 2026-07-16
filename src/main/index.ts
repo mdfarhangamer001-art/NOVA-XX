@@ -2,7 +2,6 @@ import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session } from 'el
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import registerSystemHandlers from './lib/system'
 import registerVaultHandlers from './lib/vault'
 import registerNotesHandlers from './lib/notes'
 import registerGalleryHandlers from './lib/gallery'
@@ -68,7 +67,6 @@ app.whenReady().then(() => {
       })
   })
 
-  registerSystemHandlers(ipcMain)
   registerVaultHandlers(ipcMain)
   registerNotesHandlers(ipcMain)
   registerGalleryHandlers(ipcMain)
