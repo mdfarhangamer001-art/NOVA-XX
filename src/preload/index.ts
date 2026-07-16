@@ -14,7 +14,9 @@ if (process.contextIsolated) {
     })
     contextBridge.exposeInMainWorld('api', api)
     contextBridge.exposeInMainWorld('iris', {
-      sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame)
+      sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame),
+      transcribeAudio: (base64Audio: string, mimeType: string, languageHint?: string) =>
+        ipcRenderer.invoke('nova-transcribe-audio', base64Audio, mimeType, languageHint)
     })
   } catch (error) {}
 } else {
@@ -30,6 +32,8 @@ if (process.contextIsolated) {
   window.api = api
   // @ts-ignore
   window.iris = {
-    sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame)
+    sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame),
+    transcribeAudio: (base64Audio: string, mimeType: string, languageHint?: string) =>
+      ipcRenderer.invoke('nova-transcribe-audio', base64Audio, mimeType, languageHint)
   }
 }
