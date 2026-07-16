@@ -1,5 +1,4 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-
 declare global {
   interface Window {
     electron: ElectronAPI & {
@@ -20,7 +19,6 @@ declare global {
     }
   }
 }```
-
 ---
 
 ## src/renderer/src/IRISRoot.tsx  (REPLACE)
