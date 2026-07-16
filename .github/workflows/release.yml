@@ -22,6 +22,12 @@ jobs:
           node-version: 24
           cache: 'npm'
 
+      # package.json aur package-lock.json sync nahi hain, isliye
+      # `npm ci` fail ho raha tha. Ye step lockfile ko fresh regenerate
+      # karta hai taaki `npm ci` aage pass ho jaye.
+      - name: Sync package-lock.json
+        run: npm install --package-lock-only
+
       - name: Install dependencies (clean, lockfile-exact)
         run: npm ci
 
@@ -57,4 +63,3 @@ jobs:
             dist/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
