@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloudfire.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE PRIMITIVES & HELPER FUNCTIONS ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      // In this app, we require a signed-in user. If email is verified, that's great. 
+      // If the platform supports anonymous users or unverified oauth emails, we can be more flexible,
+      // but requiring isSignedIn() is the baseline. We also check email_verified if present.
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- ENTITY SPECIFIC VALIDATION BLUEPRINTS ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt'])
+        && data.keys().size() <= 4
+        && data.uid == request.auth.uid
+        && data.uid is string
+        && data.email is string
+        && data.email.size() <= 256
+        && data.createdAt == request.time
+        && (!data.keys().contains('displayName') || (data.displayName is string && data.displayName.size() <= 100));
+    }
+
+    function isValidNote(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'content', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 6
+        && data.id is string
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && data.userId is string
+        && isValidId(data.userId)
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 200
+        && data.content is string
+        && data.content.size() <= 50000
+        && (data.createdAt is timestamp || data.createdAt is string)
+        && (data.updatedAt is timestamp || data.updatedAt is string);
+    }
+
+    // --- COLLECTION RULES MATCHES ---
+
+    // 1. Users Profile Collection
+    match /users/{userId} {
+      allow get: if isVerified() && userId == request.auth.uid;
+      
+      // Creating a user profile
+      allow create: if isVerified() 
+        && userId == request.auth.uid 
+        && isValidUser(incoming());
+
+      // Updating profile
+      allow update: if isVerified()
+        && userId == request.auth.uid
+        && isValidUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email']);
+    }
+
+    // 2. User Specific Notes Subcollection (Parent-child hierarchy matching)
+    match /users/{userId}/notes/{noteId} {
+      
+      // Strict List/Get Queries: Only the matching authenticated owner can fetch or query
+      allow get, list: if isVerified() && userId == request.auth.uid;
+
+      // Create Note: Must be owner, valid note shape, matching path variables, strict server-time matching
+      allow create: if isVerified()
+        && userId == request.auth.uid
+        && noteId == incoming().id
+        && isValidId(noteId)
+        && isValidNote(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      // Update Note: Only owner, fields must match schema, immutable fields (id, userId, createdAt) must not change
+      allow update: if isVerified()
+        && userId == request.auth.uid
+        && noteId == incoming().id
+        && isValidNote(incoming())
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Edit title & content
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'updatedAt'])
+        );
+
+      // Delete Note: Only owner can delete their notes
+      allow delete: if isVerified() && userId == request.auth.uid;
+    }
+  }
+}

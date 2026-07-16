@@ -10,6 +10,22 @@ export interface Agent {
 }
 
 export const AGENTS_DATA: Agent[] = [
+  // ==================== DYNAMIC MASTER AGENTS ====================
+  {
+    id: 'coding-agent',
+    name: 'NOVA-X Coding Agent',
+    category: 'DevOps',
+    role: 'Natively reads, writes, and executes development tasks across the workspace.',
+    description: 'Uses live Gemini function calling with native toolchains to index the workspace, write correct implementations, and run validation test command pipelines.',
+    status: 'ACTIVE',
+    metrics: { cpu: 1.2, ram: 148, latency: 15 },
+    systemLogs: [
+      'SYSTEM: Coding Agent Core initialized.',
+      'UPLINK: Connected to server-side Node.js workspace environment.',
+      'SANDBOX: File writes restricted to local repository context.',
+      'Awaiting prompt instruction from Operator...'
+    ]
+  },
   // ==================== CATEGORY: AUTOMATION (17 Agents) ====================
   {
     id: 'adb-gesture-executor',

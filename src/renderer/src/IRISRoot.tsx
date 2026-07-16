@@ -40,6 +40,20 @@ const IndexRoot = (): JSX.Element => {
     setIsMuted(nextMutedState)
   }
 
+  const [activeLang, setActiveLang] = useState(() => {
+    return (window as any).selectedLanguage || localStorage.getItem('novax_lang') || 'en-US'
+  })
+
+  useEffect(() => {
+    const handleLangChange = (e: any) => {
+      setActiveLang(e.detail || 'en-US')
+    }
+    window.addEventListener('novax_lang_changed', handleLangChange)
+    return () => {
+      window.removeEventListener('novax_lang_changed', handleLangChange)
+    }
+  }, [])
+
   // Real-time Voice Recognition Loop
   useEffect(() => {
     // @ts-ignore - Check for browser speech recognition variants
@@ -54,11 +68,11 @@ const IndexRoot = (): JSX.Element => {
     const shouldBeRunning = isConnected && !isMuted && !isSpeaking
 
     if (shouldBeRunning) {
-      console.log('[NOVA-X] Activating Voice Recognition Core...')
+      console.log(`[NOVA-X] Activating Voice Recognition Core for Language: ${activeLang}...`)
       recognition = new SpeechRecognition()
       recognition.continuous = true
       recognition.interimResults = false
-      recognition.lang = 'en-US' // Default locale
+      recognition.lang = activeLang
 
       recognition.onstart = (): void => {
         console.log('[NOVA-X] Microphone listening active.')
@@ -115,7 +129,7 @@ const IndexRoot = (): JSX.Element => {
         }
       }
     }
-  }, [isConnected, isMuted, isSpeaking])
+  }, [isConnected, isMuted, isSpeaking, activeLang])
 
   return (
     <div className="flex flex-col h-screen w-screen bg-black overflow-hidden relative border border-emerald-500/20 rounded-xl">

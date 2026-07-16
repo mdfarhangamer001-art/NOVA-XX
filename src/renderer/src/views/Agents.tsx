@@ -44,7 +44,41 @@ export default function AgentsView() {
     'SYSTEM: Neural Core Autopilot initialized.',
     'STATUS: Awaiting code drift trigger or scheduled cron loop.'
   ])
-  const [currentVersion, setCurrentVersion] = useState('1.6.3')
+  const [currentVersion, setCurrentVersion] = useState(() => {
+    return localStorage.getItem('novax_app_version') || '1.6.3'
+  })
+
+  const visionIntervalRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.invoke('get-app-version').then((v: string) => {
+        if (v) {
+          setCurrentVersion(v)
+          localStorage.setItem('novax_app_version', v)
+        }
+      })
+
+      // Real-time progress logs subscription
+      const handleProgress = (_event: any, msg: string) => {
+        setAgentLogs((prev) => {
+          const currentLogs = prev['coding-agent'] || []
+          return {
+            ...prev,
+            'coding-agent': [...currentLogs, msg]
+          }
+        })
+      }
+
+      const unsubscribe = window.electron.ipcRenderer.on('agent-progress-log', handleProgress)
+      return () => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe()
+        }
+      }
+    }
+    return undefined
+  }, [])
 
   // Direct Uplink console input/log states
   const [consoleInput, setConsoleInput] = useState('')
@@ -103,6 +137,10 @@ export default function AgentsView() {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
+      if (visionIntervalRef.current) {
+        clearInterval(visionIntervalRef.current)
+        visionIntervalRef.current = null
+      }
       setIsScreenSharing(false)
       setShareResolution('—')
       setShareFps(0)
@@ -141,6 +179,37 @@ export default function AgentsView() {
         }
         trackStats()
 
+        // Real-time multimodal screen vision capture loop
+        visionIntervalRef.current = setInterval(async () => {
+          if (!streamRef.current || !videoRef.current) return
+          try {
+            const canvas = document.createElement('canvas')
+            canvas.width = 640
+            canvas.height = 360
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+              const base64 = canvas.toDataURL('image/jpeg', 0.6)
+              
+              setAutopilotLogs(prev => [...prev, `[VISION] Capture frame dispatched to server-side multimodal analyzer...`])
+              
+              if (window.iris?.sendVisionFrame) {
+                const res = await window.iris.sendVisionFrame(base64)
+                if (res.success) {
+                  setAutopilotLogs(prev => [
+                    ...prev,
+                    `[VISION] Analysis Result:\n${res.analysis}`
+                  ])
+                } else {
+                  setAutopilotLogs(prev => [...prev, `[VISION ERROR] ${res.error}`])
+                }
+              }
+            }
+          } catch (e: any) {
+            console.error('Vision frame capture failed:', e)
+          }
+        }, 12000)
+
         videoTrack.onended = () => {
           toggleScreenShare()
         }
@@ -151,7 +220,7 @@ export default function AgentsView() {
   }
 
   // Handle direct console submission
-  const handleConsoleSubmit = (e: React.FormEvent) => {
+  const handleConsoleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!consoleInput.trim() || !selectedAgent) return
 
@@ -166,24 +235,61 @@ export default function AgentsView() {
       [selectedAgent.id]: newLogs
     })
 
-    // Simulate Agent response based on its identity
-    setTimeout(() => {
-      let response = ''
-      if (selectedAgent.id === 'github-workflow-automator') {
-        response = `AUTOMATOR: Executed custom patch release sequence. Bumped package version, created release.yml template, compiled JS assemblies, and pushed tag to simulated git origin.`
+    if (selectedAgent.id === 'coding-agent') {
+      if (window.electron?.ipcRenderer) {
+        try {
+          const res = await window.electron.ipcRenderer.invoke('agent-run-task', input)
+          if (res.success) {
+            setAgentLogs((prev) => ({
+              ...prev,
+              'coding-agent': [...(prev['coding-agent'] || []), `NEURAL: ${res.summary}`]
+            }))
+          } else {
+            setAgentLogs((prev) => ({
+              ...prev,
+              'coding-agent': [...(prev['coding-agent'] || []), `ERROR: ${res.error}`]
+            }))
+          }
+        } catch (err: any) {
+          setAgentLogs((prev) => ({
+            ...prev,
+            'coding-agent': [...(prev['coding-agent'] || []), `ERROR: ${err.message}`]
+          }))
+        }
       } else {
-        response = `${selectedAgent.id.toUpperCase()}: Instruction loaded. Analyzing context nodes, executing targeted tool parameters. Output pipeline verified. Status code: 200 OK.`
+        setAgentLogs((prev) => ({
+          ...prev,
+          'coding-agent': [...(prev['coding-agent'] || []), `ERROR: Main process communication is unavailable.`]
+        }))
       }
-      setAgentLogs((prev) => ({
-        ...prev,
-        [selectedAgent.id]: [...(prev[selectedAgent.id] || []), response]
-      }))
-    }, 1000)
+    } else {
+      // Simulate Agent response based on its identity
+      setTimeout(() => {
+        let response = ''
+        if (selectedAgent.id === 'github-workflow-automator') {
+          response = `AUTOMATOR: Executed custom patch release sequence. Bumped package version, created release.yml template, compiled JS assemblies, and pushed tag to simulated git origin.`
+        } else {
+          response = `${selectedAgent.id.toUpperCase()}: Instruction loaded. Analyzing context nodes, executing targeted tool parameters. Output pipeline verified. Status code: 200 OK.`
+        }
+        setAgentLogs((prev) => ({
+          ...prev,
+          [selectedAgent.id]: [...(prev[selectedAgent.id] || []), response]
+        }))
+      }, 1000)
+    }
   }
 
   // Run the Master Autopilot Release loop!
   const startAutopilotSequence = () => {
     if (isAutopilotRunning) return
+
+    // Calculate dynamic next version
+    const parts = currentVersion.split('.')
+    let nextVersion = '1.6.4'
+    if (parts.length === 3) {
+      parts[2] = (parseInt(parts[2], 10) + 1).toString()
+      nextVersion = parts.join('.')
+    }
 
     setIsAutopilotRunning(true)
     const logs = [
@@ -194,8 +300,8 @@ export default function AgentsView() {
       '⚙️ [COMPILATION] Invoking esbuild bundling protocol: server.ts -> dist/server.cjs...',
       '📦 [COMPILATION] Vite bundle compiled successfully into static assets.',
       '🏷️ [VERSIONING] Semantic patch detected. Preparing version promotion...',
-      `📈 [VERSIONING] Promoting local build from v${currentVersion} to v1.6.4...`,
-      '🏷️ [GIT] Generated secure release tag: v1.6.4-release',
+      `📈 [VERSIONING] Promoting local build from v${currentVersion} to v${nextVersion}...`,
+      `🏷️ [GIT] Generated secure release tag: v${nextVersion}-release`,
       '🤖 [AUTOPILOT] Crafting GitHub release assets and workflow payloads...',
       '🚀 [RELEASE] Pushing assets to GitHub Actions workflow pipeline...',
       '📡 [RELEASE] GitHub release action executed successfully. Deployment online!',
@@ -205,12 +311,26 @@ export default function AgentsView() {
     setAutopilotLogs(['[AUTOPILOT] Initializing full loop.'])
     
     let index = 0
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       if (index < logs.length) {
         setAutopilotLogs((prev) => [...prev, logs[index]])
         index++
         if (index === 8) {
-          setCurrentVersion('1.6.4')
+          if (window.electron?.ipcRenderer) {
+            try {
+              const realNext = await window.electron.ipcRenderer.invoke('bump-app-version')
+              if (realNext) {
+                setCurrentVersion(realNext)
+                localStorage.setItem('novax_app_version', realNext)
+              }
+            } catch (err) {
+              setCurrentVersion(nextVersion)
+              localStorage.setItem('novax_app_version', nextVersion)
+            }
+          } else {
+            setCurrentVersion(nextVersion)
+            localStorage.setItem('novax_app_version', nextVersion)
+          }
         }
       } else {
         clearInterval(interval)

@@ -23,7 +23,7 @@ asarUnpack:
 
 win:
   executableName: nova-x
-  icon: build/icon.png
+  icon: resources/icon.png
   target:
     - target: nsis
 

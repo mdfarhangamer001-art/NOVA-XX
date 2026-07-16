@@ -13,6 +13,9 @@ if (process.contextIsolated) {
       }
     })
     contextBridge.exposeInMainWorld('api', api)
+    contextBridge.exposeInMainWorld('iris', {
+      sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame)
+    })
   } catch (error) {}
 } else {
   // @ts-ignore (define in dts)
@@ -25,4 +28,8 @@ if (process.contextIsolated) {
   }
   // @ts-ignore (define in dts)
   window.api = api
+  // @ts-ignore
+  window.iris = {
+    sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame)
+  }
 }

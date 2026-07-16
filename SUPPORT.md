@@ -8,7 +8,7 @@ IRIS is fully open-source, free, and community-supported. We do not have paid pa
 
 For all users exploring the public repository and system modules:
 
-- **GitHub Issues:** If you find a reproducible bug in the UI, React components, or public documentation, please [open an issue](https://github.com/xtehzeeb/IRIS-AI/issues).
+- **GitHub Issues:** If you find a reproducible bug in the UI, React components, or public documentation, please [open an issue](https://github.com/mdfarhangamer001-art/IRIS-AI/issues).
 - **GitHub Discussions:** Have a question about how the UI is structured or want to share a custom agent widget? Join the public discussions.
 - **Documentation:** Please thoroughly read the `/docs` folder before asking questions.
 - **Instagram Contact:** For inquiries, suggestions, or chat, you can message Tehzeeb at [@xtehzeeb.x](https://www.instagram.com/xtehzeeb.x/).

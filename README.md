@@ -10,26 +10,6 @@
 
 <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
 
-  <a href="https://github.com/IRISX-AI/IRIS-AI/stargazers">
-    <img src="https://badgen.net/github/stars/IRISX-AI/IRIS-AI?color=10b981&icon=github" alt="GitHub stars">
-  </a>
-
-  <a href="https://github.com/IRISX-AI/IRIS-AI/network/members">
-    <img src="https://badgen.net/github/forks/201Harsh/IRIS-AI?color=10b981&icon=github" alt="GitHub forks">
-  </a>
-
-  <a href="https://github.com/IRISX-AI/IRIS-AI/graphs/contributors">
-    <img src="https://badgen.net/github/contributors/IRISX-AI/IRIS-AI?color=10b981&icon=github" alt="Contributors">
-  </a>
-
-  <a href="https://github.com/sponsors/201Harsh">
-    <img src="https://badgen.net/badge/Sponsor/Support%20IRIS/ff69b4?icon=github" alt="GitHub Sponsors">
-  </a>
-
-  <a href="https://github.com/IRISX-AI/IRIS-AI/releases">
-    <img src="https://badgen.net/github/assets-dl/IRISX-AI/IRIS-AI?color=10b981&icon=github" alt="Total Downloads">
-  </a>
-
 </div>
 
 **Speak your command. IRIS executes it.**
@@ -503,7 +483,7 @@ ipcMain.handle('tool-name', async (event, payload) => {
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/IRISX-AI/IRIS-AI
+git clone https://github.com/mdfarhangamer001-art/IRIS-AI
 cd IRIS-AI
 ```
 
@@ -549,7 +529,7 @@ npm run build:linux  # Linux
 
 **How to Access:**
 
-1. Become a sponsor: [GitHub Sponsors](https://github.com/sponsors/201Harsh)
+1. Become a sponsor: [GitHub Sponsors](https://github.com/sponsors/mdfarhangamer001-art)
 2. Get private repo access via GitHub
 3. Clone private repository with examples
 4. Follow sponsor-only documentation
@@ -1048,7 +1028,7 @@ AI Systems Engineer & Creator
 **Connect:**
 
 - 🎬 Instagram: [@xtehzeeb.x](https://www.instagram.com/xtehzeeb.x/)
-- 💻 GitHub: [@xtehzeeb](https://github.com/xtehzeeb)
+- 💻 GitHub: [@mdfarhangamer001-art](https://github.com/mdfarhangamer001-art)
 
 ---
 
@@ -1061,7 +1041,7 @@ MIT License. See [LICENSE](LICENSE) file for details.
 # 🎯 Get Started
 
 ```bash
-git clone https://github.com/xtehzeeb/IRIS-AI
+git clone https://github.com/mdfarhangamer001-art/IRIS-AI
 cd IRIS-AI
 npm install
 npm run dev

@@ -12,14 +12,14 @@ Please read this guide to ensure your Pull Requests (PRs) merge smoothly and kee
 
 ## 🔗 Quick Links
 
-- **GitHub:** [IRIS-AI Public Repo](https://github.com/xtehzeeb/IRIS-AI)
+- **GitHub:** [IRIS-AI Public Repo](https://github.com/mdfarhangamer001-art/IRIS-AI)
 - **Instagram:** [@xtehzeeb.x](https://www.instagram.com/xtehzeeb.x/)
 - **Email:** [cutegirla6777@gmail.com](mailto:cutegirla6777@gmail.com)
 
 ## 👑 Maintainers
 
 - **Tehzeeb** - Creator & Lead Architect
-  - GitHub: [xtehzeeb](https://github.com/xtehzeeb)
+  - GitHub: [mdfarhangamer001-art](https://github.com/mdfarhangamer001-art)
   - Instagram: [@xtehzeeb.x](https://www.instagram.com/xtehzeeb.x/)
 
 ---

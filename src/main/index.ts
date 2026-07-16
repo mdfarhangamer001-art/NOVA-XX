@@ -1,8 +1,13 @@
-import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session } from 'electron'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session, protocol, net } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import registerSystemHandlers from './lib/system'
+import { registerAgentHandlers } from './lib/agent'
+import { registerVisionHandlers } from './lib/vision'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -62,7 +67,14 @@ app.whenReady().then(() => {
       })
   })
 
+  protocol.handle('media', (request) => {
+    const filePath = decodeURIComponent(request.url.replace('media://', ''))
+    return net.fetch(pathToFileURL(filePath).toString())
+  })
+
   registerSystemHandlers(ipcMain)
+  registerAgentHandlers()
+  registerVisionHandlers()
   createWindow()
 
   app.on('activate', function () {

@@ -101,7 +101,7 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
         startScreenStream()
       } else {
         setStatus('idle')
-        setErrorMsg('Connection refused. Ensure TCP/IP daemon is running (adb tcpip 5555).')
+        setErrorMsg(res.error || 'Connection refused. Ensure TCP/IP daemon is running (adb tcpip 5555).')
       }
     } catch (e) {
       setStatus('idle')

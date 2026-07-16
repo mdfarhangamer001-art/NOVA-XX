@@ -10,5 +10,8 @@ declare global {
       }
     }
     api: unknown
+    iris: {
+      sendVisionFrame(base64Frame: string): Promise<any>
+    }
   }
 }

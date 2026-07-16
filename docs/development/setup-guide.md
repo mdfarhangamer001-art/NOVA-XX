@@ -16,7 +16,7 @@ For developers looking to explore or contribute to the React frontend, you can u
 
 ```bash
 # 1. Clone the public repository
-git clone https://github.com/IRISX-AI/IRIS-AI
+git clone https://github.com/mdfarhangamer001-art/IRIS-AI
 
 # 2. Navigate into the directory
 cd IRIS-AI
@@ -36,7 +36,7 @@ To unlock actual Voice-First Desktop Assistant functionality, you must be a GitH
 # 1. Ensure you have accepted the GitHub invitation to the private repo after sponsoring.
 
 # 2. Clone the private insiders repository
-git clone https://github.com/IRISX-AI/iris-insiders
+git clone https://github.com/mdfarhangamer001-art/iris-insiders
 
 # 3. Navigate into the directory
 cd iris-insiders

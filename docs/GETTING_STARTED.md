@@ -9,7 +9,7 @@ IRIS is a powerful voice-first AI OS. This guide will help you set up the public
 
 ## 2. Installation
 ```bash
-git clone https://github.com/IRISX-AI/IRIS-AI
+git clone https://github.com/mdfarhangamer001-art/IRIS-AI
 cd IRIS-AI
 npm install
 ```
