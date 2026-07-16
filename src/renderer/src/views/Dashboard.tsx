@@ -76,7 +76,7 @@ const VOICES: VoiceProfile[] = [
   },
   {
     id: 'HELIOS',
-    name: 'HELIOS (Jarvis Command)',
+    name: 'HELIOS (NOVA-X Command)',
     gender: 'MALE',
     description: 'Rich, tech-forward, mechanical tactical voice for rapid command feedback.',
     pitch: 0.65,
@@ -1224,8 +1224,8 @@ export default function Dashboard({
               </button>
               <button
                 onClick={() => {
-                  setCoreType('jarvis')
-                  localStorage.setItem('novax_core_type', 'jarvis')
+                  setCoreType('NOVA-X')
+                  localStorage.setItem('novax_core_type', 'NOVA-X')
                 }}
                 className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
                   coreType === 'jarvis'
