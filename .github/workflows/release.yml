@@ -26,7 +26,6 @@ jobs:
           npm install
           npm ci
           npm install @rollup/rollup-win32-x64-msvc --save-dev
-          npm install @lightningcss/win32-x64-msvc --save-dev
 
       - name: Sync package.json version with Release Tag
         run: |
