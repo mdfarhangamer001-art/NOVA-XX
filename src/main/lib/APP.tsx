@@ -1,4 +1,4 @@
-import { AppItem, getAllApps } from '@renderer/src/services/system-info'
+import { AppItem, getAllApps } from "@/src/renderer/src/service/"
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   RiAppsLine,
