@@ -3,6 +3,10 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import registerSystemHandlers from './lib/system'
+import registerVaultHandlers from './lib/vault'
+import registerNotesHandlers from './lib/notes'
+import registerGalleryHandlers from './lib/gallery'
+import registerAdbHandlers from './lib/adb'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -63,6 +67,10 @@ app.whenReady().then(() => {
   })
 
   registerSystemHandlers(ipcMain)
+  registerVaultHandlers(ipcMain)
+  registerNotesHandlers(ipcMain)
+  registerGalleryHandlers(ipcMain)
+  registerAdbHandlers(ipcMain)
   createWindow()
 
   app.on('activate', function () {
