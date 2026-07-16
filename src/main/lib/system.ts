@@ -161,6 +161,10 @@ export async function executeSystemAction(_event: any, payload: { action: string
   }
 }
 
+export async function openApp(_event: any, appName: string) {
+  return executeSystemAction(_event, { action: 'open-app', data: { appName } })
+}
+
 export default function registerSystemHandlers(ipcMain: IpcMain) {
   ipcMain.removeHandler('get-installed-apps')
   ipcMain.handle('get-installed-apps', fetchInstalledApps)
@@ -173,4 +177,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
 
   ipcMain.removeHandler('execute-system-action')
   ipcMain.handle('execute-system-action', executeSystemAction)
+
+  ipcMain.removeHandler('open-app')
+  ipcMain.handle('open-app', openApp)
 }
