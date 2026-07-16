@@ -3,7 +3,6 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-// नई फाइलों के लिए इंपोर्ट्स
 import registerAppHandlers from './lib/APP'
 import registerAgentsHandlers from './lib/Agents'
 import registerGalleryHandlers from './lib/Gallery'
@@ -31,7 +30,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -53,9 +52,6 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // (स्क्रीन शेयरिंग वाला हिस्सा वैसे ही रहने दें)
-
-  // नई फाइलों के लिए रजिस्टर फंक्शन कॉल्स
   registerAppHandlers(ipcMain)
   registerAgentsHandlers(ipcMain)
   registerGalleryHandlers(ipcMain)
@@ -63,8 +59,6 @@ app.whenReady().then(() => {
   registerPhoneHandlers(ipcMain)
   registerSettingsHandlers(ipcMain)
   registerGoogleAuthHandlers(ipcMain)
-
-  // (IPC विंडोज कंट्रोल वाले लिसनर्स वैसे ही रहने दें)
 
   createWindow()
 
