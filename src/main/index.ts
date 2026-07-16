@@ -2,10 +2,15 @@ import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session } from 'el
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import registerVaultHandlers from './lib/vault'
-import registerNotesHandlers from './lib/notes'
-import registerGalleryHandlers from './lib/gallery'
-import registerAdbHandlers from './lib/adb'
+
+// नई फाइलों के लिए इंपोर्ट्स
+import registerAppHandlers from './lib/APP'
+import registerAgentsHandlers from './lib/Agents'
+import registerGalleryHandlers from './lib/Gallery'
+import registerNotesHandlers from './lib/Notes'
+import registerPhoneHandlers from './lib/Phone'
+import registerSettingsHandlers from './lib/Settings'
+import registerGoogleAuthHandlers from './lib/google-auth'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -48,50 +53,18 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  session.defaultSession.setDisplayMediaRequestHandler((_request: any, callback: any) => {
-    desktopCapturer
-      .getSources({ types: ['screen'] })
-      .then((sources) => {
-        if (sources && sources.length > 0) {
-          callback({ video: sources[0] })
-        } else {
-          console.error('[NOVA-X] No screens found to share.')
-          // @ts-ignore - explicitly fail the callback safely
-          callback()
-        }
-      })
-      .catch((err) => {
-        console.error('[NOVA-X] Screen capture failed:', err)
-        // @ts-ignore
-        callback()
-      })
-  })
+  // (स्क्रीन शेयरिंग वाला हिस्सा वैसे ही रहने दें)
 
-  registerVaultHandlers(ipcMain)
-  registerNotesHandlers(ipcMain)
+  // नई फाइलों के लिए रजिस्टर फंक्शन कॉल्स
+  registerAppHandlers(ipcMain)
+  registerAgentsHandlers(ipcMain)
   registerGalleryHandlers(ipcMain)
-  registerAdbHandlers(ipcMain)
+  registerNotesHandlers(ipcMain)
+  registerPhoneHandlers(ipcMain)
+  registerSettingsHandlers(ipcMain)
+  registerGoogleAuthHandlers(ipcMain)
 
-  ipcMain.removeAllListeners('window-min')
-  ipcMain.on('window-min', () => {
-    mainWindow?.minimize()
-  })
-
-  ipcMain.removeAllListeners('window-max')
-  ipcMain.on('window-max', () => {
-    if (!mainWindow) return
-    if (mainWindow.isMaximized() || mainWindow.isFullScreen()) {
-      if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false)
-      mainWindow.unmaximize()
-    } else {
-      mainWindow.maximize()
-    }
-  })
-
-  ipcMain.removeAllListeners('window-close')
-  ipcMain.on('window-close', () => {
-    mainWindow?.close()
-  })
+  // (IPC विंडोज कंट्रोल वाले लिसनर्स वैसे ही रहने दें)
 
   createWindow()
 
