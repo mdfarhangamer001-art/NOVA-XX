@@ -1,4 +1,4 @@
-name: MAX AI Single EXE Release
+name: NOVA-X Single EXE Release
 
 on:
   push:
@@ -26,14 +26,14 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Build MAX AI Installer
+      - name: Build NOVA-X Installer
         run: npm run dist:win
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: MAX AI v1.0.${{ github.run_number }}
+          name: NOVA-X v1.0.${{ github.run_number }}
           generate_release_notes: true
           files: |
             dist/*.exe
