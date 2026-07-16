@@ -1,7 +1,7 @@
 {
   "name": "nova-x",
   "version": "1.6.3",
-  "description": "IRIS is not another chatbot you type at. It is an intelligent Voice-First Operating Layer that gives you complete, hands-free authority over your digital environment. It lives on your desktop, watches your workflow, and executes your intent instantly.",
+  "description": "NOVA-X is not another chatbot you type at. It is an intelligent Voice-First Operating Layer that gives you complete, hands-free authority over your digital environment. It lives on your desktop, watches your workflow, and executes your intent instantly.",
   "main": "./out/main/index.js",
   "author": "System Operator <operator@novax.ai>",
   "homepage": "https://novax.ai",
@@ -11,7 +11,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:electron": "electron-vite build",
-    "dist:win": "electron-vite build && electron-builder --win --publish never"
+    "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
