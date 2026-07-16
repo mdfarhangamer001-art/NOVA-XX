@@ -1,4 +1,4 @@
-Name: NOVA-X Single EXE Release
+name: NOVA-X Single EXE Release
 
 on:
   push:
