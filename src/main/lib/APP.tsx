@@ -1,5 +1,5 @@
 import { AppItem, getAllApps } from '@renderer/services/system-info'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   RiAppsLine,
   RiTerminalBoxLine,
@@ -10,41 +10,29 @@ import {
   RiGamepadLine
 } from 'react-icons/ri'
 
+// Icons mapping for better scalability
+const ICON_MAP: Record<string, { icon: any, color: string, bg: string }> = {
+  chrome: { icon: RiChromeLine, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  edge: { icon: RiChromeLine, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  code: { icon: RiCodeLine, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+  dev: { icon: RiCodeLine, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+  spotify: { icon: RiSpotifyLine, color: 'text-green-400', bg: 'bg-green-500/10' },
+  music: { icon: RiSpotifyLine, color: 'text-green-400', bg: 'bg-green-500/10' },
+  discord: { icon: RiDiscordLine, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+  telegram: { icon: RiDiscordLine, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+  game: { icon: RiGamepadLine, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+  launcher: { icon: RiGamepadLine, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+}
+
 const SmartIcon = ({ name }: { name: string }) => {
-  if (!name) return <div className="w-10 h-10 bg-zinc-800 rounded-lg border border-white/5" />
-
   const lower = name.toLowerCase()
-  let icon = <RiTerminalBoxLine size={20} />
-  let color = 'text-zinc-400'
-  let bg = 'bg-zinc-800'
-
-  if (lower.includes('chrome') || lower.includes('edge')) {
-    icon = <RiChromeLine size={20} />
-    color = 'text-blue-400'
-    bg = 'bg-blue-500/10'
-  } else if (lower.includes('code') || lower.includes('dev')) {
-    icon = <RiCodeLine size={20} />
-    color = 'text-cyan-400'
-    bg = 'bg-cyan-500/10'
-  } else if (lower.includes('spotify') || lower.includes('music')) {
-    icon = <RiSpotifyLine size={20} />
-    color = 'text-green-400'
-    bg = 'bg-green-500/10'
-  } else if (lower.includes('discord') || lower.includes('telegram')) {
-    icon = <RiDiscordLine size={20} />
-    color = 'text-indigo-400'
-    bg = 'bg-indigo-500/10'
-  } else if (lower.includes('game') || lower.includes('launcher')) {
-    icon = <RiGamepadLine size={20} />
-    color = 'text-purple-400'
-    bg = 'bg-purple-500/10'
-  }
+  const matchKey = Object.keys(ICON_MAP).find((key) => lower.includes(key))
+  const { icon: Icon, color, bg } = matchKey ? ICON_MAP[matchKey] : 
+    { icon: RiTerminalBoxLine, color: 'text-zinc-400', bg: 'bg-zinc-800' }
 
   return (
-    <div
-      className={`w-10 h-10 rounded-lg flex items-center justify-center border border-white/5 ${bg} ${color} shadow-sm group-hover:scale-110 transition-transform`}
-    >
-      {icon}
+    <div className={`w-10 h-10 rounded-lg flex items-center justify-center border border-white/5 ${bg} ${color} shadow-sm group-hover:scale-110 transition-transform`}>
+      <Icon size={20} />
     </div>
   )
 }
@@ -73,27 +61,23 @@ const AppsView = () => {
   const [loading, setLoading] = useState(true)
 
   const observer = useRef<IntersectionObserver | null>(null)
-  const lastAppElementRef = useCallback(
-    (node: HTMLDivElement) => {
-      if (loading) return
-      if (observer.current) observer.current.disconnect()
-
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && visibleApps.length < allApps.length) {
-          setPage((prev) => prev + 1)
-        }
-      })
-      if (node) observer.current.observe(node)
-    },
-    [loading, visibleApps.length, allApps.length]
-  )
+  
+  const lastAppElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading) return
+    if (observer.current) observer.current.disconnect()
+    observer.current = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && visibleApps.length < allApps.length) {
+        setPage((prev) => prev + 1)
+      }
+    })
+    if (node) observer.current.observe(node)
+  }, [loading, visibleApps.length, allApps.length])
 
   useEffect(() => {
     getAllApps().then((raw) => {
       const cleanData = (Array.isArray(raw) ? raw : []).filter(
-        (item) => item && typeof item === 'object' && item.name && item.id
+        (item) => item?.name && item?.id
       )
-
       setAllApps(cleanData)
       setVisibleApps(cleanData.slice(0, 15))
       setLoading(false)
@@ -101,10 +85,7 @@ const AppsView = () => {
   }, [])
 
   useEffect(() => {
-    if (page > 1) {
-      const nextBatch = allApps.slice(0, page * 12 + 6)
-      setVisibleApps(nextBatch)
-    }
+    setVisibleApps(allApps.slice(0, page * 12 + 6))
   }, [page, allApps])
 
   return (
@@ -126,31 +107,13 @@ const AppsView = () => {
 
       <div className="flex-1 overflow-y-auto pr-4 pb-4 scrollbar-small min-h-0">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {visibleApps.map((app, index) => {
-            const safeKey = `${app.id}-${index}`
-
-            if (visibleApps.length === index + 1) {
-              return (
-                <div ref={lastAppElementRef} key={safeKey}>
-                  <AppCard app={app} />
-                </div>
-              )
-            } else {
-              return <AppCard key={safeKey} app={app} />
-            }
-          })}
-
-          {loading && (
-            <div className="text-zinc-500 text-xs p-4 text-center col-span-full">
-              Scanning System...
+          {visibleApps.map((app, index) => (
+            <div key={app.id} ref={index === visibleApps.length - 1 ? lastAppElementRef : null}>
+              <AppCard app={app} />
             </div>
-          )}
+          ))}
 
-          {!loading && visibleApps.length === 0 && (
-            <div className="text-zinc-500 text-xs p-10 text-center col-span-full">
-              No Apps Found.
-            </div>
-          )}
+          {loading && <div className="text-zinc-500 text-xs p-4 text-center col-span-full">Scanning System...</div>}
         </div>
       </div>
     </div>
