@@ -2,13 +2,14 @@
 import { ipcMain, app } from 'electron'
 import { GoogleGenAI } from '@google/genai'
 import { getGeminiApiKey } from './apiKey'
+import { exec } from 'child_process'
+import path from 'path'
+import fs from 'fs'
 
 /** Applies a generated image as the OS desktop wallpaper, per-platform. */
 function applyWallpaper(imagePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (process.platform === 'win32') {
-      // Uses SystemParametersInfo via an inline PowerShell snippet — no
-      // extra native dependency required.
       const psScript = `
         Add-Type @"
         using System.Runtime.InteropServices;
@@ -32,7 +33,6 @@ function applyWallpaper(imagePath: string): Promise<void> {
         }
       )
     } else {
-      // Most GNOME-based Linux desktops
       const uri = `file://${imagePath}`
       exec(`gsettings set org.gnome.desktop.background picture-uri "${uri}"`, (error) => {
         if (error) reject(error)
@@ -89,4 +89,4 @@ export function registerWallpaperHandlers(): void {
       return { success: false, error: err.message }
     }
   })
-    }
+}
