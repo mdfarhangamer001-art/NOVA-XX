@@ -1,4 +1,23 @@
 import { useState, useEffect } from 'react'
+import { LANGUAGES } from '../data/languages'
+
+// JWT token decode helper for real Google login profile parsing
+const decodeJwt = (token: string): any => {
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(jsonPayload)
+  } catch (e) {
+    return null
+  }
+}
+
 import {
   Camera,
   Mic,
@@ -144,6 +163,64 @@ export default function Dashboard({
   })
   const [voiceVolume, setVoiceVolume] = useState<number>(0.8)
 
+  // Selected language state - lazy loaded
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
+    return localStorage.getItem('novax_lang') || 'en-US'
+  })
+
+  // Dynamic Google script loader and window bindings
+  useEffect(() => {
+    ;(window as any).selectedLanguage = selectedLanguage
+  }, [selectedLanguage])
+
+  useEffect(() => {
+    const id = 'google-gsi-client'
+    if (document.getElementById(id)) return
+
+    const script = document.createElement('script')
+    script.id = id
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    document.head.appendChild(script)
+  }, [])
+
+  // Render official Google Identity Services login button when modal opens
+  useEffect(() => {
+    if (showGoogleModal && googleStep === 'choose' && (window as any).google) {
+      setTimeout(() => {
+        try {
+          const container = document.getElementById('gsi-button-container')
+          if (container) {
+            ;(window as any).google.accounts.id.initialize({
+              client_id: '594791243891-v9l7v6mndm8eub9oee10r2vka3f31jfe.apps.googleusercontent.com',
+              callback: (response: any) => {
+                try {
+                  const decoded = decodeJwt(response.credential)
+                  if (decoded && decoded.email) {
+                    completeGoogleSignIn(
+                      decoded.email,
+                      decoded.name || decoded.given_name || 'Google Operator',
+                      decoded.picture || ''
+                    )
+                  }
+                } catch (err) {
+                  console.error('Google credentials parsing failed', err)
+                }
+              }
+            });
+            ;(window as any).google.accounts.id.renderButton(
+              container,
+              { theme: 'filled_black', size: 'large', width: 320, shape: 'pill' }
+            )
+          }
+        } catch (e) {
+          console.error('GIS render error', e)
+        }
+      }, 150)
+    }
+  }, [showGoogleModal, googleStep])
+
   // System stats fetched locally
   const [stats, setStats] = useState<SystemStats>({
     cpu: '0.0',
@@ -193,28 +270,53 @@ export default function Dashboard({
       // Strip common Markdown characters for beautiful spoken audio
       const cleanText = text.replace(/[*#`_\-]/g, '').trim()
       const utterance = new SpeechSynthesisUtterance(cleanText)
+      utterance.lang = selectedLanguage
 
       const systemVoices = window.speechSynthesis.getVoices()
       let matchedVoice = null
 
-      if (selected.gender === 'MALE') {
-        matchedVoice = systemVoices.find(
-          (v) =>
-            v.name.toLowerCase().includes('google uk english male') ||
-            v.name.toLowerCase().includes('david') ||
-            v.name.toLowerCase().includes('male') ||
-            v.name.toLowerCase().includes('natural male') ||
-            v.name.toLowerCase().includes('microsoft david')
-        )
-      } else {
-        matchedVoice = systemVoices.find(
-          (v) =>
-            v.name.toLowerCase().includes('female') ||
-            v.name.toLowerCase().includes('zira') ||
-            v.name.toLowerCase().includes('google uk english female') ||
-            v.name.toLowerCase().includes('hazel') ||
-            v.name.toLowerCase().includes('microsoft zira')
-        )
+      const langLower = selectedLanguage.toLowerCase().split('-')[0] // e.g. 'hi' or 'en'
+
+      // First, try to find a voice that matches both the selected gender AND the selected language!
+      matchedVoice = systemVoices.find(
+        (v) =>
+          v.lang.toLowerCase().includes(langLower) &&
+          (selected.gender === 'MALE'
+            ? v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('google uk english male')
+            : v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('google uk english female'))
+      )
+
+      // If not found, try to find ANY voice for that language prefix
+      if (!matchedVoice) {
+        matchedVoice = systemVoices.find((v) => v.lang.toLowerCase().includes(langLower))
+      }
+
+      // If still not found, try to find a voice for that exact language code
+      if (!matchedVoice) {
+        matchedVoice = systemVoices.find((v) => v.lang.toLowerCase() === selectedLanguage.toLowerCase())
+      }
+
+      // If still not found, fallback to standard voice matching
+      if (!matchedVoice) {
+        if (selected.gender === 'MALE') {
+          matchedVoice = systemVoices.find(
+            (v) =>
+              v.name.toLowerCase().includes('google uk english male') ||
+              v.name.toLowerCase().includes('david') ||
+              v.name.toLowerCase().includes('male') ||
+              v.name.toLowerCase().includes('natural male') ||
+              v.name.toLowerCase().includes('microsoft david')
+          )
+        } else {
+          matchedVoice = systemVoices.find(
+            (v) =>
+              v.name.toLowerCase().includes('female') ||
+              v.name.toLowerCase().includes('zira') ||
+              v.name.toLowerCase().includes('google uk english female') ||
+              v.name.toLowerCase().includes('hazel') ||
+              v.name.toLowerCase().includes('microsoft zira')
+          )
+        }
       }
 
       if (matchedVoice) {
@@ -247,7 +349,7 @@ export default function Dashboard({
     return () => {
       delete (window as any).speakText
     }
-  }, [activeVoice, voiceVolume])
+  }, [activeVoice, voiceVolume, selectedLanguage])
 
   const changeVisionMode = (mode: 'off' | 'camera' | 'screen'): void => {
     setVisionMode(mode)
@@ -454,7 +556,8 @@ export default function Dashboard({
           </div>
 
           <p className="text-[11px] text-zinc-400 font-sans tracking-wide leading-relaxed mb-8 px-2">
-            Welcome, Operator. Link your Google account to enable persistent network synchronization, or activate offline sandbox mode to encrypt all telemetry and chat logs directly within secure sandbox directory on your device.
+            Securely link your Google Identity to enable real-time network sync and preserve dynamic nodes.
+            Alternatively, bypass authorization to encrypt telemetry and session logs locally in your sandbox.
           </p>
 
           <div className="flex flex-col gap-3">
@@ -586,6 +689,14 @@ export default function Dashboard({
                         </div>
                       </button>
                     </div>
+
+                    <div className="flex items-center my-2">
+                      <div className="flex-1 h-px bg-white/5" />
+                      <span className="text-[8px] font-mono text-zinc-500 uppercase px-2">or use official sign-in</span>
+                      <div className="flex-1 h-px bg-white/5" />
+                    </div>
+
+                    <div id="gsi-button-container" className="flex justify-center" />
                   </div>
                 )}
 
@@ -815,6 +926,25 @@ export default function Dashboard({
                 </span>
                 <span className="font-mono text-[7px] text-zinc-500">Cognitron Decoders</span>
               </div>
+            </div>
+
+            {/* Language Selection Dropdown */}
+            <div className="flex flex-col gap-1 border-b border-white/5 pb-2.5">
+              <label className="font-mono text-[7px] tracking-widest text-[#00f3ff] uppercase font-bold">SYSTEM SYNTHESIS LANGUAGE</label>
+              <select
+                value={selectedLanguage}
+                onChange={(e) => {
+                  setSelectedLanguage(e.target.value)
+                  localStorage.setItem('novax_lang', e.target.value)
+                }}
+                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white font-mono outline-none focus:border-[#00f3ff] cursor-pointer hover:bg-zinc-800 transition-colors"
+              >
+                {LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code} className="bg-zinc-950 text-white font-mono text-xs">
+                    {lang.name} {lang.nativeName ? `(${lang.nativeName})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex flex-col gap-1.5 flex-1 min-h-0">

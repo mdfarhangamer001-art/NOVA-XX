@@ -1,4 +1,4 @@
-import IndexRoot from './NOVA-XRoot'
+import IndexRoot from './IRISRoot'
 
 const App = () => {
   return (

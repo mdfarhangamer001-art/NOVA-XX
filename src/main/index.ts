@@ -2,20 +2,10 @@ import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session } from 'el
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-
-// यहाँ पाथ अपडेट किए गए हैं ताकि वे renderer/src/views/ को पॉइंट करें
-import registerAppHandlers from '../renderer/src/views/APP'
-import registerAgentsHandlers from '../renderer/src/views/Agents'
-import registerGalleryHandlers from '../renderer/src/views/Gallery'
-import registerNotesHandlers from '../renderer/src/views/Notes'
-import registerPhoneHandlers from '../renderer/src/views/Phone'
-import registerSettingsHandlers from '../renderer/src/views/Settings'
-import registerGoogleAuthHandlers from '../renderer/src/views/google-auth'
-
-let mainWindow: BrowserWindow | null = null
+import registerSystemHandlers from './lib/system'
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow({
+  const mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
     show: false,
@@ -31,7 +21,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show()
+    mainWindow.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -53,15 +43,26 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // हैंडलर्स अब सही पाथ से रजिस्टर होंगे
-  registerAppHandlers(ipcMain)
-  registerAgentsHandlers(ipcMain)
-  registerGalleryHandlers(ipcMain)
-  registerNotesHandlers(ipcMain)
-  registerPhoneHandlers(ipcMain)
-  registerSettingsHandlers(ipcMain)
-  registerGoogleAuthHandlers(ipcMain)
+  session.defaultSession.setDisplayMediaRequestHandler((_request: any, callback: any) => {
+    desktopCapturer
+      .getSources({ types: ['screen'] })
+      .then((sources) => {
+        if (sources && sources.length > 0) {
+          callback({ video: sources[0] })
+        } else {
+          console.error('[NOVA-X] No screens found to share.')
+          // @ts-ignore - explicitly fail the callback safely
+          callback()
+        }
+      })
+      .catch((err) => {
+        console.error('[NOVA-X] Screen capture failed:', err)
+        // @ts-ignore
+        callback()
+      })
+  })
 
+  registerSystemHandlers(ipcMain)
   createWindow()
 
   app.on('activate', function () {

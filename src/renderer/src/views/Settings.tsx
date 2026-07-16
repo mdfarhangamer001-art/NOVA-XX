@@ -34,25 +34,30 @@ function GlassPanel({
 export default function SettingsView({ isSystemActive }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('keys')
 
-  const [geminiKey, setGeminiKey] = useState('')
-  const [groqKey, setGroqKey] = useState('')
-  const [hfKey, setHfKey] = useState('')
-  const [tavilyKey, settavilyKey] = useState('')
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('mock_geminiKey') || '')
+  const [groqKey, setGroqKey] = useState(() => localStorage.getItem('mock_groqKey') || '')
+  const [hfKey, setHfKey] = useState(() => localStorage.getItem('mock_hfKey') || '')
+  const [tavilyKey, settavilyKey] = useState(() => localStorage.getItem('mock_tavilyKey') || '')
 
   useEffect(() => {
-    if (!window.electron?.ipcRenderer) return undefined
-
-    window.electron.ipcRenderer.invoke('secure-get-keys').then((keys: any) => {
-      if (keys) {
-        setGeminiKey(keys.geminiKey || '')
-        setGroqKey(keys.groqKey || '')
-        setHfKey(keys.hfKey || '')
-        settavilyKey(keys.tavilyKey || '')
-      }
-    })
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.invoke('secure-get-keys').then((keys: any) => {
+        if (keys) {
+          if (keys.geminiKey) setGeminiKey(keys.geminiKey)
+          if (keys.groqKey) setGroqKey(keys.groqKey)
+          if (keys.hfKey) setHfKey(keys.hfKey)
+          if (keys.tavilyKey) settavilyKey(keys.tavilyKey)
+        }
+      })
+    }
   }, [])
 
   const saveApiKeys = async () => {
+    localStorage.setItem('mock_geminiKey', geminiKey)
+    localStorage.setItem('mock_groqKey', groqKey)
+    localStorage.setItem('mock_hfKey', hfKey)
+    localStorage.setItem('mock_tavilyKey', tavilyKey)
+
     if (window.electron?.ipcRenderer) {
       try {
         await window.electron.ipcRenderer.invoke('secure-save-keys', {
@@ -65,6 +70,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps) {
       } catch (e) {
         alert('Failed to save keys to the secure vault.')
       }
+    } else {
+      alert('API Keys securely saved to Browser Storage.')
     }
   }
 
