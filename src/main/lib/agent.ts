@@ -4,45 +4,15 @@ import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai'
 import fs from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
-import Store from 'electron-store'
-
-const store = new Store()
-
-function getGeminiApiKey(): string {
-  const envKey = process.env.GEMINI_API_KEY
-  if (envKey) return envKey
-  
-  // Try decrypting from the secure keys if stored there
-  const secureKeys: any = store.get('secure_api_keys')
-  if (secureKeys && secureKeys.GEMINI_API_KEY) {
-    return secureKeys.GEMINI_API_KEY
-  }
-  
-  const decryptedKeysStr = store.get('secure_api_keys_enc') as string
-  if (decryptedKeysStr) {
-    try {
-      const crypto = require('crypto')
-      const ENCRYPTION_KEY = crypto.scryptSync('novax-secret-vault-salt-key', 'salt', 32)
-      const textParts = decryptedKeysStr.split(':')
-      const iv = Buffer.from(textParts.shift()!, 'hex')
-      const encryptedText = Buffer.from(textParts.join(':'), 'hex')
-      const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
-      let decrypted = decipher.update(encryptedText)
-      decrypted = Buffer.concat([decrypted, decipher.final()])
-      const parsed = JSON.parse(decrypted.toString())
-      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
-    } catch (e) {
-      // ignore decryption errors
-    }
-  }
-
-  return ''
-}
+import { getGeminiApiKey } from './apiKey'
 
 // Map the workspace root path
 const WORKSPACE_ROOT = process.cwd()
 
-// Define Tools
+// ---------------------------------------------------------------------------
+// Tool Definitions
+// ---------------------------------------------------------------------------
+
 const listFilesTool: FunctionDeclaration = {
   name: 'list_files',
   description: 'List all files and folders in a directory of the project workspace.',
@@ -73,9 +43,34 @@ const readFileTool: FunctionDeclaration = {
   }
 }
 
+const searchFilesTool: FunctionDeclaration = {
+  name: 'search_files',
+  description:
+    'Search for a text/regex pattern across files in the workspace (like grep). Use this before editing to find exactly where something lives instead of guessing.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      pattern: {
+        type: Type.STRING,
+        description: 'Plain text or regex pattern to search for.'
+      },
+      directory: {
+        type: Type.STRING,
+        description: 'Directory to search within, relative to workspace root. Defaults to root.'
+      },
+      fileExtension: {
+        type: Type.STRING,
+        description: 'Optional filter, e.g. ".ts" or ".tsx". Leave empty to search all text files.'
+      }
+    },
+    required: ['pattern']
+  }
+}
+
 const writeFileTool: FunctionDeclaration = {
   name: 'write_file',
-  description: 'Create a new file or write/overwrite content to a file in the workspace. Requires operator approval.',
+  description:
+    'Create a new file or completely overwrite an existing file. Use this for new files only. For editing an EXISTING file, prefer edit_file so you do not destroy unrelated code. Requires operator approval.',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -85,16 +80,56 @@ const writeFileTool: FunctionDeclaration = {
       },
       content: {
         type: Type.STRING,
-        description: 'The text content to write into the file.'
+        description: 'The full text content to write into the file.'
       }
     },
     required: ['filePath', 'content']
   }
 }
 
+const editFileTool: FunctionDeclaration = {
+  name: 'edit_file',
+  description:
+    'Make a precise, surgical edit to an existing file by replacing one exact snippet of text with a new one. The oldText MUST match the file content exactly (including whitespace) and must be unique in the file. Always read_file first to get exact current content. Requires operator approval.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      filePath: {
+        type: Type.STRING,
+        description: 'The path of the file to edit relative to the workspace root.'
+      },
+      oldText: {
+        type: Type.STRING,
+        description: 'The exact, unique existing snippet to replace.'
+      },
+      newText: {
+        type: Type.STRING,
+        description: 'The replacement text.'
+      }
+    },
+    required: ['filePath', 'oldText', 'newText']
+  }
+}
+
+const deleteFileTool: FunctionDeclaration = {
+  name: 'delete_file',
+  description: 'Delete a file from the workspace. Requires operator approval.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      filePath: {
+        type: Type.STRING,
+        description: 'The path of the file to delete relative to the workspace root.'
+      }
+    },
+    required: ['filePath']
+  }
+}
+
 const runCommandTool: FunctionDeclaration = {
   name: 'run_command',
-  description: 'Run a shell command in the project workspace (e.g. npm run test, npm run lint). Requires operator approval.',
+  description:
+    'Run a shell command in the project workspace (e.g. npm run lint, npx tsc --noEmit, npm test). Use this to verify your own changes before declaring the task done. Requires operator approval.',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -106,6 +141,67 @@ const runCommandTool: FunctionDeclaration = {
     required: ['command']
   }
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function resolveSafe(relativePath: string): { ok: true; abs: string } | { ok: false; error: string } {
+  const abs = path.resolve(WORKSPACE_ROOT, relativePath)
+  if (!abs.startsWith(WORKSPACE_ROOT)) {
+    return { ok: false, error: 'Permission Denied: Path escapes the workspace root.' }
+  }
+  return { ok: true, abs }
+}
+
+async function askOperator(
+  win: BrowserWindow | null,
+  title: string,
+  message: string,
+  detail: string
+): Promise<boolean> {
+  const res = await dialog.showMessageBox(win || undefined!, {
+    type: 'warning',
+    buttons: ['Reject', 'Authorize'],
+    defaultId: 1,
+    cancelId: 0,
+    title,
+    message,
+    detail
+  })
+  return res.response === 1
+}
+
+const TEXT_EXTENSIONS = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.html', '.yml', '.yaml', '.txt'
+])
+
+function walkTextFiles(dir: string, ext: string | undefined, out: string[]): void {
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'out' || entry.name === 'dist') {
+      continue
+    }
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      walkTextFiles(full, ext, out)
+    } else {
+      const fileExt = path.extname(entry.name)
+      if (ext ? fileExt === ext : TEXT_EXTENSIONS.has(fileExt)) {
+        out.push(full)
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Agent Loop
+// ---------------------------------------------------------------------------
 
 export function registerAgentHandlers(): void {
   ipcMain.removeHandler('agent-run-task')
@@ -134,15 +230,29 @@ export function registerAgentHandlers(): void {
       }
     })
 
-    const systemInstruction = `You are the NOVA-X Coding Agent. You are a highly professional, expert developer agent.
-You have native access to the workspace file-system and terminal via custom tools.
-Your goal is to fulfill the user's prompt by examining files, reading contents, writing correct modifications, and running check commands.
-Always verify code correctness and syntax integrity.
-Work carefully and step-by-step. Let the operator know exactly what you are doing.`
+    const systemInstruction = `You are the coding-agent module of an assistant persona named Max (Tehzeeb AI OS). \
+Inside this specific task you act as a precise, senior-level software engineer — calm, direct, and honest, never overconfident.
+
+Operating rules:
+1. Investigate before you act: use list_files / search_files / read_file to understand real code before changing anything. Never assume file contents from memory.
+2. Prefer edit_file (surgical, exact-snippet replacement) over write_file for existing files. Only use write_file for brand-new files or a deliberate full rewrite.
+3. After making a change, verify it: read the file back, or run a check command (lint / type-check / test) via run_command when one is available. Do not declare success without verifying.
+4. If something you tried fails or a command errors, read the error carefully, form a specific hypothesis about the cause, and fix it — don't repeat the same failing action.
+5. Keep the operator informed in plain, honest language: what you found, what you're about to do, and why. No filler, no exaggeration about what was actually accomplished.
+6. Respect workspace boundaries and operator approval on every write/edit/delete/run — these gates exist for the user's safety and you must not try to work around them.
+7. When the task is genuinely complete and verified, say so clearly and summarize exactly what changed.`
 
     const tools: any[] = [
       {
-        functionDeclarations: [listFilesTool, readFileTool, writeFileTool, runCommandTool]
+        functionDeclarations: [
+          listFilesTool,
+          readFileTool,
+          searchFilesTool,
+          writeFileTool,
+          editFileTool,
+          deleteFileTool,
+          runCommandTool
+        ]
       }
     ]
 
@@ -150,17 +260,14 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
       sendLog(`Task received: "${prompt}"`)
       sendLog('Analyzing task strategy and compiling toolchain...')
 
-      // We maintain history manually for the loop
-      const contentsHistory: any[] = [
-        { role: 'user', parts: [{ text: prompt }] }
-      ]
+      const contentsHistory: any[] = [{ role: 'user', parts: [{ text: prompt }] }]
 
       let loopCount = 0
-      const maxLoops = 8
+      const maxLoops = 20
 
       while (loopCount < maxLoops) {
         loopCount++
-        sendLog(`[Step ${loopCount}] Querying Gemini neural model...`)
+        sendLog(`[Step ${loopCount}/${maxLoops}] Querying neural model...`)
 
         const response = await ai.models.generateContent({
           model: 'gemini-3.5-flash',
@@ -171,7 +278,6 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
           }
         })
 
-        // Add model response to history
         const modelContent = response.candidates?.[0]?.content
         if (modelContent) {
           contentsHistory.push(modelContent)
@@ -179,7 +285,7 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
 
         const textResponse = response.text
         if (textResponse) {
-          sendLog(`Agent response: ${textResponse}`)
+          sendLog(`Agent: ${textResponse}`)
         }
 
         const functionCalls = response.functionCalls
@@ -188,24 +294,23 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
           return { success: true, summary: textResponse || 'Task complete.' }
         }
 
-        // Handle function call
         const call = functionCalls[0]
         const toolName = call.name
         const args: any = call.args
-        sendLog(`Agent requested tool execution: ${toolName}(${JSON.stringify(args)})`)
+        sendLog(`Tool requested: ${toolName}(${JSON.stringify(args)})`)
 
         let toolResult: any = null
 
         if (toolName === 'list_files') {
-          try {
-            const targetDir = path.resolve(WORKSPACE_ROOT, args.directory || '.')
-            if (!targetDir.startsWith(WORKSPACE_ROOT)) {
-              toolResult = { error: 'Permission Denied: Cannot traverse outside workspace.' }
-            } else {
-              if (fs.existsSync(targetDir)) {
-                const files = fs.readdirSync(targetDir)
-                const fileStats = files.map(file => {
-                  const fp = path.join(targetDir, file)
+          const resolved = resolveSafe(args.directory || '.')
+          if (!resolved.ok) {
+            toolResult = { error: resolved.error }
+          } else {
+            try {
+              if (fs.existsSync(resolved.abs)) {
+                const files = fs.readdirSync(resolved.abs)
+                const fileStats = files.map((file) => {
+                  const fp = path.join(resolved.abs, file)
                   const isDir = fs.statSync(fp).isDirectory()
                   return `${file}${isDir ? '/' : ''}`
                 })
@@ -214,94 +319,177 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
               } else {
                 toolResult = { error: 'Directory does not exist.' }
               }
+            } catch (e: any) {
+              toolResult = { error: e.message }
             }
-          } catch (e: any) {
-            toolResult = { error: e.message }
           }
-        } 
-        else if (toolName === 'read_file') {
-          try {
-            const targetPath = path.resolve(WORKSPACE_ROOT, args.filePath)
-            if (!targetPath.startsWith(WORKSPACE_ROOT)) {
-              toolResult = { error: 'Permission Denied: Cannot access file outside workspace.' }
-            } else {
-              if (fs.existsSync(targetPath)) {
-                const content = fs.readFileSync(targetPath, 'utf8')
-                toolResult = { content }
-                sendLog(`Successfully read file of size: ${content.length} characters.`)
-              } else {
-                toolResult = { error: 'File does not exist.' }
-              }
-            }
-          } catch (e: any) {
-            toolResult = { error: e.message }
-          }
-        } 
-        else if (toolName === 'write_file') {
-          // Ask for Operator Confirmation
-          sendLog('Awaiting operator authorization for write_file operation...')
-          const dialogResponse = await dialog.showMessageBox(focusedWindow || undefined!, {
-            type: 'warning',
-            buttons: ['Reject', 'Authorize Write'],
-            defaultId: 1,
-            cancelId: 0,
-            title: 'NOVA-X Coding Agent Authorization',
-            message: 'Write File Action Requested',
-            detail: `The Coding Agent is requesting to write to file:\n\n${args.filePath}\n\nDo you authorize this file system write operation?`
-          })
-
-          if (dialogResponse.response !== 1) {
-            sendLog('Operator REJECTED the write file request.')
-            toolResult = { error: 'Operator rejected the write file request.' }
+        } else if (toolName === 'read_file') {
+          const resolved = resolveSafe(args.filePath)
+          if (!resolved.ok) {
+            toolResult = { error: resolved.error }
           } else {
             try {
-              const targetPath = path.resolve(WORKSPACE_ROOT, args.filePath)
-              if (!targetPath.startsWith(WORKSPACE_ROOT)) {
-                toolResult = { error: 'Permission Denied: Cannot write file outside workspace.' }
+              if (fs.existsSync(resolved.abs)) {
+                const content = fs.readFileSync(resolved.abs, 'utf8')
+                toolResult = { content }
+                sendLog(`Read file (${content.length} chars).`)
               } else {
-                fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-                fs.writeFileSync(targetPath, args.content, 'utf8')
-                toolResult = { success: true }
-                sendLog(`Successfully wrote code modification to: ${args.filePath}`)
+                toolResult = { error: 'File does not exist.' }
               }
             } catch (e: any) {
               toolResult = { error: e.message }
             }
           }
-        } 
-        else if (toolName === 'run_command') {
-          // Ask for Operator Confirmation
-          sendLog('Awaiting operator authorization for run_command operation...')
-          const dialogResponse = await dialog.showMessageBox(focusedWindow || undefined!, {
-            type: 'warning',
-            buttons: ['Reject', 'Authorize Command'],
-            defaultId: 1,
-            cancelId: 0,
-            title: 'NOVA-X Coding Agent Authorization',
-            message: 'Terminal Command Action Requested',
-            detail: `The Coding Agent is requesting to run terminal command:\n\n${args.command}\n\nDo you authorize executing this shell command?`
-          })
-
-          if (dialogResponse.response !== 1) {
-            sendLog('Operator REJECTED the terminal command execution.')
+        } else if (toolName === 'search_files') {
+          const startDir = resolveSafe(args.directory || '.')
+          if (!startDir.ok) {
+            toolResult = { error: startDir.error }
+          } else {
+            try {
+              const files: string[] = []
+              walkTextFiles(startDir.abs, args.fileExtension, files)
+              const pattern = args.pattern as string
+              let regex: RegExp
+              try {
+                regex = new RegExp(pattern, 'i')
+              } catch {
+                regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+              }
+              const matches: { file: string; line: number; text: string }[] = []
+              for (const f of files) {
+                const rel = path.relative(WORKSPACE_ROOT, f)
+                const lines = fs.readFileSync(f, 'utf8').split('\n')
+                lines.forEach((line, idx) => {
+                  if (regex.test(line)) {
+                    matches.push({ file: rel, line: idx + 1, text: line.trim().slice(0, 200) })
+                  }
+                })
+                if (matches.length >= 100) break
+              }
+              toolResult = { matches, matchCount: matches.length }
+              sendLog(`Search found ${matches.length} matching line(s).`)
+            } catch (e: any) {
+              toolResult = { error: e.message }
+            }
+          }
+        } else if (toolName === 'write_file') {
+          const authorized = await askOperator(
+            focusedWindow,
+            'NOVA-X Coding Agent Authorization',
+            'Write File Action Requested',
+            `The Coding Agent wants to write to:\n\n${args.filePath}\n\nAuthorize this file write?`
+          )
+          if (!authorized) {
+            sendLog('Operator REJECTED the write_file request.')
+            toolResult = { error: 'Operator rejected the write file request.' }
+          } else {
+            const resolved = resolveSafe(args.filePath)
+            if (!resolved.ok) {
+              toolResult = { error: resolved.error }
+            } else {
+              try {
+                fs.mkdirSync(path.dirname(resolved.abs), { recursive: true })
+                fs.writeFileSync(resolved.abs, args.content, 'utf8')
+                toolResult = { success: true }
+                sendLog(`Wrote file: ${args.filePath}`)
+              } catch (e: any) {
+                toolResult = { error: e.message }
+              }
+            }
+          }
+        } else if (toolName === 'edit_file') {
+          const authorized = await askOperator(
+            focusedWindow,
+            'NOVA-X Coding Agent Authorization',
+            'Edit File Action Requested',
+            `The Coding Agent wants to edit:\n\n${args.filePath}\n\nAuthorize this surgical edit?`
+          )
+          if (!authorized) {
+            sendLog('Operator REJECTED the edit_file request.')
+            toolResult = { error: 'Operator rejected the edit file request.' }
+          } else {
+            const resolved = resolveSafe(args.filePath)
+            if (!resolved.ok) {
+              toolResult = { error: resolved.error }
+            } else if (!fs.existsSync(resolved.abs)) {
+              toolResult = { error: 'File does not exist. Use write_file to create it first.' }
+            } else {
+              try {
+                const current = fs.readFileSync(resolved.abs, 'utf8')
+                const occurrences = current.split(args.oldText).length - 1
+                if (occurrences === 0) {
+                  toolResult = {
+                    error: 'oldText not found in file. Re-read the file to get exact current content before editing.'
+                  }
+                } else if (occurrences > 1) {
+                  toolResult = {
+                    error: `oldText matched ${occurrences} times — it must be unique. Include more surrounding context.`
+                  }
+                } else {
+                  const updated = current.replace(args.oldText, args.newText)
+                  fs.writeFileSync(resolved.abs, updated, 'utf8')
+                  toolResult = { success: true }
+                  sendLog(`Edited file: ${args.filePath}`)
+                }
+              } catch (e: any) {
+                toolResult = { error: e.message }
+              }
+            }
+          }
+        } else if (toolName === 'delete_file') {
+          const authorized = await askOperator(
+            focusedWindow,
+            'NOVA-X Coding Agent Authorization',
+            'Delete File Action Requested',
+            `The Coding Agent wants to delete:\n\n${args.filePath}\n\nAuthorize this deletion?`
+          )
+          if (!authorized) {
+            sendLog('Operator REJECTED the delete_file request.')
+            toolResult = { error: 'Operator rejected the delete file request.' }
+          } else {
+            const resolved = resolveSafe(args.filePath)
+            if (!resolved.ok) {
+              toolResult = { error: resolved.error }
+            } else {
+              try {
+                if (fs.existsSync(resolved.abs)) {
+                  fs.unlinkSync(resolved.abs)
+                  toolResult = { success: true }
+                  sendLog(`Deleted file: ${args.filePath}`)
+                } else {
+                  toolResult = { error: 'File does not exist.' }
+                }
+              } catch (e: any) {
+                toolResult = { error: e.message }
+              }
+            }
+          }
+        } else if (toolName === 'run_command') {
+          const authorized = await askOperator(
+            focusedWindow,
+            'NOVA-X Coding Agent Authorization',
+            'Terminal Command Action Requested',
+            `The Coding Agent wants to run:\n\n${args.command}\n\nAuthorize this command execution?`
+          )
+          if (!authorized) {
+            sendLog('Operator REJECTED the run_command request.')
             toolResult = { error: 'Operator rejected the run command execution.' }
           } else {
             try {
-              sendLog(`Running shell command: ${args.command}`)
-              const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-                exec(args.command, { cwd: WORKSPACE_ROOT }, (error, stdout, stderr) => {
+              sendLog(`Running: ${args.command}`)
+              const result = await new Promise<{ stdout: string; stderr: string }>((resolve) => {
+                exec(args.command, { cwd: WORKSPACE_ROOT, timeout: 120000 }, (_error, stdout, stderr) => {
                   resolve({ stdout, stderr })
                 })
               })
-              toolResult = { stdout: result.stdout, stderr: result.stderr }
-              sendLog(`Command execution complete. Stdout length: ${result.stdout.length}`)
+              toolResult = { stdout: result.stdout.slice(0, 8000), stderr: result.stderr.slice(0, 4000) }
+              sendLog(`Command finished. stdout: ${result.stdout.length} chars, stderr: ${result.stderr.length} chars.`)
             } catch (e: any) {
               toolResult = { error: e.message }
             }
           }
         }
 
-        // Add function response to history
         contentsHistory.push({
           role: 'user',
           parts: [
@@ -315,12 +503,11 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
         })
       }
 
-      sendLog('Maximum step loops exceeded without final response. Stopping.')
+      sendLog('Maximum step loops exceeded without a final response. Stopping.')
       return { success: false, error: 'Maximum loop steps exceeded.' }
-
     } catch (err: any) {
       sendLog(`ERROR in agent loop: ${err.message}`)
       return { success: false, error: err.message }
     }
   })
-}
+  }
