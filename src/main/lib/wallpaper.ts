@@ -79,7 +79,14 @@ export function registerWallpaperHandlers(): void {
       fs.mkdirSync(wallpaperDir, { recursive: true })
       const fileName = `wallpaper-${Date.now()}.png`
       const filePath = path.join(wallpaperDir, fileName)
-      fs.writeFileSync(filePath, Buffer.from(imagePart.inlineData.data, 'base64'))
+
+      // Ensure image data is a string before processing to resolve type-check error
+      const base64Data = imagePart.inlineData.data
+      if (typeof base64Data === 'string') {
+        fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'))
+      } else {
+        return { success: false, error: 'Image data format is invalid.' }
+      }
 
       await applyWallpaper(filePath)
 
@@ -89,4 +96,4 @@ export function registerWallpaperHandlers(): void {
       return { success: false, error: err.message }
     }
   })
-}
+    }
