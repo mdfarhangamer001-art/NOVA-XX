@@ -9,7 +9,9 @@
     "format": "prettier --write .",
     "lint": "eslint --cache .",
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "build:electron": "electron-vite build",
+    "dist:win": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
