@@ -1,19 +1,25 @@
 import { resolve } from 'path'
-import { defineConfig } from 'electron-vite'
+import { defineConfig, type Plugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import JavaScriptObfuscator from 'javascript-obfuscator'
+import type { OutputBundle, OutputChunk } from 'rollup'
 
-function obfuscatePlugin() {
+function obfuscatePlugin(): Plugin {
   return {
     name: 'vite-plugin-javascript-obfuscator',
-    enforce: 'post' as const,
-    generateBundle(_options, bundle) {
-      for (const [fileName, file] of Object.entries(bundle)) {
-        if (fileName.endsWith('.js') && file.type === 'chunk' && file.code) {
+    enforce: 'post',
+    generateBundle(_options, bundle: OutputBundle) {
+      for (const fileName in bundle) {
+        const file = bundle[fileName]
+        
+        // चेक करें कि क्या यह एक OutputChunk है और इसमें कोड है
+        if (fileName.endsWith('.js') && file.type === 'chunk') {
+          const chunk = file as OutputChunk
+          
           console.log(`[Obfuscating] ${fileName}...`)
           try {
-            const result = JavaScriptObfuscator.obfuscate(file.code, {
+            const result = JavaScriptObfuscator.obfuscate(chunk.code, {
               compact: true,
               controlFlowFlattening: true,
               controlFlowFlatteningThreshold: 0.75,
@@ -22,7 +28,7 @@ function obfuscatePlugin() {
               stringArray: true,
               stringArrayThreshold: 0.75
             })
-            file.code = result.getObfuscatedCode()
+            chunk.code = result.getObfuscatedCode()
           } catch (err) {
             console.error(`[Obfuscation Error] Failed to obfuscate ${fileName}:`, err)
           }
