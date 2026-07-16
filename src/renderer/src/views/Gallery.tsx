@@ -68,7 +68,7 @@ const GalleryView = () => {
   useEffect(() => {
     fetchGallery()
     const interval = setInterval(fetchGallery, 5000)
-    return () => clearInterval(interval)6
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
