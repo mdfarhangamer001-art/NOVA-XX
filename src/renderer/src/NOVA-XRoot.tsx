@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import IRIS from './UI/IRIS'
+import IRIS from './UI/NOVA-X'
 import TitleBar from './components/Titlebar'
 
 export type VisionMode = 'camera' | 'screen' | 'none'
