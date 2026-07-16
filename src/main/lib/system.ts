@@ -1,183 +1,215 @@
-import { IpcMain } from 'electron'
-import os from 'os'
-import { exec } from 'child_process'
+import { useEffect, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { GiArtificialIntelligence } from 'react-icons/gi'
+import {
+  RiKey2Line,
+  RiSave3Line,
+  RiShieldKeyholeLine,
+  RiPlugLine,
+  RiTerminalWindowLine
+} from 'react-icons/ri'
 
-const runCommand = (cmd: string): Promise<string> => {
-  return new Promise((resolve) => {
-    exec(cmd, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
-      if (error) resolve('')
-      resolve(stdout ? stdout.trim() : '')
+interface SettingsProps {
+  isSystemActive: boolean
+}
+
+type TabType = 'updates' | 'keys' | 'security'
+
+function GlassPanel({
+  children,
+  className = ''
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl bg-zinc-900/60 backdrop-blur-xl border border-white/10 shadow-lg ${className}`}
+    >
+      <div className="relative z-10">{children}</div>
+    </div>
+  )
+}
+
+export default function SettingsView({ isSystemActive }: SettingsProps) {
+  const [activeTab, setActiveTab] = useState<TabType>('keys')
+
+  const [geminiKey, setGeminiKey] = useState('')
+  const [groqKey, setGroqKey] = useState('')
+  const [hfKey, setHfKey] = useState('')
+  const [tavilyKey, settavilyKey] = useState('')
+
+  useEffect(() => {
+    if (!window.electron?.ipcRenderer) return undefined
+
+    window.electron.ipcRenderer.invoke('secure-get-keys').then((keys: any) => {
+      if (keys) {
+        setGeminiKey(keys.geminiKey || '')
+        setGroqKey(keys.groqKey || '')
+        setHfKey(keys.hfKey || '')
+        settavilyKey(keys.tavilyKey || '')
+      }
     })
-  })
-}
+  }, [])
 
-let cpuLastSnapshot = os.cpus()
-
-function getSystemCpuUsage(): string {
-  const cpus = os.cpus()
-  let idle = 0
-  let total = 0
-  for (let i = 0; i < cpus.length; i++) {
-    const cpu = cpus[i]
-    const prevCpu = cpuLastSnapshot[i]
-    let currentTotal = 0
-    for (const type in cpu.times) currentTotal += cpu.times[type as keyof typeof cpu.times]
-    let prevTotal = 0
-    for (const type in prevCpu.times) prevTotal += prevCpu.times[type as keyof typeof prevCpu.times]
-    idle += cpu.times.idle - prevCpu.times.idle
-    total += currentTotal - prevTotal
-  }
-  cpuLastSnapshot = cpus
-  return total === 0 ? '0.0' : (((total - idle) / total) * 100).toFixed(1)
-}
-
-export async function fetchInstalledApps() {
-  try {
-    const platform = os.platform()
-    if (platform === 'win32') {
-      const cmd = `powershell "Get-StartApps | Select-Object Name, AppID | ConvertTo-Json -Depth 1"`
-      const jsonOutput = await runCommand(cmd)
-      if (!jsonOutput) return []
-      const rawData = JSON.parse(jsonOutput)
-      const appsArray = Array.isArray(rawData) ? rawData : [rawData]
-      return appsArray
-        .filter((a: any) => a && a.Name && a.AppID)
-        .map((a: any) => ({ name: a.Name.trim(), id: a.AppID.trim() }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-    } else if (platform === 'darwin') {
-      const cmd = `mdfind "kMDItemContentType == 'com.apple.application-bundle'"`
-      const output = await runCommand(cmd)
-      return output
-        .split('\n')
-        .filter((p) => p.includes('/Applications/'))
-        .map((p) => ({ name: p.split('/').pop()?.replace('.app', '') || 'Unknown', id: p }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-    } else if (platform === 'linux') {
-      const cmd = `ls /usr/share/applications | grep .desktop`
-      const output = await runCommand(cmd)
-      return output
-        .split('\n')
-        .map((p) => ({ name: p.replace('.desktop', '').replace(/-/g, ' '), id: p }))
-    }
-    return []
-  } catch (e) {
-    return []
-  }
-}
-
-export async function fetchSystemStats() {
-  const totalMem = os.totalmem()
-  const freeMem = os.freemem()
-
-  const cpuString = getSystemCpuUsage()
-  const cpuNum = parseFloat(cpuString)
-
-  const estimatedTemp = 40 + cpuNum * 0.4 + Math.random() * 2
-  const tx = Math.floor(Math.random() * 40) + (cpuNum > 20 ? 40 : 0)
-  const rx = Math.floor(Math.random() * 60) + (cpuNum > 10 ? 20 : 0)
-
-  let osName = 'UNKNOWN'
-  if (os.platform() === 'win32') osName = 'WIN 11'
-  if (os.platform() === 'darwin') osName = 'MACOS'
-  if (os.platform() === 'linux') osName = 'LINUX'
-
-  return {
-    cpu: cpuString,
-    memory: {
-      total: (totalMem / 1024 ** 3).toFixed(1),
-      free: (freeMem / 1024 ** 3).toFixed(1),
-      usedPercentage: (((totalMem - freeMem) / totalMem) * 100).toFixed(1)
-    },
-    temperature: estimatedTemp,
-    os: { type: osName, uptime: (os.uptime() / 3600).toFixed(1) + 'h' },
-    network: { tx, rx, latency: Math.floor(Math.random() * 15) + 20 }
-  }
-}
-
-export async function fetchStorageDrives() {
-  try {
-    if (os.platform() === 'win32') {
-      const cmd = `powershell "Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{N='FreeGB';E={[math]::round($_.Free/1GB, 2)}}, @{N='TotalGB';E={[math]::round(($_.Used + $_.Free)/1GB, 2)}} | ConvertTo-Json"`
-      const output = await runCommand(cmd)
-      return output ? JSON.parse(output) : []
-    } else {
-      const cmd = `df -h | awk '$1 ~ /^\\/dev\\// {print $1, $4, $2}'`
-      const output = await runCommand(cmd)
-      return output.split('\n').map((line) => {
-        const parts = line.split(' ')
-        return { Name: parts[0], FreeGB: parts[1], TotalGB: parts[2] }
-      })
-    }
-  } catch (e) {
-    return []
-  }
-}
-
-export async function executeSystemAction(_event: any, payload: { action: string; data?: any }) {
-  const platform = os.platform()
-  const { action, data } = payload
-  console.log(`[NOVA-X Main] Executing system action: ${action}`, data)
-  try {
-    if (action === 'run-command' && data?.command) {
-      const result = await runCommand(data.command)
-      return { success: true, output: result }
-    }
-    if (action === 'open-app' && data?.appName) {
-      const appName = data.appName
-      if (platform === 'win32') {
-        await runCommand(`start "" "${appName}"`)
-      } else if (platform === 'darwin') {
-        await runCommand(`open -a "${appName}"`)
-      } else {
-        await runCommand(`"${appName}" &`)
+  const saveApiKeys = async () => {
+    if (window.electron?.ipcRenderer) {
+      try {
+        await window.electron.ipcRenderer.invoke('secure-save-keys', {
+          groqKey,
+          geminiKey,
+          hfKey,
+          tavilyKey
+        })
+        alert('API Keys securely encrypted and saved to Vault. You can now Use this!.')
+      } catch (e) {
+        alert('Failed to save keys to the secure vault.')
       }
-      return { success: true }
     }
-    if (action === 'lock-screen') {
-      if (platform === 'win32') {
-        await runCommand('rundll32.exe user32.dll,LockWorkStation')
-      } else if (platform === 'darwin') {
-        await runCommand('pmset displaysleepnow')
-      } else {
-        await runCommand('xdg-screensaver lock')
-      }
-      return { success: true }
-    }
-    if (action === 'set-volume' && data?.volume !== undefined) {
-      const vol = data.volume // 0 - 100
-      if (platform === 'win32') {
-        // Toggle/change volume via PowerShell keys
-        await runCommand(`powershell -c "(New-Object -ComObject Wscript.Shell).SendKeys([char]174)"`)
-      } else if (platform === 'darwin') {
-        await runCommand(`osascript -e "set volume output volume ${vol}"`)
-      } else {
-        await runCommand(`amixer set Master ${vol}%`)
-      }
-      return { success: true }
-    }
-    return { success: false, error: 'Unknown system action' }
-  } catch (err: any) {
-    return { success: false, error: err.message }
   }
-}
 
-export async function openApp(_event: any, appName: string) {
-  return executeSystemAction(_event, { action: 'open-app', data: { appName } })
-}
+  const inputContainerClass =
+    'flex items-center bg-black/40 border border-white/10 rounded-lg px-4 py-3 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-all duration-200 w-full'
+  const labelClass = 'text-sm text-zinc-300 font-medium flex items-center gap-2 mb-2'
+  const titleClass = 'text-lg font-semibold text-white flex items-center gap-3'
 
-export default function registerSystemHandlers(ipcMain: IpcMain) {
-  ipcMain.removeHandler('get-installed-apps')
-  ipcMain.handle('get-installed-apps', fetchInstalledApps)
+  const tabConfigs = [{ id: 'keys', label: 'API Keys', icon: <RiPlugLine size={18} /> }]
 
-  ipcMain.removeHandler('get-system-stats')
-  ipcMain.handle('get-system-stats', fetchSystemStats)
+  return (
+    <div className="flex-1 p-6 md:p-10 flex flex-col items-center bg-transparent min-h-screen text-zinc-100 overflow-y-auto scrollbar-small">
+      <motion.div
+        className="w-full max-w-4xl flex flex-col gap-8"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/10">
+          <div className="flex items-center gap-4">
+            <div className="relative flex items-center justify-center h-14 w-14 rounded-xl bg-zinc-900 border border-white/10 shadow-lg">
+              <GiArtificialIntelligence size={28} className="text-zinc-100" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight text-white">Settings</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <div
+                  className={`h-2 w-2 rounded-full ${isSystemActive ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-600'}`}
+                />
+                <p className="text-sm text-zinc-400 font-medium">
+                  {isSystemActive ? 'System is Online' : 'System is Offline'}
+                </p>
+              </div>
+            </div>
+          </div>
 
-  ipcMain.removeHandler('get-drives')
-  ipcMain.handle('get-drives', fetchStorageDrives)
+          <div className="flex bg-zinc-900/80 p-1.5 rounded-xl border border-white/10 backdrop-blur-md shadow-xl overflow-x-auto scrollbar-none">
+            {tabConfigs.map((tab) => (
+              <motion.button
+                key={tab.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setActiveTab(tab.id as TabType)}
+                className={`cursor-pointer flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-white text-black shadow-md'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {tab.icon} {tab.label}
+              </motion.button>
+            ))}
+          </div>
+        </div>
 
-  ipcMain.removeHandler('execute-system-action')
-  ipcMain.handle('execute-system-action', executeSystemAction)
+        <div className="relative min-h-125">
+          <AnimatePresence mode="wait">
+            {activeTab === 'keys' && (
+              <motion.div
+                key="keys"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="w-full absolute"
+              >
+                <GlassPanel className="p-8 flex flex-col gap-8">
+                  <div className="flex justify-between items-center pb-2">
+                    <span className={titleClass}>
+                      <RiKey2Line className="text-emerald-400" size={24} /> API Providers
+                    </span>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={saveApiKeys}
+                      className="bg-emerald-500 cursor-pointer text-black px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2"
+                    >
+                      <RiSave3Line size={18} /> Save Keys
+                    </motion.button>
+                  </div>
 
-  ipcMain.removeHandler('open-app')
-  ipcMain.handle('open-app', openApp)
-}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className={labelClass}>Google Gemini API</label>
+                      <div className={inputContainerClass}>
+                        <input
+                          type="password"
+                          value={geminiKey}
+                          onChange={(e) => setGeminiKey(e.target.value)}
+                          placeholder="AIzaSy..."
+                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Groq Cloud API</label>
+                      <div className={inputContainerClass}>
+                        <input
+                          type="password"
+                          value={groqKey}
+                          onChange={(e) => setGroqKey(e.target.value)}
+                          placeholder="gsk_..."
+                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Hugging Face Token</label>
+                      <div className={inputContainerClass}>
+                        <input
+                          type="password"
+                          value={hfKey}
+                          onChange={(e) => setHfKey(e.target.value)}
+                          placeholder="hf_..."
+                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Tavily Search API</label>
+                      <div className={inputContainerClass}>
+                        <input
+                          type="password"
+                          value={tavilyKey}
+                          onChange={(e) => settavilyKey(e.target.value)}
+                          placeholder="tvly-..."
+                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-white/5 p-4 rounded-xl flex gap-3 items-start mt-4">
+                    <RiShieldKeyholeLine className="text-zinc-400 shrink-0 mt-0.5" size={18} />
+                    <p className="text-sm text-zinc-300 leading-relaxed">
+                      <strong>Privacy Notice:</strong> Your API keys are encrypted and saved locally
+                      on this machine. They are never sent to a central server, ensuring your usage
+                      and billing remain completely private.
+                    </p>
+                  </div>
+                </GlassPanel>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
+    </div>
+  )
+    }
