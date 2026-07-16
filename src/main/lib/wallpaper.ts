@@ -80,12 +80,12 @@ export function registerWallpaperHandlers(): void {
       const fileName = `wallpaper-${Date.now()}.png`
       const filePath = path.join(wallpaperDir, fileName)
 
-      // Ensure image data is a string before processing to resolve type-check error
+      // Ensure the image data is a string to satisfy TypeScript's type requirement
       const base64Data = imagePart.inlineData.data
       if (typeof base64Data === 'string') {
         fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'))
       } else {
-        return { success: false, error: 'Image data format is invalid.' }
+        return { success: false, error: 'Invalid image data returned by the model.' }
       }
 
       await applyWallpaper(filePath)
@@ -96,4 +96,5 @@ export function registerWallpaperHandlers(): void {
       return { success: false, error: err.message }
     }
   })
-    }
+}
+
