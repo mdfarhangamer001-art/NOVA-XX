@@ -1,0 +1,17 @@
+# This file defines the code owners for the IRIS repository.
+# Code owners will be automatically requested for review when a PR touches their code.
+
+*       @xtehzeeb
+
+/docs/                      @xtehzeeb
+README.md                   @xtehzeeb
+CONTRIBUTING.md             @xtehzeeb
+SUPPORT.md                  @xtehzeeb
+
+SECURITY.md                 @xtehzeeb
+electron-builder.yml        @xtehzeeb
+
+/src/main/                  @xtehzeeb
+/src/preload/               @xtehzeeb
+
+/src/renderer/              @xtehzeeb
