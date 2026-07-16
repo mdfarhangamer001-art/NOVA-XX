@@ -144,7 +144,7 @@ if (typeof window !== 'undefined') {
     const mockTranscriptCompleteCallbacks: any[] = [];
     const chatHistory = [
       { role: 'user', text: 'Hello, system' },
-      { role: 'model', text: 'Greetings, master. I am IRIS. How can I assist you today?' }
+      { role: 'model', text: 'Greetings, Boss. I am NOVA-X. How can I assist you today?' }
     ];
 
     (window as any).iris = {
@@ -166,7 +166,7 @@ if (typeof window !== 'undefined') {
         const triggers = [
           { user: "Analyze current system stats", model: "Current CPU usage is 28.4%. Temperature is stabilized at 41.2°C. All telemetry nodes are running optimally." },
           { user: "Show me connected devices", model: "Uplink is secure on device Pixel 8 Pro at port 5555. ADB bridge connection shows 84% battery charge." },
-          { user: "Check for updates", model: "System is fully up-to-date. IRIS Neural Engine is running version 1.6.3." }
+          { user: "Check for updates", model: "System is fully up-to-date. NOVA-X Neural Engine is running version 1.6.3." }
         ];
         const randomTrigger = triggers[Math.floor(Math.random() * triggers.length)];
         

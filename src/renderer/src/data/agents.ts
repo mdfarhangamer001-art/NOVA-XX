@@ -308,7 +308,7 @@ export const AGENTS_DATA: Agent[] = [
     name: 'Sentiment & Mood Analyzer',
     category: 'Neural',
     role: 'Analyzes vocal pitch and textual inputs to recognize user emotion.',
-    description: 'Adapts IRIS conversational tone, animation pulse speed, and ambient colors based on estimated user stress levels.',
+    description: 'Adapts NOVA-X conversational tone, animation pulse speed, and ambient colors based on estimated user stress levels.',
     status: 'ACTIVE',
     metrics: { cpu: 1.8, ram: 34.0, latency: 35 },
     systemLogs: [

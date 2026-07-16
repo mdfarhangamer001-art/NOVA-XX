@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session } from 'el
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import registerSystemHandlers from './lib/system'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -61,6 +62,7 @@ app.whenReady().then(() => {
       })
   })
 
+  registerSystemHandlers(ipcMain)
   createWindow()
 
   app.on('activate', function () {

@@ -565,7 +565,7 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
 
           <div className="mb-6 p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl">
             <p className="text-[10px] text-purple-400 font-mono leading-relaxed text-center">
-              IRIS is listening via the primary neural audio interface. Voice commands for app
+              NOVA-X is listening via the primary neural audio interface. Voice commands for app
               execution are online.
             </p>
           </div>

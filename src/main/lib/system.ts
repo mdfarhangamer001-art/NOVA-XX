@@ -113,6 +113,54 @@ export async function fetchStorageDrives() {
   }
 }
 
+export async function executeSystemAction(_event: any, payload: { action: string; data?: any }) {
+  const platform = os.platform()
+  const { action, data } = payload
+  console.log(`[NOVA-X Main] Executing system action: ${action}`, data)
+  try {
+    if (action === 'run-command' && data?.command) {
+      const result = await runCommand(data.command)
+      return { success: true, output: result }
+    }
+    if (action === 'open-app' && data?.appName) {
+      const appName = data.appName
+      if (platform === 'win32') {
+        await runCommand(`start "" "${appName}"`)
+      } else if (platform === 'darwin') {
+        await runCommand(`open -a "${appName}"`)
+      } else {
+        await runCommand(`"${appName}" &`)
+      }
+      return { success: true }
+    }
+    if (action === 'lock-screen') {
+      if (platform === 'win32') {
+        await runCommand('rundll32.exe user32.dll,LockWorkStation')
+      } else if (platform === 'darwin') {
+        await runCommand('pmset displaysleepnow')
+      } else {
+        await runCommand('xdg-screensaver lock')
+      }
+      return { success: true }
+    }
+    if (action === 'set-volume' && data?.volume !== undefined) {
+      const vol = data.volume // 0 - 100
+      if (platform === 'win32') {
+        // Toggle/change volume via PowerShell keys
+        await runCommand(`powershell -c "(New-Object -ComObject Wscript.Shell).SendKeys([char]174)"`)
+      } else if (platform === 'darwin') {
+        await runCommand(`osascript -e "set volume output volume ${vol}"`)
+      } else {
+        await runCommand(`amixer set Master ${vol}%`)
+      }
+      return { success: true }
+    }
+    return { success: false, error: 'Unknown system action' }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+}
+
 export default function registerSystemHandlers(ipcMain: IpcMain) {
   ipcMain.removeHandler('get-installed-apps')
   ipcMain.handle('get-installed-apps', fetchInstalledApps)
@@ -122,4 +170,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
 
   ipcMain.removeHandler('get-drives')
   ipcMain.handle('get-drives', fetchStorageDrives)
+
+  ipcMain.removeHandler('execute-system-action')
+  ipcMain.handle('execute-system-action', executeSystemAction)
 }
