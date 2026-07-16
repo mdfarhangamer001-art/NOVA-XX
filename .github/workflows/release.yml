@@ -1,4 +1,4 @@
-name: NOVA-X Single EXE Release
+Name: NOVA-X Single EXE Release
 
 on:
   push:
@@ -26,6 +26,9 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Fix Rollup Dependency
+        run: npm install @rollup/rollup-win32-x64-msvc --save-dev
+
       - name: Sync package.json version with Release Tag
         run: |
           node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.version = '1.0.${{ github.run_number }}'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2), 'utf8');"
@@ -45,3 +48,4 @@ jobs:
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
