@@ -23,7 +23,7 @@ asarUnpack:
 
 win:
   executableName: novax
-  icon: build/icon.ico
+  icon: resources/icon.ico
   target:
     - target: nsis
 
