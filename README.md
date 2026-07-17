@@ -1,6 +1,6 @@
 <div align="center">
 
-![IRIS Neural OS Documentation Banner](./assets/banner.png)
+![NOVA-X Neural OS Documentation Banner](./assets/banner.png)
 
 ### Voice-First Desktop AI Assistant
 
@@ -12,7 +12,7 @@
 
 </div>
 
-**Speak your command. IRIS executes it.**
+**Speak your command. NOVA-X executes it.**
 
 A voice-first neural execution system powered by **Gemini 3.1 Live API** with real-time WebRTC audio, biometric security, and autonomous system control.
 
@@ -33,7 +33,7 @@ A voice-first neural execution system powered by **Gemini 3.1 Live API** with re
 - [📁 Project Structure](#-project-structure)
 - [🧠 Development Philosophy](#-development-philosophy)
 - [🤝 Contributing](#-contributing)
-- [🧩 Extending IRIS](#-extending-iris)
+- [🧩 Extending NOVA-X](#-extending-novax)
 - [🧠 Roadmap](#-roadmap)
 - [⚠️ Disclaimer](#️-disclaimer)
 - [👨‍💻 Architect](#-architect)
@@ -43,13 +43,13 @@ A voice-first neural execution system powered by **Gemini 3.1 Live API** with re
 
 # ⚡ Overview
 
-IRIS is not a chatbot.
+NOVA-X is not a chatbot.
 
 It is a **Voice-First Desktop AI Assistant** that executes real-world actions across your system, applications, and devices—powered by **Gemini 3.1 Live API** with real-time bidirectional audio processing.
 
-> **Speak naturally. IRIS understands intent. Real actions execute instantly.**
+> **Speak naturally. NOVA-X understands intent. Real actions execute instantly.**
 
-## What Makes IRIS Different?
+## What Makes NOVA-X Different?
 
 ✅ **Voice-First Design** – Optimized for natural speech input with real-time WebRTC audio streaming  
 ✅ **Proprietary Agent Logic** – Heavily protected, production-grade agentic orchestration  
@@ -62,10 +62,10 @@ It is a **Voice-First Desktop AI Assistant** that executes real-world actions ac
 # ✨ What's New In v1.6.0
 
 - Added Wakeup word functionality for seamless hands-free activation
-- Introduced Chat/Voice toggle — use voice or text to interact with IRIS
+- Introduced Chat/Voice toggle — use voice or text to interact with NOVA-X
 - Advanced Mobile Camera Control: Full control over front/back camera with customized video recording settings
 - More precise authentication including IP and Location verification
-- IRIS now divided into Free and PRO tiers with distinct badges
+- NOVA-X now divided into Free and PRO tiers with distinct badges
 - Introduced Custom Protocols to build and execute multi-step automated workflows
 - Introduced AI Wallpaper Engine to dynamically change PC wallpaper with natural language
 - New quick-access overlay available via Ctrl + Shift + I
@@ -78,7 +78,7 @@ It is a **Voice-First Desktop AI Assistant** that executes real-world actions ac
 
 # 🪡 Open Core Model
 
-### IRIS follows an Open Core development model.
+### NOVA-X follows an Open Core development model.
 
 **The public repository includes**:
 
@@ -106,7 +106,7 @@ GitHub Sponsors receive access to additional documentation, implementation examp
 
 Traditional AI assistants are **text-first**: you type → they respond → you read.
 
-IRIS is **voice-first**: you speak → they listen & execute → actions happen in real-time.
+NOVA-X is **voice-first**: you speak → they listen & execute → actions happen in real-time.
 
 ### Real-Time Audio Processing
 
@@ -127,7 +127,7 @@ Results Streamed Back to You
 - **Models:** Gemini 3.1 Live API (primary) + Groq (Fast Responses) + Hugging Face (Open-Sourced + Local Models)
 - **Search:** Tavily for real-time web data
 
-No local-only limitations. IRIS connects to **cloud AI, search engines, and APIs** for maximum intelligence.
+No local-only limitations. NOVA-X connects to **cloud AI, search engines, and APIs** for maximum intelligence.
 
 ---
 
@@ -137,8 +137,8 @@ No local-only limitations. IRIS connects to **cloud AI, search engines, and APIs
 
 Autonomous voice activation hooks, advanced screen character peeling, and phantom inline input overlays.
 
-- **Wake Up Word Activation:** IRIS is configured for hands-free local startup. Speaking the wake word automatically opens the assistant window, performs local telemetry diagnostics, and checks real-time atmospheric updates.
-  - _Commands:_ "Hey, IRIS", "IRIS", "Wake up, IRIS"
+- **Wake Up Word Activation:** NOVA-X is configured for hands-free local startup. Speaking the wake word automatically opens the assistant window, performs local telemetry diagnostics, and checks real-time atmospheric updates.
+  - _Commands:_ "Hey, NOVA-X", "NOVA-X", "Wake up, NOVA-X"
 - **Phantom Control (Ghost Keyboard):** Inline typing injection overlay. Activating the shortcut creates a phantom input hook to inject typed keystrokes anywhere on the OS, integrating cleanly with VS Code.
   - _Commands:_ "Press Ctrl + Alt + Space", "Activate Phantom Typer", "Start Ghost Typer"
 - **ScreenPeeler (Multimodal AI OCR):** Intelligent rectangular region screen selection. Takes a high-resolution snapshot of any screen coordinate area, runs local/cloud multimodal extraction, and populates extracted text to your clipboard.
@@ -309,11 +309,11 @@ OS-level biometric encryption and multi-face recognition locks.
 
 ## ⚠️ Important: Core Code is Protected
 
-IRIS uses **enterprise-grade code protection** to secure proprietary agent logic and tool implementations:
+NOVA-X uses **enterprise-grade code protection** to secure proprietary agent logic and tool implementations:
 
 ### What is Protected?
 
-✅ **Agent Core** (`iris-ai.ts`)  
+✅ **Agent Core** (`novax-ai.ts`)  
 ✅ **Tool Implementations** (`tools.ts`)  
 ✅ **IPC Handlers** (`handlers.ts`)  
 ✅ **System Utilities** (All Main Process code)
@@ -349,11 +349,11 @@ IRIS uses **enterprise-grade code protection** to secure proprietary agent logic
 
 ---
 
-# ⚡ Why Upgrade to IRIS Pro?
+# ⚡ Why Upgrade to NOVA-X Pro?
 
-IRIS is built on an **Open Core model**. While the Free Tier (Public Repository) gives you access to the community UI and basic templates, the **core voice engine, agent loops, and advanced execution tools** are protected within the IRIS Pro ecosystem.
+NOVA-X is built on an **Open Core model**. While the Free Tier (Public Repository) gives you access to the community UI and basic templates, the **core voice engine, agent loops, and advanced execution tools** are protected within the NOVA-X Pro ecosystem.
 
-Upgrading to **IRIS Pro (₹499 base license + platform processing fee (Final Checkout: ₹513))** unlocks the complete autonomous OS controller experience.
+Upgrading to **NOVA-X Pro (₹499 base license + platform processing fee (Final Checkout: ₹513))** unlocks the complete autonomous OS controller experience.
 
 ## 🎁 Free Tier (Base Engine)
 
@@ -368,12 +368,12 @@ Upgrading to **IRIS Pro (₹499 base license + platform processing fee (Final Ch
 - **Maps & Weather:** Live location, navigation, and weather insights.
 - **Docs & Email:** PDF Generation and background Email Drafting.
 
-## 🚀 IRIS Paid Pro
+## 🚀 NOVA-X Paid Pro
 
 **Cost:** ₹499 base license + platform processing fee (Final Checkout: ₹513)
 
 - **Instant License Activation:** Pay once, keep it forever. No subscriptions.
-- **Hands-Free Wake Up Word:** Passive offline activation ("Hey, IRIS").
+- **Hands-Free Wake Up Word:** Passive offline activation ("Hey, NOVA-X").
 - **ScreenPeeler Multimodal AI OCR:** Instantly scan and extract text/code from your screen (Ctrl+Alt+X).
 - **Phantom Ghost Keyboard:** Global inline injection (Ctrl+Alt+Space).
 - **Small Ghost Overlay:** Instantly summon a fast-access floating command overlay via `Ctrl + Shift + I`.
@@ -390,7 +390,7 @@ Upgrading to **IRIS Pro (₹499 base license + platform processing fee (Final Ch
 
 1. **Authenticate with Google** to create your secure identity.
 2. **Purchase a License** via our Secure Checkout (Razorpay).
-3. **Unlock the IRIS PRO** instantly.
+3. **Unlock the NOVA-X PRO** instantly.
 
 [**Check Out The Full Free vs PRO Tool Comparison**](./Comparison.md)
 
@@ -483,8 +483,8 @@ ipcMain.handle('tool-name', async (event, payload) => {
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/mdfarhangamer001-art/IRIS-AI
-cd IRIS-AI
+git clone https://github.com/novax-project/NOVA-X
+cd NOVA-X
 ```
 
 ### 2. Install Dependencies
@@ -529,7 +529,7 @@ npm run build:linux  # Linux
 
 **How to Access:**
 
-1. Become a sponsor: [GitHub Sponsors](https://github.com/sponsors/mdfarhangamer001-art)
+1. Become a sponsor: [GitHub Sponsors](https://github.com/sponsors/novax)
 2. Get private repo access via GitHub
 3. Clone private repository with examples
 4. Follow sponsor-only documentation
@@ -538,13 +538,13 @@ npm run build:linux  # Linux
 
 ## 🔑 System Keys & Configuration
 
-IRIS operates with **cloud-powered AI**, requiring specific API keys to function.
+NOVA-X operates with **cloud-powered AI**, requiring specific API keys to function.
 
-To ensure absolute privacy and safety, **IRIS does not use local `.env` files** to store keys. All credentials must be entered directly into the secure application interface, where they are encrypted locally on your machine via the native OS keychain.
+To ensure absolute privacy and safety, **NOVA-X does not use local `.env` files** to store keys. All credentials must be entered directly into the secure application interface, where they are encrypted locally on your machine via the native OS keychain.
 
 ### ⚙️ How to Configure
 
-- Open the IRIS Desktop App.
+- Open the NOVA-X Desktop App.
 - Navigate to **Settings**.
 - Select the **API** tab.
 - Paste your keys and save them securely.
@@ -555,7 +555,7 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 
 **[Google Gemini API](https://aistudio.google.com/app/apikey)**
 
-- Primary reasoning engine for IRIS.
+- Primary reasoning engine for NOVA-X.
 - Real-time voice processing (WebRTC).
 - Multimodal vision capabilities.
 - Setup: Google AI Studio → Get API Key → Create.
@@ -593,7 +593,7 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 │   ├── banner-old.jpeg
 │   └── banner.png
 ├── bin
-│   └── iris-ai.ts
+│   └── novax-ai.ts
 ├── build
 │   ├── entitlements.mac.plist
 │   ├── icon.icns
@@ -665,9 +665,9 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 │   │   │   ├── ScreenPeeler-handler.ts
 │   │   │   └── SmartDropZone-Handler.ts
 │   │   ├── hooks
-│   │   │   └── iris-memory.ts
+│   │   │   └── novax-memory.ts
 │   │   ├── instructions
-│   │   │   └── iris-instructions.ts
+│   │   │   └── novax-instructions.ts
 │   │   ├── lib
 │   │   │   └── system.ts
 │   │   ├── logic
@@ -696,7 +696,7 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 │   │   │   └── Security.ts
 │   │   ├── services
 │   │   │   ├── deep-research.ts
-│   │   │   ├── iris-coder.ts
+│   │   │   ├── novax-coder.ts
 │   │   │   ├── RAG-oracle.ts
 │   │   │   └── wormhole.ts
 │   │   ├── tools
@@ -781,8 +781,8 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 │       │   │   └── Logo.png
 │       │   ├── services
 │       │   │   ├── get-apps.ts
-│       │   │   ├── IRIS_AI.ts
-│       │   │   ├── iris-ai-brain.ts
+│       │   │   ├── NOVA-X_AI.ts
+│       │   │   ├── novax-ai-brain.ts
 │       │   │   └── system-info.ts
 │       │   ├── store
 │       │   │   └── auth-store.ts
@@ -803,7 +803,7 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 │       │   │   ├── form-type.ts
 │       │   │   └── panel.ts
 │       │   ├── UI
-│       │   │   ├── IRIS.tsx
+│       │   │   ├── NOVA-X.tsx
 │       │   │   └── LockScreen.tsx
 │       │   ├── utils
 │       │   │   ├── audioUtils.ts
@@ -831,7 +831,7 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 │       │   ├── App.tsx
 │       │   ├── env.d.ts
 │       │   ├── ing.tsx
-│       │   ├── IRISRoot.tsx
+│       │   ├── NOVA-XRoot.tsx
 │       │   └── main.tsx
 │       └── index.html
 ├── testing
@@ -918,7 +918,7 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 
 | Path            | Protected?  | Access        |
 | --------------- | ----------- | ------------- | ------ |
-| `iris-ai.ts`    | ✅ Bytecode | Sponsors only |
+| `novax-ai.ts`    | ✅ Bytecode | Sponsors only |
 | `tools.ts`      | ✅ Bytecode | Sponsors only |
 | `src/renderer/` | ✅ React    | ✅ Open       | Public |
 | IPC handlers    | ✅ Bytecode | Built-in only |
@@ -937,7 +937,7 @@ To ensure absolute privacy and safety, **IRIS does not use local `.env` files** 
 
 # 🤝 Contributing
 
-IRIS welcomes contributions! Help expand the neural forge.
+NOVA-X welcomes contributions! Help expand the neural forge.
 
 ### Quick Start
 
@@ -970,7 +970,7 @@ IRIS welcomes contributions! Help expand the neural forge.
 
 ---
 
-# 🧩 Extending IRIS
+# 🧩 Extending NOVA-X
 
 ### For Free Users
 
@@ -1007,28 +1007,26 @@ IRIS welcomes contributions! Help expand the neural forge.
 
 # ⚠️ Disclaimer
 
-IRIS has **deep system-level execution capabilities**.
+NOVA-X has **deep system-level execution capabilities**.
 
 Use responsibly. The maintainers are not liable for misuse, data loss, or unintended actions.
 
-**By using IRIS, you agree:**
+**By using NOVA-X, you agree:**
 
-- ✅ You understand IRIS executes real system commands
+- ✅ You understand NOVA-X executes real system commands
 - ✅ You are responsible for API key security
-- ✅ You use IRIS ethically and legally
+- ✅ You use NOVA-X ethically and legally
 - ✅ You do not reverse engineer protected code
 
 ---
 
 # 👨‍💻 Architect
 
-**Tehzeeb**  
+**NOVA-X Team**  
 AI Systems Engineer & Creator
 
-**Connect:**
 
-- 🎬 Instagram: [@xtehzeeb.x](https://www.instagram.com/xtehzeeb.x/)
-- 💻 GitHub: [@mdfarhangamer001-art](https://github.com/mdfarhangamer001-art)
+- 💻 GitHub: [@novax-project](https://github.com/novax-project)
 
 ---
 
@@ -1041,8 +1039,8 @@ MIT License. See [LICENSE](LICENSE) file for details.
 # 🎯 Get Started
 
 ```bash
-git clone https://github.com/mdfarhangamer001-art/IRIS-AI
-cd IRIS-AI
+git clone https://github.com/novax-project/NOVA-X
+cd NOVA-X
 npm install
 npm run dev
 ```
@@ -1051,23 +1049,22 @@ npm run dev
 
 # 🚀 What's Next?
 
-**Speak. IRIS listens. Reality changes.**
+**Speak. NOVA-X listens. Reality changes.**
 
 > System Online. Neural OS Activated.
 
 ---
 
-# ❤️ Support IRIS
+# ❤️ Support NOVA-X
 
-If you find IRIS valuable, consider:
+If you find NOVA-X valuable, consider:
 
 - ⭐ **Star** the repository
 - 💬 **Share** with your network
-- 🔗 **Integrate** IRIS into your workflow
+- 🔗 **Integrate** NOVA-X into your workflow
 - 🐛 **Report** bugs & suggest features
 
 ---
 
-Made with ❤️ by [Tehzeeb](https://instagram.com/xtehzeeb.x)
 
 **System Online.**
