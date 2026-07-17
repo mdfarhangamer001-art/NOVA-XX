@@ -374,11 +374,6 @@ export default function Dashboard({
     ;(window as any).speakText = (text: string) => {
       if (!window.speechSynthesis) return
 
-      if (!(window as any).hasUserInteracted) {
-        console.warn('[NOVA-X TTS] Speech synthesis blocked: Awaiting user interaction (click or keypress) to satisfy browser autoplay policy.')
-        return
-      }
-
       window.speechSynthesis.cancel()
 
       const selected = VOICES.find((v) => v.id === activeVoice)

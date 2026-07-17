@@ -774,34 +774,33 @@ export default function AICore({
   coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'
   coreSize?: number
 }) {
-  const [lowEndMode, setLowEndMode] = useState(() => {
-    const saved = localStorage.getItem('xtehzeeb_low_end_mode') || localStorage.getItem('novax_low_end_mode')
-    if (saved === 'true') return true
-    if (saved === 'false') return false
-
+  const [perfMode, setPerfMode] = useState<'high' | 'medium' | 'low'>(() => {
+    const saved = localStorage.getItem('novax_perf_mode') as 'high' | 'medium' | 'low'
+    if (saved) return saved
+    
     // Auto-detect WebGL context support
     try {
       const canvas = document.createElement('canvas')
       const support = !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')))
-      return !support
+      if (!support) return 'low'
+      
+      return localStorage.getItem('novax_low_end_mode') === 'true' ? 'low' : 'high'
     } catch (e) {
-      return true
+      return 'low'
     }
   })
 
   useEffect(() => {
-    const handlePerfChange = () => {
-      setLowEndMode((localStorage.getItem('xtehzeeb_low_end_mode') || localStorage.getItem('novax_low_end_mode')) === 'true')
+    const handlePerfChange = (e: any) => {
+      setPerfMode(e.detail || 'high')
     }
-    window.addEventListener('xtehzeeb_perf_mode_changed', handlePerfChange)
     window.addEventListener('novax_perf_mode_changed', handlePerfChange)
     return () => {
-      window.removeEventListener('xtehzeeb_perf_mode_changed', handlePerfChange)
       window.removeEventListener('novax_perf_mode_changed', handlePerfChange)
     }
   }, [])
 
-  if (lowEndMode) {
+  if (perfMode === 'low') {
     return (
       <AICore2D
         isConnected={isConnected}
@@ -812,20 +811,23 @@ export default function AICore({
     )
   }
 
+  // Medium vs High WebGL configurations
+  const isHighEnd = perfMode === 'high'
+
   return (
     <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none">
       <Canvas
         style={{ width: '100%', height: '100%' }}
         camera={{ position: [0, 0, 5.8], fov: 38 }}
         gl={{
-          antialias: false,
-          powerPreference: 'low-power',
+          antialias: isHighEnd,
+          powerPreference: isHighEnd ? 'high-performance' : 'low-power',
           alpha: true,
-          depth: false,
+          depth: isHighEnd,
           stencil: false,
-          precision: 'lowp'
+          precision: isHighEnd ? 'highp' : 'lowp'
         }}
-        dpr={Math.min(window.devicePixelRatio, 1.0)} // Capped for low-end graphics cards
+        dpr={isHighEnd ? Math.min(window.devicePixelRatio, 2) : 1.0} // Dynamic DPR capping
         frameloop="always"
       >
         <group scale={[coreSize, coreSize, coreSize]}>

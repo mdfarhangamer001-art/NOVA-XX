@@ -179,7 +179,7 @@ const IndexRoot = (): JSX.Element => {
   }, [isConnected, isMuted, isSpeaking, activeLang])
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-black overflow-hidden relative border border-emerald-500/20 rounded-xl">
+    <div className="flex flex-col h-screen w-screen bg-transparent overflow-hidden relative border border-emerald-500/20 rounded-xl">
       <TitleBar />
       <div className="flex-1 relative">
         <NovaX

@@ -40,9 +40,19 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   const [tavilyKey, settavilyKey] = useState(() => localStorage.getItem('novax_tavily_key') || '')
   const [systemTone, setSystemTone] = useState(() => localStorage.getItem('novax_system_tone') || 'authoritative')
 
-  const [lowEndMode, setLowEndMode] = useState(() => {
-    return localStorage.getItem('novax_low_end_mode') === 'true'
+  const [perfMode, setPerfMode] = useState<'high' | 'medium' | 'low'>(() => {
+    const saved = localStorage.getItem('novax_perf_mode') as 'high' | 'medium' | 'low'
+    if (saved) return saved
+    // Fallback to legacy lowEndMode if exists
+    return localStorage.getItem('novax_low_end_mode') === 'true' ? 'low' : 'high'
   })
+
+  const handlePerfModeChange = (mode: 'high' | 'medium' | 'low'): void => {
+    setPerfMode(mode)
+    localStorage.setItem('novax_perf_mode', mode)
+    localStorage.setItem('novax_low_end_mode', mode === 'low' ? 'true' : 'false')
+    window.dispatchEvent(new CustomEvent('novax_perf_mode_changed', { detail: mode }))
+  }
 
   useEffect(() => {
     if (window.electron?.ipcRenderer) {
@@ -269,23 +279,48 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                   </div>
 
                   <div className="flex flex-col gap-6">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-black/30 border border-white/5 rounded-xl">
+                    <div className="flex flex-col gap-4 p-4 bg-black/30 border border-white/5 rounded-xl">
                       <div className="flex flex-col gap-1 max-w-lg text-left">
-                        <span className="text-sm font-semibold text-white">Low-End Laptop Mode</span>
+                        <span className="text-sm font-semibold text-white">Graphics & Engine Performance</span>
                         <span className="text-[11px] text-zinc-400">
-                          Disables heavy 3D WebGL rendering of the AI Core sphere and replaces it with a beautiful, high-performance 2D pulsing vector HUD engine. Perfect for devices with 4GB RAM or integrated GPUs.
+                          Adjust visual fidelity based on your hardware capabilities. The AI core experience remains seamless across all modes.
                         </span>
                       </div>
-                      <button
-                        onClick={() => toggleLowEndMode(!lowEndMode)}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-bold font-mono uppercase border cursor-pointer transition-all shrink-0 ${
-                          lowEndMode
-                            ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-                            : 'bg-zinc-900 text-zinc-400 border-white/5 hover:text-white hover:bg-white/5'
-                        }`}
-                      >
-                        {lowEndMode ? 'ON (2D Core)' : 'OFF (3D Core)'}
-                      </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+                        <button
+                          onClick={() => handlePerfModeChange('high')}
+                          className={`px-4 py-3 rounded-xl text-[10px] text-left font-bold font-mono uppercase border cursor-pointer transition-all ${
+                            perfMode === 'high'
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                              : 'bg-zinc-900 text-zinc-400 border-white/5 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <div className="text-xs mb-1">High End</div>
+                          <div className="text-[9px] text-zinc-500 lowercase normal-case tracking-normal">Full 3D WebGL Core, HD rendering, dynamic particles. Recommended for dedicated GPUs.</div>
+                        </button>
+                        <button
+                          onClick={() => handlePerfModeChange('medium')}
+                          className={`px-4 py-3 rounded-xl text-[10px] text-left font-bold font-mono uppercase border cursor-pointer transition-all ${
+                            perfMode === 'medium'
+                              ? 'bg-[#00f3ff]/15 text-[#00f3ff] border-[#00f3ff]/30 shadow-[0_0_12px_rgba(0,243,255,0.2)]'
+                              : 'bg-zinc-900 text-zinc-400 border-white/5 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <div className="text-xs mb-1">Medium</div>
+                          <div className="text-[9px] text-zinc-500 lowercase normal-case tracking-normal">Optimized 3D WebGL, capped resolution, low power mode. Good for modern laptops.</div>
+                        </button>
+                        <button
+                          onClick={() => handlePerfModeChange('low')}
+                          className={`px-4 py-3 rounded-xl text-[10px] text-left font-bold font-mono uppercase border cursor-pointer transition-all ${
+                            perfMode === 'low'
+                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                              : 'bg-zinc-900 text-zinc-400 border-white/5 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <div className="text-xs mb-1">Low End</div>
+                          <div className="text-[9px] text-zinc-500 lowercase normal-case tracking-normal">Lightweight 2D HUD vector core, 0% GPU usage. Perfect for older or low-spec devices.</div>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="bg-zinc-800/40 border border-white/5 p-4 rounded-xl flex gap-3 items-start text-left">
@@ -293,9 +328,9 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                       <div className="flex flex-col gap-1">
                         <strong className="text-xs text-white uppercase tracking-wider font-mono">Graphics Diagnostics</strong>
                         <p className="text-[11px] text-zinc-300 leading-relaxed font-mono">
-                          - Active Core Engine: {lowEndMode ? 'Lightweight 2D HUD vector core (0% GPU)' : 'Hardware-Accelerated 3D WebGL'}
+                          - Active Core Engine: {perfMode === 'low' ? 'Lightweight 2D HUD vector core (0% GPU)' : perfMode === 'medium' ? 'Hardware-Accelerated 3D WebGL (Optimized)' : 'Hardware-Accelerated 3D WebGL (High Fidelity)'}
                           <br />
-                          - Memory Optimization: Capped at ~15MB (VS ~250MB in 3D Mode)
+                          - Memory Optimization: {perfMode === 'low' ? 'Capped at ~15MB' : perfMode === 'medium' ? 'Capped at ~100MB' : 'VRAM Intensive (~250MB)'}
                           <br />
                           - Target Framerate: Locked to system standard (60 FPS fluid pulse)
                         </p>

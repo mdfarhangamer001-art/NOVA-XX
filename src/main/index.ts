@@ -14,10 +14,10 @@ function createWindow(): void {
     width: 1280,
     height: 720,
     show: false,
-    fullscreen: true,
     autoHideMenuBar: true,
     frame: false,
-    transparent: true,
+    backgroundColor: '#000000',
+    transparent: false,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -26,6 +26,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
+    mainWindow.maximize()
     mainWindow.show()
   })
 
@@ -41,11 +42,25 @@ function createWindow(): void {
   }
 }
 
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+  })
+
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media') {
+      callback(true)
+    } else {
+      callback(true) // Just allow everything for the AI assistant (mic, camera)
+    }
+  })
+
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    return true
   })
 
   session.defaultSession.setDisplayMediaRequestHandler((_request: any, callback: any) => {

@@ -333,7 +333,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     })
 
     const model = ai.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
       systemInstruction,
       generationConfig: {
         temperature: 0.7,
@@ -371,7 +371,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
 
   async function extractAndStoreMemories(apiKey: string, text: string) {
     const ai = new GoogleGenAI({ apiKey })
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' })
     const prompt = `Extract important personal facts about the operator from this text (e.g. name, preferences, habits). 
     Respond ONLY with a JSON array of strings: ["fact 1", "fact 2"]. If nothing important, respond [].
     Text: ${text}`
@@ -423,7 +423,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       throw new Error('Gemini API key required for transcription.')
     }
 
-    const { base64Audio, mimeType } = payload
+    let { base64Audio, mimeType } = payload
+    mimeType = mimeType.split(';')[0] // Clean mimetype for Gemini
+
     const ai = new GoogleGenAI({
       apiKey,
       httpOptions: {
@@ -434,7 +436,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     })
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-2.0-flash',
       contents: [
         {
           role: 'user',
