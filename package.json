@@ -33,7 +33,7 @@
     "react-router-dom": "^7.17.0",
     "react-tooltip": "^6.0.7",
     "remark-gfm": "^4.0.1",
-    "three": "^0.184.0",
+    "three": "0.166.0",
     "ws": "^8.21.1"
   },
   "devDependencies": {

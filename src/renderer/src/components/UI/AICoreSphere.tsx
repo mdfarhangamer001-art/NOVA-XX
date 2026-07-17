@@ -1,6 +1,7 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useMemo, useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
+import { ErrorBoundary } from './ErrorBoundary'
 
 // Premium futuristic color palette for NOVA-X Fusion Core
 const IDLE_COLOR = new THREE.Color('#00f3ff') // Electric Cyan
@@ -816,24 +817,56 @@ export default function AICore({
 
   return (
     <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none">
-      <Canvas
-        style={{ width: '100%', height: '100%' }}
-        camera={{ position: [0, 0, 5.8], fov: 38 }}
-        gl={{
-          antialias: isHighEnd,
-          powerPreference: isHighEnd ? 'high-performance' : 'low-power',
-          alpha: true,
-          depth: isHighEnd,
-          stencil: false,
-          precision: isHighEnd ? 'highp' : 'lowp'
+      <ErrorBoundary
+        name="AICoreWebGL"
+        fallback={() => {
+          console.warn('[AICore ErrorBoundary] WebGL rendering failed. Silently falling back to 2D HUD core.')
+          setTimeout(() => {
+            setPerfMode('low')
+          }, 0)
+          return (
+            <AICore2D
+              isConnected={isConnected}
+              isSpeaking={isSpeaking}
+              coreType={coreType}
+              coreSize={coreSize}
+            />
+          )
         }}
-        dpr={isHighEnd ? Math.min(window.devicePixelRatio, 2) : 1.0} // Dynamic DPR capping
-        frameloop="always"
       >
-        <group scale={[coreSize, coreSize, coreSize]}>
-          <AIOrb isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} />
-        </group>
-      </Canvas>
+        <Canvas
+          style={{ width: '100%', height: '100%' }}
+          camera={{ position: [0, 0, 5.8], fov: 38 }}
+          gl={{
+            antialias: isHighEnd,
+            powerPreference: isHighEnd ? 'high-performance' : 'low-power',
+            alpha: true,
+            depth: isHighEnd,
+            stencil: false,
+            precision: isHighEnd ? 'highp' : 'lowp'
+          }}
+          dpr={isHighEnd ? Math.min(window.devicePixelRatio, 2) : 1.0} // Dynamic DPR capping
+          frameloop="always"
+          onCreated={(state) => {
+            try {
+              const gl = state.gl
+              const canvasEl = gl.domElement
+              const handleContextLost = (e: Event) => {
+                e.preventDefault()
+                console.warn('[AICore WebGL] Context lost event captured! Changing performance mode to low.')
+                setPerfMode('low')
+              }
+              canvasEl.addEventListener('webglcontextlost', handleContextLost)
+            } catch (err) {
+              console.error('[AICore WebGL] Failed to register webglcontextlost listener:', err)
+            }
+          }}
+        >
+          <group scale={[coreSize, coreSize, coreSize]}>
+            <AIOrb isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} />
+          </group>
+        </Canvas>
+      </ErrorBoundary>
     </div>
   )
 }

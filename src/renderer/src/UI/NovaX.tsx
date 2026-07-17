@@ -6,7 +6,9 @@ import {
   RiSettings4Line,
   RiImageLine,
   RiCpuLine,
-  RiMentalHealthLine
+  RiMentalHealthLine,
+  RiClipboardLine,
+  RiBarChartLine
 } from 'react-icons/ri'
 
 import DashboardView from '../views/Dashboard'
@@ -17,8 +19,10 @@ import AgentsView from '../views/Agents'
 const NotesView = lazy(() => import('../views/Notes'))
 const GalleryView = lazy(() => import('../views/Gallery'))
 const MemoryView = lazy(() => import('../views/Memory'))
+const ClipboardView = lazy(() => import('../views/Clipboard'))
+const ActivityView = lazy(() => import('../views/Activity'))
 
-import Logo from '../public/Logo.png'
+import Logo from '../assets/Logo.png'
 
 interface NovaXProps {
   isConnected: boolean
@@ -42,6 +46,8 @@ const NovaX = ({
   const tabs = [
     { id: 'DASHBOARD', label: 'Command', icon: <RiLayoutGridLine size={16} /> },
     { id: 'AGENTS', label: 'Agents', icon: <RiCpuLine size={16} /> },
+    { id: 'CLIPBOARD', label: 'Clipboard', icon: <RiClipboardLine size={16} /> },
+    { id: 'ACTIVITY', label: 'Activity', icon: <RiBarChartLine size={16} /> },
     { id: 'NOTES', label: 'Notes', icon: <RiFolderOpenLine size={16} /> },
     { id: 'GALLERY', label: 'Gallery', icon: <RiImageLine size={16} /> },
     { id: 'MEMORY', label: 'Memory', icon: <RiMentalHealthLine size={16} /> },
@@ -133,6 +139,8 @@ const NovaX = ({
             {activeTab === 'NOTES' && <NotesView glassPanel={glassPanel} />}
             {activeTab === 'GALLERY' && <GalleryView />}
             {activeTab === 'MEMORY' && <MemoryView />}
+            {activeTab === 'CLIPBOARD' && <ClipboardView />}
+            {activeTab === 'ACTIVITY' && <ActivityView />}
             {activeTab === 'SETTINGS' && <SettingsView isSystemActive={isConnected} />}
           </Suspense>
         </div>

@@ -73,6 +73,32 @@ function getGeminiApiKey(): string {
 // Map the workspace root path
 const WORKSPACE_ROOT = process.cwd()
 
+function validateAgentCommand(command: string): { valid: boolean; reason?: string } {
+  const trimmed = command.trim()
+  
+  const dangerousPatterns = [
+    /rm\s+-rf\s+[^\w\.\-\/]/i,
+    />\s*\/etc\//,
+    /curl.*\|\s*(bash|sh|zsh|python)/i,
+    /wget.*\|\s*(bash|sh|zsh|python)/i,
+    /chmod\s+.*777/,
+    /chown\s+/i,
+    /sudo\s+/i
+  ]
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(trimmed)) {
+      return { valid: false, reason: `Command matches blocklisted dangerous pattern: ${pattern}` }
+    }
+  }
+
+  if (trimmed.includes('../') && (trimmed.includes('rm ') || trimmed.includes('mv ') || trimmed.includes('cp '))) {
+    return { valid: false, reason: 'Command attempts to modify files outside the workspace root.' }
+  }
+
+  return { valid: true }
+}
+
 // Define Tools
 const listFilesTool: FunctionDeclaration = {
   name: 'list_files',
@@ -317,17 +343,23 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
             sendLog('Operator REJECTED the terminal command execution.')
             toolResult = { error: 'Operator rejected the run command execution.' }
           } else {
-            try {
-              sendLog(`Running shell command: ${args.command}`)
-              const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-                exec(args.command, { cwd: WORKSPACE_ROOT }, (error, stdout, stderr) => {
-                  resolve({ stdout, stderr })
+            const validation = validateAgentCommand(args.command)
+            if (!validation.valid) {
+              sendLog(`[NOVA-X Security] Agent command blocked: ${validation.reason}`)
+              toolResult = { error: `Security block: ${validation.reason}` }
+            } else {
+              try {
+                sendLog(`Running shell command: ${args.command}`)
+                const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+                  exec(args.command, { cwd: WORKSPACE_ROOT }, (error, stdout, stderr) => {
+                    resolve({ stdout, stderr })
+                  })
                 })
-              })
-              toolResult = { stdout: result.stdout, stderr: result.stderr }
-              sendLog(`Command execution complete. Stdout length: ${result.stdout.length}`)
-            } catch (e: any) {
-              toolResult = { error: e.message }
+                toolResult = { stdout: result.stdout, stderr: result.stderr }
+                sendLog(`Command execution complete. Stdout length: ${result.stdout.length}`)
+              } catch (e: any) {
+                toolResult = { error: e.message }
+              }
             }
           }
         }

@@ -20,7 +20,14 @@ if (process.contextIsolated) {
       deleteMemory: (index: number) => ipcRenderer.invoke('delete-memory', index),
       launchApp: (appName: string) => ipcRenderer.invoke('launch-app', appName)
     })
-  } catch (error) {}
+  } catch (error) {
+    console.error('[NOVA-X Preload] Failed to expose APIs:', error)
+  }
+
+  // Validate that critical APIs were exposed successfully
+  if (typeof (window as any).electron === 'undefined' || typeof (window as any).iris === 'undefined') {
+    console.warn('[NOVA-X Preload Warning] window.electron or window.iris remains undefined after contextBridge initialization!')
+  }
 } else {
   // @ts-ignore (define in dts)
   window.electron = {

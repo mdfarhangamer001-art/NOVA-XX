@@ -74,13 +74,14 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   }
 
   const saveApiKeys = async (): Promise<void> => {
-    localStorage.setItem('novax_gemini_key', geminiKey)
-    localStorage.setItem('novax_groq_key', groqKey)
-    localStorage.setItem('novax_hf_key', hfKey)
-    localStorage.setItem('novax_tavily_key', tavilyKey)
-    localStorage.setItem('novax_system_tone', systemTone)
-
     if (window.electron?.ipcRenderer) {
+      // Remove any legacy/insecure plain text keys from localStorage
+      localStorage.removeItem('novax_gemini_key')
+      localStorage.removeItem('novax_groq_key')
+      localStorage.removeItem('novax_hf_key')
+      localStorage.removeItem('novax_tavily_key')
+      localStorage.setItem('novax_system_tone', systemTone)
+
       try {
         await window.electron.ipcRenderer.invoke('secure-save-keys', {
           groqKey,
@@ -93,6 +94,11 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
         alert('Failed to save keys to the secure vault.')
       }
     } else {
+      localStorage.setItem('novax_gemini_key', geminiKey)
+      localStorage.setItem('novax_groq_key', groqKey)
+      localStorage.setItem('novax_hf_key', hfKey)
+      localStorage.setItem('novax_tavily_key', tavilyKey)
+      localStorage.setItem('novax_system_tone', systemTone)
       alert('API Keys saved to browser storage.')
     }
   }

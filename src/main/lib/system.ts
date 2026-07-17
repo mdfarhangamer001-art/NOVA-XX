@@ -7,6 +7,7 @@ import { exec } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import http from 'http'
+import crypto from 'crypto'
 import { WebSocketServer } from 'ws'
 import Store from 'electron-store'
 import { GoogleGenAI } from '@google/genai'
@@ -389,19 +390,65 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
   }
 
   ipcMain.handle('launch-app', async (_event, appName: string) => {
-    const { exec } = require('child_process')
+    const { spawn } = require('child_process')
     const platform = process.platform
     
-    let command = ''
-    if (platform === 'win32') command = `start "" "${appName}"`
-    else if (platform === 'darwin') command = `open -a "${appName}"`
-    else command = `xdg-open "${appName}"`
+    const ALLOWED_APPS = [
+      'chrome', 'google chrome', 'google-chrome', 'chromium',
+      'firefox', 'safari', 'edge', 'msedge', 'microsoft edge',
+      'vscode', 'code', 'spotify', 'slack', 'discord',
+      'notepad', 'notepad++', 'calc', 'calculator',
+      'terminal', 'cmd', 'cmd.exe', 'powershell', 'powershell.exe',
+      'explorer', 'explorer.exe', 'finder', 'paint', 'mspaint',
+      'calendar', 'mail', 'word', 'excel', 'powerpoint',
+      'sublime', 'sublime text', 'atom', 'intellij', 'webstorm',
+      'postman', 'docker', 'terminal.app', 'iterm2', 'iterm'
+    ]
+
+    const trimmed = appName.trim()
+    const lower = trimmed.toLowerCase()
+
+    // 1. Validate character safety to prevent injection
+    const safeRegex = /^[a-zA-Z0-9\s\.\-_]+$/
+    if (!safeRegex.test(trimmed)) {
+      console.warn(`[NOVA-X Security] Blocked launching application with invalid characters: ${trimmed}`)
+      return { success: false, error: 'Invalid application name characters' }
+    }
+
+    // 2. Validate against explicit allow-list
+    if (!ALLOWED_APPS.includes(lower)) {
+      console.warn(`[NOVA-X Security] Blocked launching application not in allowlist: ${trimmed}`)
+      return { success: false, error: 'Application not in allowlist' }
+    }
+
+    let execName = trimmed
+    let args: string[] = []
+
+    if (platform === 'win32') {
+      execName = 'cmd.exe'
+      args = ['/c', 'start', '', trimmed]
+    } else if (platform === 'darwin') {
+      execName = 'open'
+      args = ['-a', trimmed]
+    } else {
+      execName = 'xdg-open'
+      args = [trimmed]
+    }
 
     return new Promise((resolve) => {
-      exec(command, (err) => {
-        if (err) resolve({ success: false, error: err.message })
-        else resolve({ success: true })
-      })
+      try {
+        const child = spawn(execName, args, { shell: false })
+        
+        child.on('error', (err: any) => {
+          resolve({ success: false, error: err.message })
+        })
+
+        setTimeout(() => {
+          resolve({ success: true })
+        }, 200)
+      } catch (err: any) {
+        resolve({ success: false, error: err.message })
+      }
     })
   })
 
@@ -808,11 +855,22 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     }
   })
 
+  function generateCodeVerifier(): string {
+    return crypto.randomBytes(32).toString('base64url')
+  }
+
+  function generateCodeChallenge(verifier: string): string {
+    const hash = crypto.createHash('sha256').update(verifier).digest()
+    return hash.toString('base64url')
+  }
+
   // Google Auth IPC Handlers
   ipcMain.removeHandler('google-sign-in')
   ipcMain.handle('google-sign-in', async () => {
     return new Promise((resolve) => {
       let isResolved = false
+      const codeVerifier = generateCodeVerifier()
+      const codeChallenge = generateCodeChallenge(codeVerifier)
       
       const server = http.createServer(async (req, res) => {
         const urlObj = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`)
@@ -823,7 +881,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
               const tokenParams = new URLSearchParams({
                 code: code,
                 client_id: '930847920384-novax-google-client-id-placeholder.apps.googleusercontent.com',
-                client_secret: '',
+                code_verifier: codeVerifier,
                 redirect_uri: `http://127.0.0.1:${port}/callback`,
                 grant_type: 'authorization_code'
               })
@@ -950,7 +1008,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         port = (server.address() as any).port
         const clientId = '930847920384-novax-google-client-id-placeholder.apps.googleusercontent.com'
         const redirectUri = `http://127.0.0.1:${port}/callback`
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email%20profile`
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email%20profile&code_challenge=${codeChallenge}&code_challenge_method=S256`
         
         console.log(`[NOVA-X OAuth] Started local loopback server on port ${port}`)
         shell.openExternal(authUrl).catch(() => {

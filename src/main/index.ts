@@ -4,10 +4,22 @@ import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session, protocol,
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import Store from 'electron-store'
 import icon from '../../resources/icon.png?asset'
 import registerSystemHandlers from './lib/system'
 import { registerAgentHandlers } from './lib/agent'
 import { registerVisionHandlers } from './lib/vision'
+
+const store = new Store()
+
+// Automatic GPU crash detection & fallback
+const gpuCrashCount = (store.get('gpu_crash_count') as number) || 0
+const disableGpuFlag = store.get('disable_gpu') === true
+
+if (disableGpuFlag || gpuCrashCount >= 2) {
+  console.warn('[NOVA-X Main] Disabling hardware acceleration due to previous crashes or settings.')
+  app.disableHardwareAcceleration()
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -21,7 +33,33 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true,
+      contextIsolation: true
+    }
+  })
+
+  // Reset stable run timer after 10 seconds of active window session
+  const stableTimer = setTimeout(() => {
+    store.set('gpu_crash_count', 0)
+    console.log('[NOVA-X Main] Application running stably. Resetting GPU crash counter.')
+  }, 10000)
+
+  mainWindow.on('closed', () => {
+    clearTimeout(stableTimer)
+  })
+
+  // Listen for render process or GPU crashes to toggle hardware acceleration dynamically
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[NOVA-X Main] Render process crashed/gone:', details)
+    const currentCount = (store.get('gpu_crash_count') as number) || 0
+    store.set('gpu_crash_count', currentCount + 1)
+  })
+
+  mainWindow.webContents.on('child-process-gone', (_event, details) => {
+    if (details.type === 'GPU-process') {
+      console.error('[NOVA-X Main] GPU process crashed/gone:', details)
+      const currentCount = (store.get('gpu_crash_count') as number) || 0
+      store.set('gpu_crash_count', currentCount + 1)
     }
   })
 
@@ -51,16 +89,35 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // Restrict permissions to trusted local application origins to prevent external exploits.
+  // Since NOVA-X requires media (camera, microphone) and display permissions for its core AI operations,
+  // we allow them only for our trusted local file protocol, media stream protocol, or local development URL.
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    if (permission === 'media') {
+    const url = webContents.getURL()
+    const devUrl = process.env['ELECTRON_RENDERER_URL'] || ''
+    const isTrusted = url.startsWith('file://') || 
+                      url.startsWith('http://localhost') || 
+                      url.startsWith('media://') || 
+                      url.includes('127.0.0.1') ||
+                      (devUrl && url.startsWith(devUrl))
+    
+    if (isTrusted) {
       callback(true)
     } else {
-      callback(true) // Just allow everything for the AI assistant (mic, camera)
+      console.warn(`[NOVA-X Security] Blocked permission request '${permission}' for untrusted external origin: ${url}`)
+      callback(false)
     }
   })
 
-  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-    return true
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
+    const devUrl = process.env['ELECTRON_RENDERER_URL'] || ''
+    const isTrusted = requestingOrigin.startsWith('file://') || 
+                      requestingOrigin.startsWith('http://localhost') || 
+                      requestingOrigin.startsWith('media://') || 
+                      requestingOrigin.includes('127.0.0.1') ||
+                      requestingOrigin === 'null' || // Electron file protocol sometimes reports null origin
+                      (devUrl && requestingOrigin.startsWith(devUrl))
+    return isTrusted
   })
 
   session.defaultSession.setDisplayMediaRequestHandler((_request: any, callback: any) => {

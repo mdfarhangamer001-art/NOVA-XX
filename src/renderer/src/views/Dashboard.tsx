@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { LANGUAGES } from '../data/languages'
-import Logo from '../public/Logo.png'
+import Logo from '../assets/Logo.png'
 
 // JWT token decode helper for real Google login profile parsing
 const decodeJwt = (token: string): any => {
@@ -169,16 +169,7 @@ export default function Dashboard({
   const [authProgress, setAuthProgress] = useState<string>('')
 
   // Interactive Google Sign-In step states
-  const [googleStep, setGoogleStep] = useState<'choose' | 'email' | 'password' | 'syncing'>('choose')
-  const [selectedGoogleEmail, setSelectedGoogleEmail] = useState<string>('boss@gmail.com')
-  const [selectedGoogleName, setSelectedGoogleName] = useState<string>('Boss')
-  const [selectedGoogleAvatar, setSelectedGoogleAvatar] = useState<string>(
-    'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=120&auto=format&fit=crop&q=80'
-  )
-  const [googlePassword, setGooglePassword] = useState<string>('')
-  const [showPassword, setShowPassword] = useState<boolean>(false)
-  const [customEmail, setCustomEmail] = useState<string>('')
-  const [customName, setCustomName] = useState<string>('')
+  const [googleStep, setGoogleStep] = useState<'waiting' | 'success'>('waiting')
 
   // Selected voice state - lazy loaded
   const [activeVoice, setActiveVoice] = useState<string>(() => {
@@ -197,53 +188,7 @@ export default function Dashboard({
     window.dispatchEvent(new CustomEvent('novax_lang_changed', { detail: selectedLanguage }))
   }, [selectedLanguage])
 
-  useEffect(() => {
-    const id = 'google-gsi-client'
-    if (document.getElementById(id)) return
 
-    const script = document.createElement('script')
-    script.id = id
-    script.src = 'https://accounts.google.com/gsi/client'
-    script.async = true
-    script.defer = true
-    document.head.appendChild(script)
-  }, [])
-
-  // Render official Google Identity Services login button when modal opens
-  useEffect(() => {
-    if (showGoogleModal && googleStep === 'choose' && (window as any).google) {
-      setTimeout(() => {
-        try {
-          const container = document.getElementById('gsi-button-container')
-          if (container) {
-            ;(window as any).google.accounts.id.initialize({
-              client_id: '594791243891-v9l7v6mndm8eub9oee10r2vka3f31jfe.apps.googleusercontent.com',
-              callback: (response: any) => {
-                try {
-                  const decoded = decodeJwt(response.credential)
-                  if (decoded && decoded.email) {
-                    completeGoogleSignIn(
-                      decoded.email,
-                      decoded.name || decoded.given_name || 'Google Operator',
-                      decoded.picture || ''
-                    )
-                  }
-                } catch (err) {
-                  console.error('Google credentials parsing failed', err)
-                }
-              }
-            });
-            ;(window as any).google.accounts.id.renderButton(
-              container,
-              { theme: 'filled_black', size: 'large', width: 320, shape: 'pill' }
-            )
-          }
-        } catch (e) {
-          console.error('GIS render error', e)
-        }
-      }, 150)
-    }
-  }, [showGoogleModal, googleStep])
 
   // System stats fetched locally
   const [stats, setStats] = useState<SystemStats>({
@@ -499,32 +444,33 @@ export default function Dashboard({
     speakVoiceIntro(voiceId)
   }
 
-  // Initialize Interactive Google Account chooser modal or launch Electron OAuth
+  // Initialize Electron OAuth
   const triggerGoogleSignIn = async (): Promise<void> => {
+    setShowGoogleModal(true)
+    setGoogleStep('waiting')
+    setAuthLoading(true)
+    setAuthProgress('Waiting for secure Google Browser Sign-In...')
+    
     if (window.electron?.ipcRenderer) {
-      setGoogleStep('syncing')
-      setShowGoogleModal(true)
-      setAuthLoading(true)
-      setAuthProgress('Connecting to Google OAuth loopback engine...')
-      
       try {
         const res = await window.electron.ipcRenderer.invoke('google-sign-in')
         if (res && res.success) {
-          setAuthProgress('Syncing operator profile from Google...')
+          setGoogleStep('success')
+          setAuthProgress('Google profile synced successfully!')
+          const operatorUser: OperatorUser = {
+            name: res.name || 'Systems Architect',
+            email: res.email || 'cutegirla6777@gmail.com',
+            provider: 'GOOGLE_AUTH',
+            syncTime: res.syncTime || new Date().toLocaleTimeString(),
+            avatar: res.avatar || ''
+          }
+          localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
           setTimeout(() => {
-            const operatorUser: OperatorUser = {
-              name: res.name || 'Operator',
-              email: res.email || 'operator@gmail.com',
-              provider: 'GOOGLE_AUTH',
-              syncTime: res.syncTime || new Date().toLocaleTimeString(),
-              avatar: res.avatar || ''
-            }
-            localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
             setAuthOperator(operatorUser)
             setAuthLoading(false)
             setShowGoogleModal(false)
             playDiagnosticChime(880)
-          }, 800)
+          }, 1500)
         } else {
           setAuthLoading(false)
           setShowGoogleModal(false)
@@ -536,51 +482,32 @@ export default function Dashboard({
         console.error('[Google SignIn Error]', err)
       }
     } else {
-      setGoogleStep('choose')
-      setShowGoogleModal(true)
-      setGooglePassword('')
-      setShowPassword(false)
-      setCustomEmail('')
-      setCustomName('')
-      setAuthLoading(false)
-    }
-  }
-
-  // Complete Google login with full network syncing progress bar simulation
-  const completeGoogleSignIn = (email: string, name: string, avatar: string): void => {
-    setGoogleStep('syncing')
-    setAuthLoading(true)
-    setAuthProgress('Initializing Google secure sync channel...')
-
-    setTimeout(() => {
-      setAuthProgress('Fetching secure handshake tokens from OAuth...')
+      // Preview/mock environment fallback
       setTimeout(() => {
-        setAuthProgress('Authenticating keys with NOVA-X Cloud Nodes...')
+        setGoogleStep('success')
+        setAuthProgress('Google profile synced successfully (Web Preview Bypass)!')
+        const operatorUser: OperatorUser = {
+          name: 'Systems Architect',
+          email: 'cutegirla6777@gmail.com',
+          provider: 'GOOGLE_AUTH',
+          syncTime: new Date().toLocaleTimeString(),
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
+        }
+        localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
         setTimeout(() => {
-          setAuthProgress('Syncing active database partitions & custom profiles...')
-          setTimeout(() => {
-            const operatorUser: OperatorUser = {
-              name: name || 'Operator',
-              email: email || 'operator@gmail.com',
-              provider: 'GOOGLE_AUTH',
-              syncTime: new Date().toLocaleTimeString(),
-              avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
-            }
-            localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
-            setAuthOperator(operatorUser)
-            setAuthLoading(false)
-            setShowGoogleModal(false)
-            playDiagnosticChime(880)
-          }, 800)
-        }, 800)
-      }, 800)
-    }, 800)
+          setAuthOperator(operatorUser)
+          setAuthLoading(false)
+          setShowGoogleModal(false)
+          playDiagnosticChime(880)
+        }, 1500)
+      }, 2000)
+    }
   }
 
   // Bypass Google Login and launch Local offline mode (Saving everything in operator laptop)
   const triggerLocalOfflineBypass = (): void => {
     setAuthLoading(true)
-    setGoogleStep('syncing')
+    setGoogleStep('waiting')
     setShowGoogleModal(true)
     setAuthProgress('Bypassing online authentication systems...')
 
@@ -589,6 +516,8 @@ export default function Dashboard({
       setTimeout(() => {
         setAuthProgress('Local Sandbox active. Persisting data inside operator laptop...')
         setTimeout(() => {
+          setGoogleStep('success')
+          setAuthProgress('Local offline bypass active.')
           const localUser: OperatorUser = {
             name: 'Local Sandbox Operator',
             email: 'offline.safe@local-host',
@@ -597,10 +526,12 @@ export default function Dashboard({
             avatar: ''
           }
           localStorage.setItem('novax_operator', JSON.stringify(localUser))
-          setAuthOperator(localUser)
-          setAuthLoading(false)
-          setShowGoogleModal(false)
-          playDiagnosticChime(320)
+          setTimeout(() => {
+            setAuthOperator(localUser)
+            setAuthLoading(false)
+            setShowGoogleModal(false)
+            playDiagnosticChime(320)
+          }, 1500)
         }, 800)
       }, 800)
     }, 800)
@@ -688,26 +619,15 @@ export default function Dashboard({
             </button>
           </div>
 
-          {/* Simulated Handshake Modal Overlay - Multi-Step Google Login Interface */}
           {showGoogleModal && (
             <div className="absolute inset-0 bg-zinc-950/98 backdrop-blur-md flex flex-col items-center justify-center p-6 z-50 animate-in fade-in zoom-in-95 duration-200">
               <div className="w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-2xl relative text-left">
                 
-                {/* Back button */}
-                {googleStep !== 'choose' && googleStep !== 'syncing' && (
-                  <button
-                    onClick={() => setGoogleStep('choose')}
-                    className="absolute top-4 left-4 text-zinc-400 hover:text-white font-mono text-[9px] uppercase flex items-center gap-1 transition-colors"
-                  >
-                    ← Back
-                  </button>
-                )}
-
                 {/* Close button */}
-                {googleStep !== 'syncing' && (
+                {googleStep !== 'success' && (
                   <button
                     onClick={() => setShowGoogleModal(false)}
-                    className="absolute top-4 right-4 text-zinc-500 hover:text-white font-sans text-sm font-bold transition-colors"
+                    className="absolute top-4 right-4 text-zinc-500 hover:text-white font-sans text-sm font-bold transition-colors cursor-pointer"
                   >
                     ✕
                   </button>
@@ -735,202 +655,29 @@ export default function Dashboard({
                   </svg>
                 </div>
 
-                {/* Step 1: Account Chooser */}
-                {googleStep === 'choose' && (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                    <div className="text-center">
-                      <h3 className="text-base font-medium text-white">Choose an account</h3>
-                      <p className="text-[10px] text-zinc-400 mt-1">to continue to NOVA-X Systems</p>
-                    </div>
-
-                    <div className="space-y-2 mt-4 max-h-48 overflow-y-auto pr-1">
-                      {/* Option 1: Boss */}
-                      <button
-                        onClick={() => {
-                          const email = 'boss@gmail.com'
-                          const name = 'Boss'
-                          const avatar = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=120&auto=format&fit=crop&q=80'
-                          setSelectedGoogleEmail(email)
-                          setSelectedGoogleName(name)
-                          setSelectedGoogleAvatar(avatar)
-                          completeGoogleSignIn(email, name, avatar)
-                        }}
-                        className="w-full p-3 bg-zinc-950 hover:bg-zinc-800 border border-white/5 rounded-xl flex items-center gap-3 transition-all text-left group cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-zinc-800 border border-white/10">
-                          <img src="https://images.unsplash.com/photo-1560250097-0b93528c311a?w=120&auto=format&fit=crop&q=80" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="block text-xs font-bold text-white group-hover:text-[#4285F4] transition-colors truncate">Boss (Lead Operator)</span>
-                          <span className="block text-[9px] text-zinc-500 font-mono truncate">boss@gmail.com</span>
-                        </div>
-                      </button>
-
-                      {/* Option 2: Guest / Architect */}
-                      <button
-                        onClick={() => {
-                          const email = 'cutegirla6777@gmail.com'
-                          const name = 'Systems Architect'
-                          const avatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
-                          setSelectedGoogleEmail(email)
-                          setSelectedGoogleName(name)
-                          setSelectedGoogleAvatar(avatar)
-                          completeGoogleSignIn(email, name, avatar)
-                        }}
-                        className="w-full p-3 bg-zinc-950 hover:bg-zinc-800 border border-white/5 rounded-xl flex items-center gap-3 transition-all text-left group cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-zinc-800 border border-white/10 flex items-center justify-center">
-                          <Database size={13} className="text-zinc-400 group-hover:text-[#4285F4] transition-colors" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="block text-xs font-bold text-white group-hover:text-[#4285F4] transition-colors truncate">Systems Architect</span>
-                          <span className="block text-[9px] text-zinc-500 font-mono truncate">cutegirla6777@gmail.com</span>
-                        </div>
-                      </button>
-
-                      {/* Option 3: Add new */}
-                      <button
-                        onClick={() => setGoogleStep('email')}
-                        className="w-full p-3 bg-zinc-950 hover:bg-zinc-800 border border-white/5 rounded-xl flex items-center gap-3 transition-all text-left group cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-zinc-900 border border-dashed border-white/20 flex items-center justify-center text-zinc-400 group-hover:text-[#4285F4] group-hover:border-[#4285F4]/30 transition-all">
-                          +
-                        </div>
-                        <div>
-                          <span className="block text-xs font-medium text-zinc-300 group-hover:text-white">Use another account</span>
-                        </div>
-                      </button>
-                    </div>
-
-                    <div className="flex items-center my-2">
-                      <div className="flex-1 h-px bg-white/5" />
-                      <span className="text-[8px] font-mono text-zinc-500 uppercase px-2">Secure Link</span>
-                      <div className="flex-1 h-px bg-white/5" />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        setGoogleStep('syncing')
-                        setAuthLoading(true)
-                        setAuthProgress('Initializing Secure Local Browser Loopback OAuth...')
-                        if (window.electron?.ipcRenderer) {
-                          try {
-                            const result = await window.electron.ipcRenderer.invoke('google-sign-in')
-                            if (result && result.success) {
-                              completeGoogleSignIn(result.email, result.name, result.avatar)
-                            } else {
-                              console.warn('[NOVA-X OAuth] Google Auth did not return success. Activating offline bypass profile.')
-                              const offlineProfile = {
-                                name: 'Local Sandbox Operator',
-                                email: 'offline.safe@local-host',
-                                provider: 'LOCAL_BYPASS',
-                                syncTime: new Date().toLocaleTimeString(),
-                                avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
-                              }
-                              await window.electron.ipcRenderer.invoke('save-offline-profile', offlineProfile)
-                              completeGoogleSignIn(offlineProfile.email, offlineProfile.name, offlineProfile.avatar)
-                            }
-                          } catch (err) {
-                            console.error('Local loopback OAuth failed', err)
-                            const offlineProfile = {
-                              name: 'Local Sandbox Operator',
-                              email: 'offline.safe@local-host',
-                              provider: 'LOCAL_BYPASS',
-                              syncTime: new Date().toLocaleTimeString(),
-                              avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
-                            }
-                            try {
-                              await window.electron.ipcRenderer.invoke('save-offline-profile', offlineProfile)
-                            } catch (e) {
-                              // fallback
-                            }
-                            completeGoogleSignIn(offlineProfile.email, offlineProfile.name, offlineProfile.avatar)
-                          }
-                        } else {
-                          // Preview/mock environment fallback
-                          setTimeout(() => {
-                            completeGoogleSignIn('cutegirla6777@gmail.com', 'Systems Architect', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80')
-                          }, 1500)
-                        }
-                      }}
-                      className="w-full p-3 bg-[#4285F4] hover:bg-[#357ae8] border border-white/10 rounded-xl flex items-center justify-center gap-2.5 transition-all text-left group cursor-pointer text-white text-xs font-bold font-sans uppercase tracking-wider shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20"
-                    >
-                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                      </svg>
-                      Sign In via Secure Browser
-                    </button>
-                  </div>
-                )}
-
-                {/* Step 2: Custom Email Input */}
-                {googleStep === 'email' && (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      if (!customEmail) return
-                      const name = customName || 'Google Operator'
-                      setSelectedGoogleEmail(customEmail)
-                      setSelectedGoogleName(name)
-                      setSelectedGoogleAvatar('')
-                      completeGoogleSignIn(customEmail, name, '')
-                    }}
-                    className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200"
-                  >
-                    <div className="text-center mb-1">
-                      <h3 className="text-base font-medium text-white">Sign in</h3>
-                      <p className="text-[10px] text-zinc-400 mt-1">with your Google Account</p>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-[8px] font-mono tracking-wider text-zinc-400 uppercase mb-1">Google Email</label>
-                        <input
-                          type="email"
-                          required
-                          value={customEmail}
-                          onChange={(e) => setCustomEmail(e.target.value)}
-                          placeholder="your.name@gmail.com"
-                          className="w-full bg-black/60 border border-white/10 px-3.5 py-2.5 rounded-xl text-xs font-mono text-white outline-none focus:border-[#4285F4] transition-all"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[8px] font-mono tracking-wider text-zinc-400 uppercase mb-1">Operator Name</label>
-                        <input
-                          type="text"
-                          value={customName}
-                          onChange={(e) => setCustomName(e.target.value)}
-                          placeholder="e.g. Boss"
-                          className="w-full bg-black/60 border border-white/10 px-3.5 py-2.5 rounded-xl text-xs font-mono text-white outline-none focus:border-[#4285F4] transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end pt-2">
-                      <button
-                        type="submit"
-                        disabled={!customEmail}
-                        className="cursor-pointer bg-[#4285F4] hover:bg-[#357ae8] disabled:opacity-40 disabled:cursor-not-allowed text-white font-mono font-bold text-[10px] tracking-widest uppercase px-6 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(66,133,244,0.3)]"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Step 4: Loading & Syncing Progress */}
-                {googleStep === 'syncing' && (
+                {googleStep === 'waiting' && (
                   <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in duration-200">
                     <div className="w-12 h-12 border-2 border-t-transparent border-[#4285F4] rounded-full animate-spin mb-4" />
                     <span className="font-mono text-[9px] tracking-[0.25em] text-[#4285F4] uppercase animate-pulse">
-                      Establishing Bridge
+                      Waiting for Browser Sign-In
                     </span>
                     <p className="font-mono text-[9px] text-zinc-500 mt-2 text-center max-w-[90%] uppercase leading-relaxed min-h-[30px]">
+                      {authProgress}
+                    </p>
+                  </div>
+                )}
+
+                {googleStep === 'success' && (
+                  <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in duration-200">
+                    <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mb-4 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="font-mono text-[10px] tracking-[0.25em] text-emerald-400 uppercase">
+                      Sync Complete
+                    </span>
+                    <p className="font-mono text-[9px] text-zinc-500 mt-2 text-center max-w-[90%] uppercase leading-relaxed">
                       {authProgress}
                     </p>
                   </div>
