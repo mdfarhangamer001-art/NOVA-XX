@@ -86,6 +86,12 @@ function createWindow(): void {
     }
   })
 
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.key === 'F12') {
+      mainWindow.webContents.toggleDevTools()
+    }
+  })
+
   // Reset stable run timer after 10 seconds of active window session
   const stableTimer = setTimeout(() => {
     store.set('gpu_crash_count', 0)
