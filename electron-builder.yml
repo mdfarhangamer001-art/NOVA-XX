@@ -1,5 +1,5 @@
-appId: com.xtehzeeb.xtehzeeb.app
-productName: xtehzeeb.x
+appId: com.novanovax.app
+productName: novax
 directories:
   buildResources: build
 
@@ -22,7 +22,7 @@ asarUnpack:
   - resources/**
 
 win:
-  executableName: xtehzeeb-x
+  executableName: novax
   icon: resources/icon.ico
   target:
     - target: nsis
@@ -55,7 +55,7 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: Tehzeeb
+  maintainer: NOVA-X Team
   category: Utility
 
 appImage:
@@ -64,5 +64,5 @@ appImage:
 npmRebuild: false
 publish:
   provider: github
-  owner: xtehzeeb
-  repo: xtehzeeb-x
+  owner: novax
+  repo: novax
