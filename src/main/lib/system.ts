@@ -454,24 +454,23 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     // model requests it, execute the search and feed results back, looping a
     // few times, before producing the final user-facing reply.
     let workingContents = [...contents]
+    let usedTool = false
+    const toolsConfig = { tools: [{ functionDeclarations: [webSearchTool] }] }
     const maxToolLoops = 3
     for (let i = 0; i < maxToolLoops; i++) {
       const toolResponse = await ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: workingContents,
-        config: { ...genConfig, tools: [{ functionDeclarations: [webSearchTool] }] }
+        config: { ...genConfig, ...toolsConfig }
       })
 
       const calls = toolResponse.functionCalls
       if (!calls || calls.length === 0) {
         // No tool needed (or tools exhausted) — this is effectively our final answer
-        if (i === 0) {
-          // Model answered directly without needing a tool at all; reuse this text
-          // by injecting it as the model's turn so the streaming step below is cheap.
-        }
         break
       }
 
+      usedTool = true
       const modelContent = toolResponse.candidates?.[0]?.content
       if (modelContent) workingContents.push(modelContent)
 
@@ -485,27 +484,49 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       }
     }
 
-    let fullText = ''
-    if (stream) {
-      const result = await ai.models.generateContentStream({
-        model: 'gemini-2.0-flash',
-        contents: workingContents,
-        config: genConfig
-      })
-      const webContents = event.sender
+    // IMPORTANT: if the tool loop ever used the web_search function, the conversation
+    // history now contains functionCall/functionResponse parts. The follow-up call MUST
+    // keep the same `tools` declaration, otherwise Gemini treats it as a malformed
+    // conversation and silently returns an empty response instead of throwing an error.
+    const finalConfig = usedTool ? { ...genConfig, ...toolsConfig } : genConfig
 
-      for await (const chunk of result) {
-        const chunkText = chunk.text || ''
-        fullText += chunkText
-        webContents.send('gemini-stream-chunk', chunkText)
+    let fullText = ''
+    let lastFinishReason: string | undefined
+    try {
+      if (stream) {
+        const result = await ai.models.generateContentStream({
+          model: 'gemini-2.0-flash',
+          contents: workingContents,
+          config: finalConfig
+        })
+        const webContents = event.sender
+
+        for await (const chunk of result) {
+          lastFinishReason = chunk.candidates?.[0]?.finishReason || lastFinishReason
+          const chunkText = chunk.text || ''
+          fullText += chunkText
+          webContents.send('gemini-stream-chunk', chunkText)
+        }
+      } else {
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: workingContents,
+          config: finalConfig
+        })
+        lastFinishReason = response.candidates?.[0]?.finishReason
+        fullText = response.text || ''
       }
-    } else {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: workingContents,
-        config: genConfig
-      })
-      fullText = response.text || ''
+    } catch (err: any) {
+      console.error('[Gemini] generateContent failed:', err?.message || err)
+      throw new Error(`Gemini API error: ${err?.message || 'unknown error'}`)
+    }
+
+    if (!fullText) {
+      console.error('[Gemini] Empty response. finishReason =', lastFinishReason)
+      throw new Error(
+        `Gemini returned an empty response (finishReason: ${lastFinishReason || 'unknown'}). ` +
+        `This usually means: rate limit / quota exceeded, safety filters blocked the reply, or an invalid model name.`
+      )
     }
 
     // Proactive Memory Extraction (Background)
