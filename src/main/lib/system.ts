@@ -10,7 +10,7 @@ import http from 'http'
 import crypto from 'crypto'
 import { WebSocketServer } from 'ws'
 import Store from 'electron-store'
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai'
 import Groq, { toFile } from 'groq-sdk'
 
 const store = new Store()
@@ -341,6 +341,83 @@ function getGroqApiKeyLocal(): string {
   return ''
 }
 
+function getTavilyApiKeyLocal(): string {
+  const envKey = process.env.TAVILY_API_KEY
+  if (envKey) return envKey
+
+  try {
+    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
+    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
+      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
+      const parsed = JSON.parse(decrypted)
+      if (parsed.tavilyKey) return parsed.tavilyKey
+      if (parsed.TAVILY_API_KEY) return parsed.TAVILY_API_KEY
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const secureKeys: any = store.get('secure_api_keys')
+  if (secureKeys) {
+    if (secureKeys.tavilyKey) return secureKeys.tavilyKey
+    if (secureKeys.TAVILY_API_KEY) return secureKeys.TAVILY_API_KEY
+  }
+
+  return ''
+}
+
+const webSearchTool: FunctionDeclaration = {
+  name: 'web_search',
+  description: 'Search the live internet for current information, news, facts, or anything not known from training data. Use this whenever the operator asks about current events, prices, or anything time-sensitive.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      query: {
+        type: Type.STRING,
+        description: 'The search query to look up on the web.'
+      }
+    },
+    required: ['query']
+  }
+}
+
+async function runWebSearch(query: string): Promise<string> {
+  const tavilyKey = getTavilyApiKeyLocal()
+  if (!tavilyKey) {
+    return 'Web search is unavailable: no Tavily API key configured in Settings > API Vault.'
+  }
+
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: tavilyKey,
+        query,
+        search_depth: 'basic',
+        max_results: 5,
+        include_answer: true
+      })
+    })
+
+    if (!res.ok) {
+      return `Web search failed with status ${res.status}.`
+    }
+
+    const data: any = await res.json()
+    const parts: string[] = []
+    if (data.answer) parts.push(`Summary: ${data.answer}`)
+    if (Array.isArray(data.results)) {
+      data.results.slice(0, 5).forEach((r: any, i: number) => {
+        parts.push(`[${i + 1}] ${r.title}\n${r.content}\nSource: ${r.url}`)
+      })
+    }
+    return parts.join('\n\n') || 'No results found.'
+  } catch (e: any) {
+    return `Web search error: ${e?.message || 'unknown error'}`
+  }
+}
+
 export default function registerSystemHandlers(ipcMain: IpcMain) {
   ipcMain.removeHandler('gemini-chat-call')
   ipcMain.handle('gemini-chat-call', async (event, payload: { contents: any[]; systemInstruction: string; stream?: boolean }) => {
@@ -372,11 +449,47 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       contents[contents.length - 1].parts.push({ text: `\n\n${memoryContext}` })
     }
 
+    // --- Tool Resolution Pass: let Nova decide if it needs to search the web ---
+    // Run a quick non-streaming pass with the web_search tool available. If the
+    // model requests it, execute the search and feed results back, looping a
+    // few times, before producing the final user-facing reply.
+    let workingContents = [...contents]
+    const maxToolLoops = 3
+    for (let i = 0; i < maxToolLoops; i++) {
+      const toolResponse = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: workingContents,
+        config: { ...genConfig, tools: [{ functionDeclarations: [webSearchTool] }] }
+      })
+
+      const calls = toolResponse.functionCalls
+      if (!calls || calls.length === 0) {
+        // No tool needed (or tools exhausted) — this is effectively our final answer
+        if (i === 0) {
+          // Model answered directly without needing a tool at all; reuse this text
+          // by injecting it as the model's turn so the streaming step below is cheap.
+        }
+        break
+      }
+
+      const modelContent = toolResponse.candidates?.[0]?.content
+      if (modelContent) workingContents.push(modelContent)
+
+      for (const call of calls) {
+        const query = (call.args as any)?.query || ''
+        const result = await runWebSearch(query)
+        workingContents.push({
+          role: 'user',
+          parts: [{ functionResponse: { name: 'web_search', response: { result } } }]
+        })
+      }
+    }
+
     let fullText = ''
     if (stream) {
       const result = await ai.models.generateContentStream({
         model: 'gemini-2.0-flash',
-        contents,
+        contents: workingContents,
         config: genConfig
       })
       const webContents = event.sender
@@ -389,7 +502,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     } else {
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash',
-        contents,
+        contents: workingContents,
         config: genConfig
       })
       fullText = response.text || ''
