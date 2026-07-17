@@ -20,11 +20,10 @@ files:
 
 asarUnpack:
   - resources/**
-  - node_modules/vosk-koffi/**
 
 win:
   executableName: novax
-  icon: build/icon.png
+  icon: build/icon.ico
   target:
     - target: nsis
 
@@ -37,6 +36,9 @@ nsis:
   createDesktopShortcut: always
   createStartMenuShortcut: true
   runAfterFinish: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
 
 mac:
   entitlementsInherit: build/entitlements.mac.plist
@@ -67,4 +69,3 @@ publish:
   provider: github
   owner: novax
   repo: novax
-  

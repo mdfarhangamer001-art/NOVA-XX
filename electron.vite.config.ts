@@ -10,12 +10,7 @@ function obfuscatePlugin() {
     enforce: 'post' as const,
     generateBundle(_options, bundle) {
       for (const [fileName, file] of Object.entries(bundle)) {
-        if (
-          fileName.endsWith('.js') &&
-          file.type === 'chunk' &&
-          file.code &&
-          !fileName.includes('vendor-')
-        ) {
+        if (fileName.endsWith('.js') && file.type === 'chunk' && file.code) {
           console.log(`[Obfuscating] ${fileName}...`)
           try {
             const result = JavaScriptObfuscator.obfuscate(file.code, {
