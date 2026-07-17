@@ -1,7 +1,7 @@
 appId: com.novanovax.app
 productName: novax
 directories:
-  buildResources: build
+  buildResources: resources
 
 asar: true
 compression: maximum
@@ -36,9 +36,9 @@ nsis:
   createDesktopShortcut: always
   createStartMenuShortcut: true
   runAfterFinish: true
-  installerIcon: build/icon.ico
-  uninstallerIcon: build/icon.ico
-  installerHeaderIcon: build/icon.ico
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
 
 mac:
   entitlementsInherit: build/entitlements.mac.plist
