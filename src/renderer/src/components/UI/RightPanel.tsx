@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { Copy, Check, Mic, MicOff } from 'lucide-react'
 
 interface Message {
   role: 'user' | 'model' | 'system'
@@ -12,6 +13,89 @@ export default function RightPanel(): JSX.Element {
   const [userInput, setUserInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const chatHistoryRef = useRef<Message[]>([])
+
+  const [isRecording, setIsRecording] = useState(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+
+  const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<string> => {
+    if (window.iris?.transcribeAudio) {
+      try {
+        return await window.iris.transcribeAudio(base64Audio, mimeType)
+      } catch (err) {
+        console.error('Transcription failed via bridge', err)
+      }
+    }
+    return ""
+  }
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioChunksRef.current = []
+      
+      let mimeType = 'audio/webm'
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus'
+      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        mimeType = 'audio/ogg;codecs=opus'
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4'
+      }
+
+      const recorder = new MediaRecorder(stream, { mimeType })
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop())
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        const reader = new FileReader()
+        reader.readAsDataURL(audioBlob)
+        reader.onloadend = async () => {
+          const base64data = (reader.result as string).split(',')[1]
+          setActiveModelText('Transcribing audio...')
+          try {
+            const transcript = await transcribeAudio(base64data, audioBlob.type)
+            setActiveModelText('')
+            if (transcript && transcript.trim().length > 0) {
+              setUserInput(transcript)
+              await executeCoreCommand(transcript)
+            }
+          } catch (err) {
+            console.error('Audio transcription error:', err)
+            setActiveModelText('')
+          }
+        }
+      }
+
+      mediaRecorderRef.current = recorder
+      recorder.start()
+      setIsRecording(true)
+    } catch (err) {
+      console.error('Failed to access microphone:', err)
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+    }
+  }
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
 
   useEffect(() => {
     chatHistoryRef.current = chatHistory
@@ -200,6 +284,27 @@ export default function RightPanel(): JSX.Element {
     })
 
     // 2. Intercept and run direct physical commands or telemetry scans
+    const launchMatch = cleanQuery.toLowerCase().match(/^(open|launch|start|run)\s+(.+)$/i)
+    if (launchMatch) {
+      const appName = launchMatch[2].trim()
+      // @ts-ignore
+      if (window.iris?.launchApp) {
+        setActiveModelText(`Launching ${appName}...`)
+        try {
+          // @ts-ignore
+          const res = await window.iris.launchApp(appName)
+          if (res.success) {
+            const reply = `Target acquired. Launching ${appName} now, Boss.`
+            if ((window as any).speakText) (window as any).speakText(reply)
+            const modelMessage: Message = { role: 'model', text: reply }
+            setChatHistory(prev => [...prev, modelMessage].slice(-30))
+            setActiveModelText('')
+            return
+          }
+        } catch (e) {}
+      }
+    }
+
     const systemCheck = await checkForLocalSystemCommands(cleanQuery)
     if (systemCheck.handled && systemCheck.reply) {
       setActiveModelText('')
@@ -209,26 +314,17 @@ export default function RightPanel(): JSX.Element {
         localStorage.setItem('novax_chat_history', JSON.stringify(updated))
         return updated
       })
+      if (window.electron?.ipcRenderer) {
+        window.electron.ipcRenderer.invoke('phone-broadcast-reply', systemCheck.reply)
+      }
       if ((window as any).speakText) {
         ;(window as any).speakText(systemCheck.reply)
       }
       return
     }
 
-    // 3. Forward query to Gemini Cognitive Core
-    let apiKey = localStorage.getItem('mock_geminiKey') || ''
-    if (!apiKey && window.electron?.ipcRenderer) {
-      try {
-        const keys = await window.electron.ipcRenderer.invoke('secure-get-keys')
-        if (keys && keys.geminiKey) {
-          apiKey = keys.geminiKey
-        }
-      } catch (err) {
-        console.error('Failed to fetch keys', err)
-      }
-    }
-
-    if (apiKey) {
+    // 3. Forward query to Gemini Cognitive Core via Secure Bridge
+    if (window.electron?.ipcRenderer) {
       setActiveModelText('Thinking...')
       try {
         const historyContext = chatHistoryRef.current.slice(-6).map(msg => ({
@@ -236,30 +332,43 @@ export default function RightPanel(): JSX.Element {
           parts: [{ text: msg.text }]
         }))
         
-        const systemInstruction = "You are NOVA-X, a hyper-advanced cognitive neural operator system. You are speaking to your creator and operator. You MUST always address them as 'Boss' (e.g., 'Yes, Boss', 'Understood, Boss'). Your tone should be authoritative, highly technical, professional, deep, and concise. Never use fluffy or conversational filler."
+        const tone = localStorage.getItem('novax_system_tone') || 'authoritative'
+        const toneInstructions = {
+          authoritative: "Your tone should be authoritative, highly technical, professional, deep, and concise. Never use fluffy or conversational filler.",
+          friendly: "Your tone should be helpful, warm, slightly casual but still highly professional and efficient. You can use light humor if appropriate.",
+          minimalist: "Your tone should be extremely brief. Respond with the minimum amount of words necessary. No greetings or pleasantries."
+        }
+
+        const systemInstruction = `You are NOVA-X, a hyper-advanced cognitive neural operator system. You are speaking to your creator and operator Tehzeeb. You MUST always address them as 'Boss' (e.g., 'Yes, Boss', 'Understood, Boss'). ${toneInstructions[tone]}`
         
         const contents = [
           ...historyContext,
           { role: 'user', parts: [{ text: cleanQuery }] }
         ]
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents,
-            systemInstruction: {
-              parts: [{ text: systemInstruction }]
-            },
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 256
-            }
-          })
+        // Set up streaming listener
+        let fullReplyText = ''
+        const streamHandler = (_event: any, chunk: string) => {
+          fullReplyText += chunk
+          setActiveModelText(fullReplyText)
+        }
+        
+        if (window.electron?.ipcRenderer) {
+          window.electron.ipcRenderer.on('gemini-stream-chunk', streamHandler)
+        }
+
+        const result = await window.electron.ipcRenderer.invoke('gemini-chat-call', { 
+          contents, 
+          systemInstruction,
+          stream: true 
         })
 
-        const result = await response.json()
-        const modelReply = result?.candidates?.[0]?.content?.parts?.[0]?.text || "System under heavy load, Boss. Please check your credentials."
+        // Clean up streaming listener
+        if (window.electron?.ipcRenderer) {
+          window.electron.ipcRenderer.off('gemini-stream-chunk', streamHandler)
+        }
+
+        const modelReply = result?.candidates?.[0]?.content?.parts?.[0]?.text || fullReplyText || "System under heavy load, Boss. Please check your credentials."
         
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: modelReply }
@@ -268,10 +377,14 @@ export default function RightPanel(): JSX.Element {
           localStorage.setItem('novax_chat_history', JSON.stringify(updated))
           return updated
         })
-
+        
+        if (window.electron?.ipcRenderer) {
+          window.electron.ipcRenderer.invoke('phone-broadcast-reply', modelReply)
+        }
         if ((window as any).speakText) {
           ;(window as any).speakText(modelReply)
         }
+
       } catch (err) {
         console.error('Gemini call failed', err)
         setActiveModelText('')
@@ -279,25 +392,13 @@ export default function RightPanel(): JSX.Element {
         setChatHistory((prev) => [...prev, errorMessage].slice(-30))
       }
     } else {
-      // Offline mock responses
-      setActiveModelText('Simulating core processing...')
+      // Browser fallback (should not happen in production)
+      setActiveModelText('Thinking...')
       setTimeout(() => {
-        const answers = [
-          "Understood, Boss. All system metrics are within normal thresholds. What is our next operational vector?",
-          "Yes, Boss. Telemetry nodes are fully stabilized. Neural networks are running on port 3000.",
-          "Acknowledged, Boss. I have synchronized our central data indexes. Offline backup completed successfully."
-        ]
-        const randomAnswer = answers[Math.floor(Math.random() * answers.length)]
+        const randomAnswer = "Secure Bridge not found. Please run NOVA-X in Electron for full cognitive capacity, Boss."
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: randomAnswer }
-        setChatHistory((prev) => {
-          const updated = [...prev, modelMessage].slice(-30)
-          localStorage.setItem('novax_chat_history', JSON.stringify(updated))
-          return updated
-        })
-        if ((window as any).speakText) {
-          ;(window as any).speakText(randomAnswer)
-        }
+        setChatHistory((prev) => [...prev, modelMessage].slice(-30))
       }, 1000)
     }
   }, [])
@@ -307,8 +408,21 @@ export default function RightPanel(): JSX.Element {
     ;(window as any).triggerVoiceCommand = (q: string) => {
       executeCoreCommand(q)
     }
+
+    const handleMobileCommand = (_event: any, command: string) => {
+      console.log('[RightPanel] Incoming mobile companion voice command:', command)
+      executeCoreCommand(command)
+    }
+
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.on('mobile-command', handleMobileCommand)
+    }
+
     return () => {
       delete (window as any).triggerVoiceCommand
+      if (window.electron?.ipcRenderer) {
+        window.electron.ipcRenderer.off('mobile-command', handleMobileCommand)
+      }
     }
   }, [executeCoreCommand])
 
@@ -382,16 +496,35 @@ export default function RightPanel(): JSX.Element {
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[85%] p-3.5 rounded-2xl text-xs font-mono tracking-wide leading-relaxed shadow-lg ${
+              className={`relative group max-w-[85%] p-3.5 rounded-2xl text-xs font-mono tracking-wide leading-relaxed shadow-lg ${
                 msg.role === 'user'
                   ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/20 rounded-br-none'
                   : 'bg-zinc-900/60 text-zinc-100 border border-white/5 rounded-bl-none'
               }`}
             >
               <div className="text-[8px] opacity-40 uppercase font-bold tracking-widest mb-1 select-none">
-                {msg.role === 'user' ? 'Operator' : 'Nova-X'}
+                {msg.role === 'user' ? 'Operator' : 'NOVA-X'}
               </div>
-              <div className="whitespace-pre-wrap">{msg.text}</div>
+              <div className="whitespace-pre-wrap pr-6">{msg.text}</div>
+              
+              {msg.role === 'model' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(msg.text)
+                    setCopiedIndex(idx)
+                    setTimeout(() => setCopiedIndex(null), 1500)
+                  }}
+                  className="absolute top-3.5 right-3.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-400 hover:text-white cursor-pointer"
+                  title="Copy response"
+                >
+                  {copiedIndex === idx ? (
+                    <Check size={11} className="text-emerald-400" />
+                  ) : (
+                    <Copy size={11} />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -400,7 +533,7 @@ export default function RightPanel(): JSX.Element {
           <div className="flex justify-start">
             <div className="max-w-[85%] p-3.5 rounded-2xl bg-zinc-900/60 text-zinc-100 border border-white/5 rounded-bl-none text-xs font-mono tracking-wide leading-relaxed shadow-lg">
               <div className="text-[8px] text-emerald-400 opacity-60 uppercase font-bold tracking-widest mb-1 select-none">
-                Nova-X (Typing)
+                NOVA-X (Typing)
               </div>
               <div>
                 {activeModelText}
@@ -423,12 +556,26 @@ export default function RightPanel(): JSX.Element {
         }}
         className="p-3 bg-black/40 border-t border-white/5 flex gap-2 items-center shrink-0"
       >
+        <button
+          type="button"
+          onClick={toggleRecording}
+          className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+            isRecording
+              ? 'bg-red-500/20 text-red-400 border-red-500/40 animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.4)]'
+              : 'bg-zinc-900/60 text-zinc-400 border-white/5 hover:text-zinc-200 hover:bg-zinc-800/40'
+          }`}
+          title={isRecording ? 'Stop Voice Recording' : 'Voice Input (Mic)'}
+        >
+          {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+        </button>
+
         <input
           type="text"
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
-          placeholder="Enter command, Boss..."
-          className="flex-1 bg-zinc-900/60 border border-white/5 rounded-xl px-3.5 py-2 text-xs font-mono text-white outline-none focus:border-emerald-500/50 transition-all placeholder-zinc-600"
+          placeholder={isRecording ? "Listening, Boss..." : "Enter command, Boss..."}
+          disabled={isRecording}
+          className="flex-1 bg-zinc-900/60 border border-white/5 rounded-xl px-3.5 py-2 text-xs font-mono text-white outline-none focus:border-emerald-500/50 transition-all placeholder-zinc-600 disabled:opacity-55"
         />
         <button
           type="submit"

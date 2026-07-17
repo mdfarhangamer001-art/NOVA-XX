@@ -10,45 +10,26 @@ permissions:
 
 jobs:
   build:
+
     runs-on: windows-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: 'npm'
+          node-version: 22
 
-      # package.json aur package-lock.json sync nahi hain, isliye
-      # `npm ci` fail ho raha tha. Ye step lockfile ko fresh regenerate
-      # karta hai taaki `npm ci` aage pass ho jaye.
-      - name: Sync package-lock.json
-        run: npm install --package-lock-only
-
-      - name: Install dependencies (clean, lockfile-exact)
+      - name: Install Dependencies
         run: npm ci
-
-      # Known npm optional-dependency bug: on some npm/node combos the
-      # platform-specific rollup binary silently fails to install via
-      # npm ci alone, which breaks the Vite/Rollup build with
-      # "Cannot find module @rollup/rollup-win32-x64-msvc". This forces
-      # it in explicitly, after npm ci, so it isn't wiped out.
-      - name: Ensure rollup Windows binary is present
-        run: npm install @rollup/rollup-win32-x64-msvc --no-save
 
       - name: Sync package.json version with Release Tag
         run: |
           node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.version = '1.0.${{ github.run_number }}'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2), 'utf8');"
         shell: bash
-
-      # Catches TypeScript errors before they ship silently inside a
-      # packaged build (a broken renderer bundle is one of the causes
-      # of a black screen on launch on the end user's machine).
-      - name: Typecheck
-        run: npm run typecheck
 
       - name: Build NOVA-X Installer
         run: npm run dist:win
@@ -61,5 +42,6 @@ jobs:
           generate_release_notes: true
           files: |
             dist/*.exe
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

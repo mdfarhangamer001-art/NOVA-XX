@@ -72,11 +72,11 @@ const VOICES: VoiceProfile[] = [
     pitch: 0.52,
     rate: 0.82,
     chimeFreq: 180,
-    introText: 'Nova-X Neural System fully synchronized. I am Ares, your tactical administrator.'
+    introText: 'NOVA-X Neural System fully synchronized. I am Ares, your tactical administrator.'
   },
   {
     id: 'HELIOS',
-    name: 'HELIOS (NOVA-X Command)',
+    name: 'HELIOS (Jarvis Command)',
     gender: 'MALE',
     description: 'Rich, tech-forward, mechanical tactical voice for rapid command feedback.',
     pitch: 0.65,
@@ -122,12 +122,34 @@ export default function Dashboard({
   const [visionMode, setVisionMode] = useState<'off' | 'camera' | 'screen'>('off')
 
   // 3D Core customization states
-  const [coreType, setCoreType] = useState<'quantum' | 'cube' | 'matrix' | 'nebula'>(
-    (localStorage.getItem('novax_core_type') as 'quantum' | 'cube' | 'matrix' | 'nebula') || 'quantum'
+  const [coreType, setCoreType] = useState<'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'>(
+    (localStorage.getItem('novax_core_type') as 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis') || 'quantum'
   )
   const [coreSize, setCoreSize] = useState<number>(
     parseFloat(localStorage.getItem('novax_core_size') || '0.8')
   )
+
+  useEffect(() => {
+    // Initial system check and briefing
+    if (isConnected) {
+      setTimeout(() => {
+        triggerDailyBriefing()
+      }, 2000)
+    }
+  }, [isConnected])
+
+  const triggerDailyBriefing = async () => {
+    const hours = new Date().getHours()
+    let greeting = 'Good evening'
+    if (hours < 12) greeting = 'Good morning'
+    else if (hours < 18) greeting = 'Good afternoon'
+
+    const briefingText = `${greeting}, Boss. Systems are 100% operational. Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}. I have synchronized your neural store and prepared your tactical environment.`
+    
+    if ((window as any).speakText) {
+      ;(window as any).speakText(briefingText)
+    }
+  }
 
   // Auth operator state (for Google bypass feature) - lazy loaded from localStorage
   const [authOperator, setAuthOperator] = useState<OperatorUser | null>(() => {
@@ -397,7 +419,7 @@ export default function Dashboard({
         }
       }
       utterance.onerror = (e) => {
-        console.error('[NOVA-X TTS ERROR] Speech synthesis failed. Code:', e.error, '| Message:', e.message, '| Utterance:', e)
+        console.error('[NOVA-X TTS ERROR] Speech synthesis failed. Code:', e.error, '| Message:', (e as any).message, '| Utterance:', e)
         if ((window as any).setIsSpeaking) {
           ;(window as any).setIsSpeaking(false)
         }
@@ -434,6 +456,13 @@ export default function Dashboard({
 
       osc.start()
       osc.stop(audioCtx.currentTime + 0.3)
+
+      // Prevent memory context leaks and crashes on low-end systems
+      setTimeout(() => {
+        try {
+          audioCtx.close()
+        } catch (_) {}
+      }, 350)
     } catch (e) {
       console.warn('Audio playback blocked by browser/iframe permissions.')
     }
@@ -474,15 +503,51 @@ export default function Dashboard({
     speakVoiceIntro(voiceId)
   }
 
-  // Initialize Interactive Google Account chooser modal
-  const triggerGoogleSignIn = (): void => {
-    setGoogleStep('choose')
-    setShowGoogleModal(true)
-    setGooglePassword('')
-    setShowPassword(false)
-    setCustomEmail('')
-    setCustomName('')
-    setAuthLoading(false)
+  // Initialize Interactive Google Account chooser modal or launch Electron OAuth
+  const triggerGoogleSignIn = async (): Promise<void> => {
+    if (window.electron?.ipcRenderer) {
+      setGoogleStep('syncing')
+      setShowGoogleModal(true)
+      setAuthLoading(true)
+      setAuthProgress('Connecting to Google OAuth loopback engine...')
+      
+      try {
+        const res = await window.electron.ipcRenderer.invoke('google-sign-in')
+        if (res && res.success) {
+          setAuthProgress('Syncing operator profile from Google...')
+          setTimeout(() => {
+            const operatorUser: OperatorUser = {
+              name: res.name || 'Operator',
+              email: res.email || 'operator@gmail.com',
+              provider: 'GOOGLE_AUTH',
+              syncTime: res.syncTime || new Date().toLocaleTimeString(),
+              avatar: res.avatar || ''
+            }
+            localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
+            setAuthOperator(operatorUser)
+            setAuthLoading(false)
+            setShowGoogleModal(false)
+            playDiagnosticChime(880)
+          }, 800)
+        } else {
+          setAuthLoading(false)
+          setShowGoogleModal(false)
+          console.error('[Google SignIn Error]', res?.error)
+        }
+      } catch (err: any) {
+        setAuthLoading(false)
+        setShowGoogleModal(false)
+        console.error('[Google SignIn Error]', err)
+      }
+    } else {
+      setGoogleStep('choose')
+      setShowGoogleModal(true)
+      setGooglePassword('')
+      setShowPassword(false)
+      setCustomEmail('')
+      setCustomName('')
+      setAuthLoading(false)
+    }
   }
 
   // Complete Google login with full network syncing progress bar simulation
@@ -494,7 +559,7 @@ export default function Dashboard({
     setTimeout(() => {
       setAuthProgress('Fetching secure handshake tokens from OAuth...')
       setTimeout(() => {
-        setAuthProgress('Authenticating keys with Nova-X Cloud Nodes...')
+        setAuthProgress('Authenticating keys with NOVA-X Cloud Nodes...')
         setTimeout(() => {
           setAuthProgress('Syncing active database partitions & custom profiles...')
           setTimeout(() => {
@@ -546,7 +611,12 @@ export default function Dashboard({
   }
 
   // Operator logout
-  const handleOperatorLogout = (): void => {
+  const handleOperatorLogout = async (): Promise<void> => {
+    if (window.electron?.ipcRenderer) {
+      try {
+        await window.electron.ipcRenderer.invoke('google-sign-out')
+      } catch (e) {}
+    }
     localStorage.removeItem('novax_operator')
     setAuthOperator(null)
     playDiagnosticChime(150)
@@ -674,7 +744,7 @@ export default function Dashboard({
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
                     <div className="text-center">
                       <h3 className="text-base font-medium text-white">Choose an account</h3>
-                      <p className="text-[10px] text-zinc-400 mt-1">to continue to Nova-X Systems</p>
+                      <p className="text-[10px] text-zinc-400 mt-1">to continue to NOVA-X Systems</p>
                     </div>
 
                     <div className="space-y-2 mt-4 max-h-48 overflow-y-auto pr-1">
@@ -703,7 +773,7 @@ export default function Dashboard({
                       {/* Option 2: Guest / Architect */}
                       <button
                         onClick={() => {
-                          const email = 'architect@novax.ai'
+                          const email = 'cutegirla6777@gmail.com'
                           const name = 'Systems Architect'
                           const avatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
                           setSelectedGoogleEmail(email)
@@ -718,7 +788,7 @@ export default function Dashboard({
                         </div>
                         <div className="flex-1 min-w-0">
                           <span className="block text-xs font-bold text-white group-hover:text-[#4285F4] transition-colors truncate">Systems Architect</span>
-                          <span className="block text-[9px] text-zinc-500 font-mono truncate">architect@novax.ai</span>
+                          <span className="block text-[9px] text-zinc-500 font-mono truncate">cutegirla6777@gmail.com</span>
                         </div>
                       </button>
 
@@ -784,7 +854,7 @@ export default function Dashboard({
                         } else {
                           // Preview/mock environment fallback
                           setTimeout(() => {
-                            completeGoogleSignIn('architect@novax.ai', 'Systems Architect', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80')
+                            completeGoogleSignIn('cutegirla6777@gmail.com', 'Systems Architect', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80')
                           }, 1500)
                         }
                       }}
@@ -876,7 +946,7 @@ export default function Dashboard({
 
           <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between font-mono text-[8px] text-zinc-500 uppercase tracking-widest">
             <span>Uplink: Secure Protocol</span>
-            <span>OS: Nova-X Quantum</span>
+            <span>OS: NOVA-X Quantum</span>
           </div>
         </div>
       </div>
@@ -1224,8 +1294,8 @@ export default function Dashboard({
               </button>
               <button
                 onClick={() => {
-                  setCoreType('NOVA-X')
-                  localStorage.setItem('novax_core_type', 'NOVA-X')
+                  setCoreType('jarvis')
+                  localStorage.setItem('novax_core_type', 'jarvis')
                 }}
                 className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
                   coreType === 'jarvis'

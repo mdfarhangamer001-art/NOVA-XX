@@ -14,7 +14,11 @@ if (process.contextIsolated) {
     })
     contextBridge.exposeInMainWorld('api', api)
     contextBridge.exposeInMainWorld('iris', {
-      sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame)
+      sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame),
+      transcribeAudio: (base64Audio: string, mimeType: string) => ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType }),
+      getMemories: () => ipcRenderer.invoke('get-memories'),
+      deleteMemory: (index: number) => ipcRenderer.invoke('delete-memory', index),
+      launchApp: (appName: string) => ipcRenderer.invoke('launch-app', appName)
     })
   } catch (error) {}
 } else {
@@ -30,6 +34,10 @@ if (process.contextIsolated) {
   window.api = api
   // @ts-ignore
   window.iris = {
-    sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame)
+    sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame),
+    transcribeAudio: (base64Audio: string, mimeType: string) => ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType }),
+    getMemories: () => ipcRenderer.invoke('get-memories'),
+    deleteMemory: (index: number) => ipcRenderer.invoke('delete-memory', index),
+    launchApp: (appName: string) => ipcRenderer.invoke('launch-app', appName)
   }
 }

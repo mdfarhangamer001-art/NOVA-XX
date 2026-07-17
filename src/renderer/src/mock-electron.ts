@@ -21,6 +21,15 @@ if (typeof window !== 'undefined') {
         console.log(`[Mock Electron IPC] on: ${channel}`);
         return () => {};
       },
+      off: (channel: string, func: (...args: any[]) => void) => {
+        console.log(`[Mock Electron IPC] off: ${channel}`);
+      },
+      removeListener: (channel: string, func: (...args: any[]) => void) => {
+        console.log(`[Mock Electron IPC] removeListener: ${channel}`);
+      },
+      removeAllListeners: (channel: string) => {
+        console.log(`[Mock Electron IPC] removeAllListeners: ${channel}`);
+      },
       invoke: async (channel: string, ...args: any[]) => {
         console.log(`[Mock Electron IPC] invoke: ${channel}`, args);
         
@@ -123,6 +132,45 @@ if (typeof window !== 'undefined') {
 
         if (channel === 'adb-quick-action') {
           console.log(`[Mock ADB Quick Action] ${args[0]?.action}`);
+          return { success: true };
+        }
+
+        if (channel === 'google-sign-in') {
+          return {
+            success: true,
+            name: 'Systems Architect',
+            email: 'NOVA-X7@gmail.com',
+            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+            syncTime: new Date().toLocaleTimeString()
+          };
+        }
+
+        if (channel === 'google-sign-out') {
+          return { success: true };
+        }
+
+        if (channel === 'get-companion-status') {
+          return {
+            connected: false,
+            connectedIp: '',
+            pin: '842931',
+            url: 'http://192.168.1.5:3021/?token=mock-token-123',
+            ip: '192.168.1.5',
+            port: 3021
+          };
+        }
+
+        if (channel === 'forget-companion-device') {
+          return {
+            connected: false,
+            pin: '123456',
+            url: 'http://192.168.1.5:3021/?token=new-mock-token',
+            ip: '192.168.1.5',
+            port: 3021
+          };
+        }
+
+        if (channel === 'phone-broadcast-reply') {
           return { success: true };
         }
 

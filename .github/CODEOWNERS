@@ -1,17 +1,17 @@
 # This file defines the code owners for the IRIS repository.
 # Code owners will be automatically requested for review when a PR touches their code.
 
-*       @mdfarhangamer001-art
+*       @xtehzeeb
 
-/docs/                      @mdfarhangamer001-art
-README.md                   @mdfarhangamer001-art
-CONTRIBUTING.md             @mdfarhangamer001-art
-SUPPORT.md                  @mdfarhangamer001-art
+/docs/                      @xtehzeeb
+README.md                   @xtehzeeb
+CONTRIBUTING.md             @xtehzeeb
+SUPPORT.md                  @xtehzeeb
 
-SECURITY.md                 @mdfarhangamer001-art
-electron-builder.yml        @mdfarhangamer001-art
+SECURITY.md                 @xtehzeeb
+electron-builder.yml        @xtehzeeb
 
-/src/main/                  @mdfarhangamer001-art
-/src/preload/               @mdfarhangamer001-art
+/src/main/                  @xtehzeeb
+/src/preload/               @xtehzeeb
 
-/src/renderer/              @mdfarhangamer001-art
+/src/renderer/              @xtehzeeb

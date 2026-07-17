@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 
 // Premium futuristic color palette for NOVA-X Fusion Core
@@ -659,6 +659,110 @@ function AIOrb({
   )
 }
 
+const CORE_THEMES = {
+  quantum: {
+    core: 'bg-[#00f3ff]',
+    ring: 'border-[#ff0077]/30',
+    glow: 'shadow-[0_0_40px_rgba(0,243,255,0.65)]'
+  },
+  cube: {
+    core: 'bg-[#00f3ff]',
+    ring: 'border-[#00f3ff]/20',
+    glow: 'shadow-[0_0_35px_rgba(0,243,255,0.45)]'
+  },
+  matrix: {
+    core: 'bg-[#39ff14]',
+    ring: 'border-[#39ff14]/30',
+    glow: 'shadow-[0_0_40px_rgba(57,255,20,0.65)]'
+  },
+  nebula: {
+    core: 'bg-[#ff00bb]',
+    ring: 'border-[#00f3ff]/20',
+    glow: 'shadow-[0_0_45px_rgba(255,0,187,0.6)]'
+  },
+  eva: {
+    core: 'bg-[#ff0055]',
+    ring: 'border-[#ff0055]/30',
+    glow: 'shadow-[0_0_40px_rgba(255,0,85,0.65)]'
+  },
+  jarvis: {
+    core: 'bg-[#ffaa00]',
+    ring: 'border-[#ff3300]/30',
+    glow: 'shadow-[0_0_40px_rgba(255,170,0,0.65)]'
+  }
+}
+
+export function AICore2D({
+  isConnected = false,
+  isSpeaking = false,
+  coreType = 'quantum',
+  coreSize = 0.65
+}: {
+  isConnected?: boolean
+  isSpeaking?: boolean
+  coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'
+  coreSize?: number
+}) {
+  const theme = CORE_THEMES[coreType] || CORE_THEMES.quantum
+
+  // Determine dynamic size and opacity based on speaking/connected state
+  const baseScale = isConnected ? 1.0 : 0.72
+  const speakScale = isSpeaking ? 1.25 : 1.0
+  const finalScale = coreSize * baseScale * speakScale
+
+  const pulseSpeed = isSpeaking ? 'duration-150' : 'duration-1000'
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none">
+      <div
+        className="relative flex items-center justify-center pointer-events-none select-none transition-transform duration-500"
+        style={{
+          width: '280px',
+          height: '280px',
+          transform: `scale(${finalScale})`
+        }}
+      >
+        {/* Outer Rotating Compass/HUD ring */}
+        <div className="absolute inset-0 rounded-full border border-dashed border-[#00f3ff]/10 animate-[spin_40s_linear_infinite]" />
+        
+        {/* Middle Rotating HUD ring with custom theme boundary */}
+        <div className={`absolute inset-4 rounded-full border border-double ${theme.ring} animate-[spin_15s_linear_infinite_reverse]`} />
+        
+        {/* Inner Technical HUD tickmarks (glowing ticks) */}
+        <svg className="absolute inset-8 w-[calc(100%-64px)] h-[calc(100%-64px)] animate-[spin_60s_linear_infinite] opacity-30" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="1 4" className="text-[#00f3ff]" />
+          <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 8" className="text-white" />
+        </svg>
+
+        {/* Main Core Glimmer - ambient aura */}
+        <div
+          className={`absolute inset-16 rounded-full opacity-25 blur-xl transition-all ${pulseSpeed} ${theme.core} ${
+            isSpeaking ? 'scale-130 opacity-45' : isConnected ? 'scale-110 opacity-30' : 'scale-90 opacity-15'
+          }`}
+        />
+
+        {/* Primary Glowing Core Solid Sphere */}
+        <div
+          className={`absolute w-14 h-14 rounded-full transition-all ${pulseSpeed} ${theme.core} ${theme.glow} flex items-center justify-center ${
+            isSpeaking ? 'scale-125 animate-pulse' : isConnected ? 'scale-100' : 'scale-75 opacity-70'
+          }`}
+        >
+          {/* Core Center Dot */}
+          <div className="w-3 h-3 rounded-full bg-white shadow-[0_0_10px_#fff]" />
+        </div>
+
+        {/* Orbiting Tech Nodes */}
+        <div className="absolute inset-0 animate-[spin_8s_linear_infinite]">
+          <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full ${theme.core} shadow-[0_0_8px_currentColor]`} />
+        </div>
+        <div className="absolute inset-6 animate-[spin_12s_linear_infinite_reverse]">
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#00f3ff] shadow-[0_0_6px_#00f3ff]" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AICore({
   isConnected = false,
   isSpeaking = false,
@@ -670,21 +774,58 @@ export default function AICore({
   coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'
   coreSize?: number
 }) {
+  const [lowEndMode, setLowEndMode] = useState(() => {
+    const saved = localStorage.getItem('xtehzeeb_low_end_mode') || localStorage.getItem('novax_low_end_mode')
+    if (saved === 'true') return true
+    if (saved === 'false') return false
+
+    // Auto-detect WebGL context support
+    try {
+      const canvas = document.createElement('canvas')
+      const support = !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')))
+      return !support
+    } catch (e) {
+      return true
+    }
+  })
+
+  useEffect(() => {
+    const handlePerfChange = () => {
+      setLowEndMode((localStorage.getItem('xtehzeeb_low_end_mode') || localStorage.getItem('novax_low_end_mode')) === 'true')
+    }
+    window.addEventListener('xtehzeeb_perf_mode_changed', handlePerfChange)
+    window.addEventListener('novax_perf_mode_changed', handlePerfChange)
+    return () => {
+      window.removeEventListener('xtehzeeb_perf_mode_changed', handlePerfChange)
+      window.removeEventListener('novax_perf_mode_changed', handlePerfChange)
+    }
+  }, [])
+
+  if (lowEndMode) {
+    return (
+      <AICore2D
+        isConnected={isConnected}
+        isSpeaking={isSpeaking}
+        coreType={coreType}
+        coreSize={coreSize}
+      />
+    )
+  }
+
   return (
     <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none">
       <Canvas
         style={{ width: '100%', height: '100%' }}
-        // Set camera position slightly further back to make core look smaller and fit beautifully
         camera={{ position: [0, 0, 5.8], fov: 38 }}
         gl={{
           antialias: false,
-          powerPreference: 'default',
+          powerPreference: 'low-power',
           alpha: true,
           depth: false,
           stencil: false,
           precision: 'lowp'
         }}
-        dpr={Math.min(window.devicePixelRatio, 1.3)}
+        dpr={Math.min(window.devicePixelRatio, 1.0)} // Capped for low-end graphics cards
         frameloop="always"
       >
         <group scale={[coreSize, coreSize, coreSize]}>

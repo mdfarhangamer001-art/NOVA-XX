@@ -45,7 +45,7 @@ export default function AgentsView() {
     'STATUS: Awaiting code drift trigger or scheduled cron loop.'
   ])
   const [currentVersion, setCurrentVersion] = useState(() => {
-    return localStorage.getItem('novax_app_version') || '1.6.3'
+    return localStorage.getItem('xtehzeeb_app_version') || localStorage.getItem('novax_app_version') || '1.6.3'
   })
 
   const visionIntervalRef = useRef<any>(null)
@@ -55,6 +55,7 @@ export default function AgentsView() {
       window.electron.ipcRenderer.invoke('get-app-version').then((v: string) => {
         if (v) {
           setCurrentVersion(v)
+          localStorage.setItem('xtehzeeb_app_version', v)
           localStorage.setItem('novax_app_version', v)
         }
       })
@@ -321,14 +322,17 @@ export default function AgentsView() {
               const realNext = await window.electron.ipcRenderer.invoke('bump-app-version')
               if (realNext) {
                 setCurrentVersion(realNext)
+                localStorage.setItem('xtehzeeb_app_version', realNext)
                 localStorage.setItem('novax_app_version', realNext)
               }
             } catch (err) {
               setCurrentVersion(nextVersion)
+              localStorage.setItem('xtehzeeb_app_version', nextVersion)
               localStorage.setItem('novax_app_version', nextVersion)
             }
           } else {
             setCurrentVersion(nextVersion)
+            localStorage.setItem('xtehzeeb_app_version', nextVersion)
             localStorage.setItem('novax_app_version', nextVersion)
           }
         }

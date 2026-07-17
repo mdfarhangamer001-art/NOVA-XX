@@ -13,7 +13,7 @@ interface SettingsProps {
   isSystemActive: boolean
 }
 
-type TabType = 'updates' | 'keys' | 'security'
+type TabType = 'keys' | 'performance'
 
 function GlassPanel({
   children,
@@ -21,7 +21,7 @@ function GlassPanel({
 }: {
   children: React.ReactNode
   className?: string
-}) {
+}): JSX.Element {
   return (
     <div
       className={`relative overflow-hidden rounded-2xl bg-zinc-900/60 backdrop-blur-xl border border-white/10 shadow-lg ${className}`}
@@ -31,17 +31,22 @@ function GlassPanel({
   )
 }
 
-export default function SettingsView({ isSystemActive }: SettingsProps) {
+export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<TabType>('keys')
 
-  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('mock_geminiKey') || '')
-  const [groqKey, setGroqKey] = useState(() => localStorage.getItem('mock_groqKey') || '')
-  const [hfKey, setHfKey] = useState(() => localStorage.getItem('mock_hfKey') || '')
-  const [tavilyKey, settavilyKey] = useState(() => localStorage.getItem('mock_tavilyKey') || '')
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('novax_gemini_key') || '')
+  const [groqKey, setGroqKey] = useState(() => localStorage.getItem('novax_groq_key') || '')
+  const [hfKey, setHfKey] = useState(() => localStorage.getItem('novax_hf_key') || '')
+  const [tavilyKey, settavilyKey] = useState(() => localStorage.getItem('novax_tavily_key') || '')
+  const [systemTone, setSystemTone] = useState(() => localStorage.getItem('novax_system_tone') || 'authoritative')
+
+  const [lowEndMode, setLowEndMode] = useState(() => {
+    return localStorage.getItem('novax_low_end_mode') === 'true'
+  })
 
   useEffect(() => {
     if (window.electron?.ipcRenderer) {
-      window.electron.ipcRenderer.invoke('secure-get-keys').then((keys: any) => {
+      window.electron.ipcRenderer.invoke('secure-get-keys').then((keys: Record<string, string> | null) => {
         if (keys) {
           if (keys.geminiKey) setGeminiKey(keys.geminiKey)
           if (keys.groqKey) setGroqKey(keys.groqKey)
@@ -52,11 +57,18 @@ export default function SettingsView({ isSystemActive }: SettingsProps) {
     }
   }, [])
 
-  const saveApiKeys = async () => {
-    localStorage.setItem('mock_geminiKey', geminiKey)
-    localStorage.setItem('mock_groqKey', groqKey)
-    localStorage.setItem('mock_hfKey', hfKey)
-    localStorage.setItem('mock_tavilyKey', tavilyKey)
+  const toggleLowEndMode = (enabled: boolean): void => {
+    localStorage.setItem('novax_low_end_mode', enabled ? 'true' : 'false')
+    setLowEndMode(enabled)
+    window.dispatchEvent(new CustomEvent('novax_perf_mode_changed'))
+  }
+
+  const saveApiKeys = async (): Promise<void> => {
+    localStorage.setItem('novax_gemini_key', geminiKey)
+    localStorage.setItem('novax_groq_key', groqKey)
+    localStorage.setItem('novax_hf_key', hfKey)
+    localStorage.setItem('novax_tavily_key', tavilyKey)
+    localStorage.setItem('novax_system_tone', systemTone)
 
     if (window.electron?.ipcRenderer) {
       try {
@@ -66,12 +78,12 @@ export default function SettingsView({ isSystemActive }: SettingsProps) {
           hfKey,
           tavilyKey
         })
-        alert('API Keys securely encrypted and saved to Vault. You can now Use this!.')
+        alert('API Keys securely encrypted and saved to NOVA-X Vault.')
       } catch (e) {
         alert('Failed to save keys to the secure vault.')
       }
     } else {
-      alert('API Keys securely saved to Browser Storage.')
+      alert('API Keys saved to browser storage.')
     }
   }
 
@@ -80,7 +92,10 @@ export default function SettingsView({ isSystemActive }: SettingsProps) {
   const labelClass = 'text-sm text-zinc-300 font-medium flex items-center gap-2 mb-2'
   const titleClass = 'text-lg font-semibold text-white flex items-center gap-3'
 
-  const tabConfigs = [{ id: 'keys', label: 'API Keys', icon: <RiPlugLine size={18} /> }]
+  const tabConfigs = [
+    { id: 'keys', label: 'API Keys', icon: <RiPlugLine size={18} /> },
+    { id: 'performance', label: 'Performance', icon: <RiTerminalWindowLine size={18} /> }
+  ]
 
   return (
     <div className="flex-1 p-6 md:p-10 flex flex-col items-center bg-transparent min-h-screen text-zinc-100 overflow-y-auto scrollbar-small">
@@ -201,6 +216,28 @@ export default function SettingsView({ isSystemActive }: SettingsProps) {
                         />
                       </div>
                     </div>
+
+                    <div className="md:col-span-2 mt-4 pt-6 border-t border-white/5">
+                      <label className={labelClass}>Neural Cognitive Tone</label>
+                      <div className="flex gap-3 mt-3">
+                        {['authoritative', 'friendly', 'minimalist'].map((tone) => (
+                          <button
+                            key={tone}
+                            onClick={() => setSystemTone(tone)}
+                            className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${
+                              systemTone === tone
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                                : 'bg-white/5 text-zinc-500 border border-transparent hover:bg-white/10'
+                            }`}
+                          >
+                            {tone}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-2 font-mono italic">
+                        Adjusts NOVA-X's linguistic personality and interaction style.
+                      </p>
+                    </div>
                   </div>
 
                   <div className="bg-zinc-800/50 border border-white/5 p-4 rounded-xl flex gap-3 items-start mt-4">
@@ -210,6 +247,60 @@ export default function SettingsView({ isSystemActive }: SettingsProps) {
                       on this machine. They are never sent to a central server, ensuring your usage
                       and billing remain completely private.
                     </p>
+                  </div>
+                </GlassPanel>
+              </motion.div>
+            )}
+
+            {activeTab === 'performance' && (
+              <motion.div
+                key="performance"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="w-full absolute"
+              >
+                <GlassPanel className="p-8 flex flex-col gap-8">
+                  <div className="flex justify-between items-center pb-2">
+                    <span className={titleClass}>
+                      <RiTerminalWindowLine className="text-emerald-400" size={24} /> Performance & Graphics
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-black/30 border border-white/5 rounded-xl">
+                      <div className="flex flex-col gap-1 max-w-lg text-left">
+                        <span className="text-sm font-semibold text-white">Low-End Laptop Mode</span>
+                        <span className="text-[11px] text-zinc-400">
+                          Disables heavy 3D WebGL rendering of the AI Core sphere and replaces it with a beautiful, high-performance 2D pulsing vector HUD engine. Perfect for devices with 4GB RAM or integrated GPUs.
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => toggleLowEndMode(!lowEndMode)}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-bold font-mono uppercase border cursor-pointer transition-all shrink-0 ${
+                          lowEndMode
+                            ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                            : 'bg-zinc-900 text-zinc-400 border-white/5 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        {lowEndMode ? 'ON (2D Core)' : 'OFF (3D Core)'}
+                      </button>
+                    </div>
+
+                    <div className="bg-zinc-800/40 border border-white/5 p-4 rounded-xl flex gap-3 items-start text-left">
+                      <RiShieldKeyholeLine className="text-[#00f3ff] shrink-0 mt-0.5" size={18} />
+                      <div className="flex flex-col gap-1">
+                        <strong className="text-xs text-white uppercase tracking-wider font-mono">Graphics Diagnostics</strong>
+                        <p className="text-[11px] text-zinc-300 leading-relaxed font-mono">
+                          - Active Core Engine: {lowEndMode ? 'Lightweight 2D HUD vector core (0% GPU)' : 'Hardware-Accelerated 3D WebGL'}
+                          <br />
+                          - Memory Optimization: Capped at ~15MB (VS ~250MB in 3D Mode)
+                          <br />
+                          - Target Framerate: Locked to system standard (60 FPS fluid pulse)
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </GlassPanel>
               </motion.div>

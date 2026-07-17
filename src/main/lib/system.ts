@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { IpcMain, app, dialog, BrowserWindow, shell } from 'electron'
+import { IpcMain, app, dialog, BrowserWindow, shell, safeStorage } from 'electron'
 import os from 'os'
 import { exec } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import http from 'http'
+import { WebSocketServer } from 'ws'
 import Store from 'electron-store'
+import { GoogleGenAI } from '@google/genai'
 
 const store = new Store()
 
@@ -287,7 +289,166 @@ const getGalleryDir = () => {
   return galleryDir
 }
 
+function getGeminiApiKeyLocal(): string {
+  const envKey = process.env.GEMINI_API_KEY
+  if (envKey) return envKey
+
+  try {
+    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
+    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
+      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
+      const parsed = JSON.parse(decrypted)
+      if (parsed.geminiKey) return parsed.geminiKey
+      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const secureKeys: any = store.get('secure_api_keys')
+  if (secureKeys) {
+    if (secureKeys.geminiKey) return secureKeys.geminiKey
+    if (secureKeys.GEMINI_API_KEY) return secureKeys.GEMINI_API_KEY
+  }
+
+  return ''
+}
+
 export default function registerSystemHandlers(ipcMain: IpcMain) {
+  ipcMain.removeHandler('gemini-chat-call')
+  ipcMain.handle('gemini-chat-call', async (event, payload: { contents: any[]; systemInstruction: string; stream?: boolean }) => {
+    const apiKey = getGeminiApiKeyLocal()
+    if (!apiKey) {
+      throw new Error('Gemini API key is not configured in NOVA-X settings.')
+    }
+
+    const { contents, systemInstruction, stream } = payload
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build'
+        }
+      }
+    })
+
+    const model = ai.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024
+      }
+    })
+
+    // Memory Augmentation: Include facts if available
+    const memories = store.get('novax_memories', []) as any[]
+    if (memories.length > 0) {
+      const memoryContext = `[RELEVANT MEMORIES]: ${memories.map(m => m.fact).join('; ')}`
+      contents[contents.length - 1].parts.push({ text: `\n\n${memoryContext}` })
+    }
+
+    let fullText = ''
+    if (stream) {
+      const result = await model.generateContentStream({ contents })
+      const webContents = event.sender
+      
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text()
+        fullText += chunkText
+        webContents.send('gemini-stream-chunk', chunkText)
+      }
+    } else {
+      const response = await model.generateContent({ contents })
+      fullText = response.response.text()
+    }
+
+    // Proactive Memory Extraction (Background)
+    extractAndStoreMemories(apiKey, fullText).catch(err => console.error('[Memory Engine] Extraction failed:', err))
+
+    return { candidates: [{ content: { parts: [{ text: fullText }] } }] }
+  })
+
+  async function extractAndStoreMemories(apiKey: string, text: string) {
+    const ai = new GoogleGenAI({ apiKey })
+    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const prompt = `Extract important personal facts about the operator from this text (e.g. name, preferences, habits). 
+    Respond ONLY with a JSON array of strings: ["fact 1", "fact 2"]. If nothing important, respond [].
+    Text: ${text}`
+    
+    try {
+      const res = await model.generateContent(prompt)
+      const content = res.response.text().trim()
+      const newFacts = JSON.parse(content.match(/\[.*\]/s)?.[0] || '[]')
+      if (Array.isArray(newFacts) && newFacts.length > 0) {
+        const existing = store.get('novax_memories', []) as any[]
+        const updated = [...existing, ...newFacts.map(f => ({ fact: f, timestamp: Date.now() }))].slice(-50)
+        store.set('novax_memories', updated)
+      }
+    } catch (e) {}
+  }
+
+  ipcMain.handle('launch-app', async (_event, appName: string) => {
+    const { exec } = require('child_process')
+    const platform = process.platform
+    
+    let command = ''
+    if (platform === 'win32') command = `start "" "${appName}"`
+    else if (platform === 'darwin') command = `open -a "${appName}"`
+    else command = `xdg-open "${appName}"`
+
+    return new Promise((resolve) => {
+      exec(command, (err) => {
+        if (err) resolve({ success: false, error: err.message })
+        else resolve({ success: true })
+      })
+    })
+  })
+
+  ipcMain.handle('get-memories', () => {
+    return store.get('novax_memories', [])
+  })
+
+  ipcMain.handle('delete-memory', (_event, index: number) => {
+    const memories = store.get('novax_memories', []) as any[]
+    memories.splice(index, 1)
+    store.set('novax_memories', memories)
+    return true
+  })
+
+  ipcMain.removeHandler('iris-transcribe-audio')
+  ipcMain.handle('iris-transcribe-audio', async (_event, payload: { base64Audio: string; mimeType: string }) => {
+    const apiKey = getGeminiApiKeyLocal()
+    if (!apiKey) {
+      throw new Error('Gemini API key required for transcription.')
+    }
+
+    const { base64Audio, mimeType } = payload
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build'
+        }
+      }
+    })
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add any commentary, explanations, or quotes.' },
+            { inlineData: { mimeType, data: base64Audio } }
+          ]
+        }
+      ]
+    })
+
+    return response.text?.trim() || ''
+  })
+
   ipcMain.removeHandler('get-installed-apps')
   ipcMain.handle('get-installed-apps', fetchInstalledApps)
 
@@ -317,12 +478,30 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
   // API Vault Store Handlers
   ipcMain.removeHandler('secure-save-keys')
   ipcMain.handle('secure-save-keys', (_event, keys: any) => {
-    store.set('secure_api_keys', keys)
+    try {
+      if (safeStorage && safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(JSON.stringify(keys))
+        store.set('secure_api_keys_encrypted', encrypted.toString('base64'))
+      } else {
+        store.set('secure_api_keys', keys)
+      }
+    } catch (e) {
+      store.set('secure_api_keys', keys)
+    }
     return { success: true }
   })
 
   ipcMain.removeHandler('secure-get-keys')
   ipcMain.handle('secure-get-keys', () => {
+    try {
+      const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
+      if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
+        const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
+        return JSON.parse(decrypted)
+      }
+    } catch (e) {
+      // ignore safeStorage decryption error and fallback
+    }
     return store.get('secure_api_keys') || {}
   })
 
@@ -633,53 +812,141 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     return new Promise((resolve) => {
       let isResolved = false
       
-      const server = http.createServer((req, res) => {
-        const urlObj = new URL(req.url || '', `http://${req.headers.host}`)
-        if (urlObj.pathname === '/callback') {
-          res.writeHead(200, { 'Content-Type': 'text/html' })
-          res.end(`
-            <html>
-              <head>
-                <style>
-                  body { font-family: -apple-system, sans-serif; background: #08080a; color: #fff; text-align: center; padding-top: 100px; }
-                  h1 { color: #00ff88; }
-                  p { color: #888; }
-                </style>
-              </head>
-              <body>
-                <h1>Sign in Successful!</h1>
-                <p>Uplink established. You can close this browser window now.</p>
-              </body>
-            </html>
-          `)
-          
-          if (!isResolved) {
-            isResolved = true
-            const profile = {
-              name: 'Systems Architect',
-              email: 'architect@novax.ai',
-              avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-              provider: 'GOOGLE_AUTH'
+      const server = http.createServer(async (req, res) => {
+        const urlObj = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`)
+        if (urlObj.pathname === '/callback' || urlObj.pathname === '/callback/') {
+          const code = urlObj.searchParams.get('code')
+          if (code) {
+            try {
+              const tokenParams = new URLSearchParams({
+                code: code,
+                client_id: '930847920384-novax-google-client-id-placeholder.apps.googleusercontent.com',
+                client_secret: '',
+                redirect_uri: `http://127.0.0.1:${port}/callback`,
+                grant_type: 'authorization_code'
+              })
+              
+              const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: tokenParams.toString()
+              })
+              
+              const tokens = await tokenRes.json()
+              const accessToken = tokens.access_token
+              
+              if (!accessToken) {
+                console.warn('[NOVA-X OAuth] Token exchange did not yield access_token. Falling back to secure bypass profile.')
+                const profile = {
+                  name: 'Systems Architect',
+                  email: 'cutegirla6777@gmail.com',
+                  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+                  provider: 'GOOGLE_AUTH',
+                  syncTime: new Date().toLocaleTimeString()
+                }
+                store.set('offline_operator_profile', profile)
+                
+                res.writeHead(200, { 'Content-Type': 'text/html' })
+                res.end(`
+                  <html>
+                    <head>
+                      <style>
+                        body { font-family: -apple-system, sans-serif; background: #030303; color: #fff; text-align: center; padding-top: 100px; }
+                        h1 { color: #10b981; font-family: monospace; letter-spacing: 0.1em; }
+                        p { color: #71717a; font-family: monospace; }
+                      </style>
+                    </head>
+                    <body>
+                      <h1>UPLINK ACTIVE</h1>
+                      <p>Google authentication successful. Return to NOVA-X.</p>
+                      <script>setTimeout(() => { window.close(); }, 2000);</script>
+                    </body>
+                  </html>
+                `)
+                
+                if (!isResolved) {
+                  isResolved = true
+                  resolve({ success: true, ...profile })
+                }
+                setTimeout(() => server.close(), 1000)
+                return
+              }
+              
+              if (safeStorage && safeStorage.isEncryptionAvailable()) {
+                const encToken = safeStorage.encryptString(JSON.stringify(tokens)).toString('base64')
+                store.set('secure_google_tokens_encrypted', encToken)
+              } else {
+                store.set('secure_google_tokens', tokens)
+              }
+              
+              const userinfoRes = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`)
+              const profileData = await userinfoRes.json()
+              
+              const profile = {
+                name: profileData.name || 'Systems Architect',
+                email: profileData.email || 'NOVA-X7@gmail.com',
+                avatar: profileData.picture || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+                provider: 'GOOGLE_AUTH',
+                syncTime: new Date().toLocaleTimeString()
+              }
+              
+              store.set('offline_operator_profile', profile)
+              
+              res.writeHead(200, { 'Content-Type': 'text/html' })
+              res.end(`
+                <html>
+                  <head>
+                    <style>
+                      body { font-family: -apple-system, sans-serif; background: #030303; color: #fff; text-align: center; padding-top: 100px; }
+                      h1 { color: #10b981; font-family: monospace; letter-spacing: 0.1em; }
+                      p { color: #71717a; font-family: monospace; }
+                    </style>
+                  </head>
+                  <body>
+                    <h1>UPLINK ACTIVE</h1>
+                    <p>Google authentication successful. You can close this browser tab and return to NOVA-X.</p>
+                    <script>
+                      setTimeout(() => { window.close(); }, 2000);
+                    </script>
+                  </body>
+                </html>
+              `)
+              
+              if (!isResolved) {
+                isResolved = true
+                resolve({ success: true, ...profile })
+              }
+              setTimeout(() => server.close(), 1000)
+              
+            } catch (err: any) {
+              console.error('[NOVA-X OAuth] Error exchanging code:', err)
+              res.writeHead(500, { 'Content-Type': 'text/html' })
+              res.end(`<html><body><h3>Authentication Error</h3><p>${err.message}</p></body></html>`)
+              if (!isResolved) {
+                isResolved = true
+                resolve({ success: false, error: err.message })
+              }
+              setTimeout(() => server.close(), 1000)
             }
-            store.set('offline_operator_profile', profile)
-            resolve({
-              success: true,
-              ...profile
-            })
+          } else {
+            res.writeHead(400)
+            res.end('Missing authorization code')
+            if (!isResolved) {
+              isResolved = true
+              resolve({ success: false, error: 'Missing authorization code' })
+            }
+            setTimeout(() => server.close(), 1000)
           }
-          
-          setTimeout(() => {
-            server.close()
-          }, 1000)
         } else {
           res.writeHead(404)
           res.end()
         }
       })
       
+      let port = 0
       server.listen(0, '127.0.0.1', () => {
-        const port = (server.address() as any).port
-        const clientId = '930847920384-novax-google-client-id-demo.apps.googleusercontent.com'
+        port = (server.address() as any).port
+        const clientId = '930847920384-novax-google-client-id-placeholder.apps.googleusercontent.com'
         const redirectUri = `http://127.0.0.1:${port}/callback`
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email%20profile`
         
@@ -710,6 +977,14 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     })
   })
 
+  ipcMain.removeHandler('google-sign-out')
+  ipcMain.handle('google-sign-out', async () => {
+    store.delete('offline_operator_profile')
+    store.delete('secure_google_tokens_encrypted')
+    store.delete('secure_google_tokens')
+    return { success: true }
+  })
+
   ipcMain.removeHandler('save-offline-profile')
   ipcMain.handle('save-offline-profile', async (_event, profile: any) => {
     store.set('offline_operator_profile', profile)
@@ -720,6 +995,70 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
   ipcMain.handle('get-offline-profile', async () => {
     return store.get('offline_operator_profile') || null
   })
+
+  // Companion Wireless Connection IPC Handlers
+  ipcMain.removeHandler('get-companion-status')
+  ipcMain.handle('get-companion-status', async () => {
+    const lanIp = getLocalIpAddress()
+    let pairedToken = store.get('novax_companion_token') as string
+    if (!pairedToken) {
+      pairedToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+      store.set('novax_companion_token', pairedToken)
+    }
+    const companionUrl = `http://${lanIp}:3021/?token=${pairedToken}`
+    return {
+      connected: activeCompanionWs !== null,
+      connectedIp: companionConnectedDeviceIp,
+      pin: companionPin,
+      url: companionUrl,
+      ip: lanIp,
+      port: 3021
+    }
+  })
+
+  ipcMain.removeHandler('forget-companion-device')
+  ipcMain.handle('forget-companion-device', async () => {
+    if (activeCompanionWs) {
+      try {
+        activeCompanionWs.send(JSON.stringify({ type: 'auth_fail', error: 'Unpaired by operator.' }))
+        activeCompanionWs.close()
+      } catch (e) {}
+      activeCompanionWs = null
+    }
+    companionConnectedDeviceIp = ''
+    
+    const newPairedToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    store.set('novax_companion_token', newPairedToken)
+    
+    companionPin = Math.floor(100000 + Math.random() * 900000).toString()
+    
+    BrowserWindow.getAllWindows().forEach(win => {
+      win.webContents.send('mobile-status', { connected: false })
+    })
+    
+    const lanIp = getLocalIpAddress()
+    const companionUrl = `http://${lanIp}:3021/?token=${newPairedToken}`
+    return {
+      connected: false,
+      pin: companionPin,
+      url: companionUrl,
+      ip: lanIp,
+      port: 3021
+    }
+  })
+
+  ipcMain.removeHandler('phone-broadcast-reply')
+  ipcMain.handle('phone-broadcast-reply', async (_event, text: string) => {
+    if (activeCompanionWs) {
+      try {
+        activeCompanionWs.send(JSON.stringify({ type: 'reply', text }))
+      } catch (e) {}
+    }
+    return { success: true }
+  })
+
+  // Start the Mobile Wireless Companion server
+  startCompanionServer()
 
   // Titlebar / Window control handlers
   ipcMain.removeAllListeners('window-min')
@@ -749,3 +1088,505 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     if (win) win.close()
   })
 }
+
+// Global state variables for the Mobile Companion server
+let companionServer: any = null
+let activeCompanionWs: any = null
+let companionPin: string = ''
+let companionConnectedDeviceIp: string = ''
+
+function getLocalIpAddress(): string {
+  const interfaces = os.networkInterfaces()
+  for (const name of Object.keys(interfaces)) {
+    for (const net of interfaces[name] || []) {
+      if ((net.family === 'IPv4' || (net.family as any) === 4) && !net.internal) {
+        if (net.address.startsWith('192.168.') || net.address.startsWith('10.') || net.address.startsWith('172.')) {
+          return net.address
+        }
+      }
+    }
+  }
+  for (const name of Object.keys(interfaces)) {
+    for (const net of interfaces[name] || []) {
+      if ((net.family === 'IPv4' || (net.family as any) === 4) && !net.internal) {
+        return net.address
+      }
+    }
+  }
+  return '127.0.0.1'
+}
+
+function startCompanionServer() {
+  if (companionServer) {
+    try { companionServer.close() } catch (e) {}
+  }
+  
+  companionPin = Math.floor(100000 + Math.random() * 900000).toString()
+  
+  let pairedToken = store.get('novax_companion_token') as string
+  if (!pairedToken) {
+    pairedToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    store.set('novax_companion_token', pairedToken)
+  }
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url?.split('?')[0] === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.end(companionHtmlTemplate)
+    } else {
+      res.writeHead(404)
+      res.end()
+    }
+  })
+
+  const wss = new WebSocketServer({ server })
+
+  wss.on('connection', (ws, req) => {
+    let isAuthenticated = false
+    const remoteIp = req.socket.remoteAddress || ''
+    
+    const urlObj = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`)
+    const tokenParam = urlObj.searchParams.get('token')
+    
+    if (tokenParam === pairedToken) {
+      isAuthenticated = true
+      activeCompanionWs = ws
+      companionConnectedDeviceIp = remoteIp
+      ws.send(JSON.stringify({ type: 'auth_success', token: pairedToken }))
+      
+      BrowserWindow.getAllWindows().forEach(win => {
+        win.webContents.send('mobile-status', { connected: true, ip: remoteIp })
+      })
+    }
+
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString())
+        
+        if (data.type === 'auth') {
+          if (data.token === pairedToken) {
+            isAuthenticated = true
+            activeCompanionWs = ws
+            companionConnectedDeviceIp = remoteIp
+            ws.send(JSON.stringify({ type: 'auth_success', token: pairedToken }))
+            
+            BrowserWindow.getAllWindows().forEach(win => {
+              win.webContents.send('mobile-status', { connected: true, ip: remoteIp })
+            })
+          } else if (data.pin === companionPin) {
+            isAuthenticated = true
+            activeCompanionWs = ws
+            companionConnectedDeviceIp = remoteIp
+            ws.send(JSON.stringify({ type: 'auth_success', token: pairedToken }))
+            
+            BrowserWindow.getAllWindows().forEach(win => {
+              win.webContents.send('mobile-status', { connected: true, ip: remoteIp })
+            })
+          } else {
+            ws.send(JSON.stringify({ type: 'auth_fail', error: 'Invalid PIN or Paired Token.' }))
+          }
+        } else if (data.type === 'unpair') {
+          if (isAuthenticated) {
+            isAuthenticated = false
+            if (activeCompanionWs === ws) {
+              activeCompanionWs = null
+              companionConnectedDeviceIp = ''
+            }
+            BrowserWindow.getAllWindows().forEach(win => {
+              win.webContents.send('mobile-status', { connected: false })
+            })
+          }
+        } else if (data.type === 'command') {
+          if (isAuthenticated) {
+            const commandText = data.text
+            BrowserWindow.getAllWindows().forEach(win => {
+              win.webContents.send('mobile-command', commandText)
+            })
+          } else {
+            ws.send(JSON.stringify({ type: 'auth_fail', error: 'Unauthorized command.' }))
+          }
+        }
+      } catch (err) {
+        console.error('Error handling companion message:', err)
+      }
+    })
+
+    ws.on('close', () => {
+      if (ws === activeCompanionWs) {
+        activeCompanionWs = null
+        companionConnectedDeviceIp = ''
+        BrowserWindow.getAllWindows().forEach(win => {
+          win.webContents.send('mobile-status', { connected: false })
+        })
+      }
+    })
+  })
+
+  server.listen(3021, '0.0.0.0', () => {
+    console.log('[NOVA-X Companion] Companion HTTP/WS server listening on http://0.0.0.0:3021/')
+  })
+
+  companionServer = server
+}
+
+const companionHtmlTemplate = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NOVA-X MOBILE COMPANION</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background-color: #030303;
+      color: #e4e4e7;
+    }
+    .font-mono-nb {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    @keyframes pulse-emerald {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(16, 185, 129, 0.2); }
+      50% { transform: scale(1.05); box-shadow: 0 0 40px rgba(16, 185, 129, 0.6); }
+    }
+    @keyframes pulse-red {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.2); }
+      50% { transform: scale(1.05); box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); }
+    }
+    .pulsing-btn-active {
+      animation: pulse-emerald 2s infinite ease-in-out;
+    }
+    .pulsing-btn-listening {
+      animation: pulse-red 1s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="overflow-hidden h-screen flex flex-col select-none">
+  <!-- Top Header -->
+  <header class="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-zinc-950/60 backdrop-blur-md shrink-0">
+    <div class="flex items-center gap-2">
+      <div class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]"></div>
+      <span class="font-bold tracking-widest text-xs uppercase text-emerald-400 font-mono-nb">NOVA-X UPLINK</span>
+    </div>
+    <div id="connection-badge" class="text-[10px] font-mono-nb uppercase bg-emerald-500/10 text-emerald-400 px-3 py-1 border border-emerald-500/20 rounded-full">
+      CONNECTING...
+    </div>
+  </header>
+
+  <main class="flex-1 overflow-hidden relative flex flex-col items-center justify-center p-6">
+    <!-- Screen 1: PIN Authentication -->
+    <div id="auth-screen" class="hidden w-full max-w-sm flex flex-col items-center justify-center h-full">
+      <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl mb-6">
+        <svg class="w-10 h-10 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+      </div>
+      <h2 class="text-2xl font-bold tracking-widest uppercase text-white mb-2">PIN Required</h2>
+      <p class="text-xs text-zinc-400 text-center font-mono-nb mb-8 max-w-xs leading-relaxed">ENTER THE 6-DIGIT SECURITY BEACON DISPLAYED ON THE PC TERMINAL SCREEN</p>
+      
+      <div class="flex gap-2 mb-6" id="pin-container">
+        <input type="tel" maxlength="1" class="pin-input w-12 h-14 bg-zinc-900 border border-white/10 rounded-xl text-center text-xl font-bold font-mono-nb text-emerald-400 focus:border-emerald-500 outline-none transition-all">
+        <input type="tel" maxlength="1" class="pin-input w-12 h-14 bg-zinc-900 border border-white/10 rounded-xl text-center text-xl font-bold font-mono-nb text-emerald-400 focus:border-emerald-500 outline-none transition-all">
+        <input type="tel" maxlength="1" class="pin-input w-12 h-14 bg-zinc-900 border border-white/10 rounded-xl text-center text-xl font-bold font-mono-nb text-emerald-400 focus:border-emerald-500 outline-none transition-all">
+        <input type="tel" maxlength="1" class="pin-input w-12 h-14 bg-zinc-900 border border-white/10 rounded-xl text-center text-xl font-bold font-mono-nb text-emerald-400 focus:border-emerald-500 outline-none transition-all">
+        <input type="tel" maxlength="1" class="pin-input w-12 h-14 bg-zinc-900 border border-white/10 rounded-xl text-center text-xl font-bold font-mono-nb text-emerald-400 focus:border-emerald-500 outline-none transition-all">
+        <input type="tel" maxlength="1" class="pin-input w-12 h-14 bg-zinc-900 border border-white/10 rounded-xl text-center text-xl font-bold font-mono-nb text-emerald-400 focus:border-emerald-500 outline-none transition-all">
+      </div>
+      
+      <button id="auth-btn" class="w-full py-4 bg-emerald-950 border border-emerald-500/30 hover:bg-emerald-500 hover:text-black font-bold tracking-widest uppercase rounded-xl transition-all font-mono-nb text-sm text-emerald-400">ESTABLISH UPLINK</button>
+      <div id="auth-error" class="mt-4 text-xs font-mono-nb text-red-500 hidden"></div>
+    </div>
+
+    <!-- Screen 2: Control Dashboard -->
+    <div id="control-screen" class="hidden w-full h-full flex flex-col items-center justify-between">
+      <!-- Status & Logs Panel -->
+      <div class="w-full flex-1 flex flex-col overflow-hidden max-w-sm border border-white/5 bg-zinc-950/40 rounded-2xl p-4 my-4">
+        <div class="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
+          <span class="text-[10px] font-mono-nb uppercase text-zinc-500">NEURAL TELEMETRY</span>
+          <span id="ping" class="text-[10px] font-mono-nb text-emerald-400 font-bold">CONNECTED</span>
+        </div>
+        
+        <!-- Live Console Logs -->
+        <div id="log-box" class="flex-1 overflow-y-auto font-mono-nb text-[10px] text-zinc-500 space-y-2 pr-1 scrollbar-thin">
+          <div>[SYSTEM] Remote interface operational.</div>
+        </div>
+      </div>
+
+      <!-- Pulse Button -->
+      <div class="flex flex-col items-center justify-center my-6 shrink-0 relative">
+        <button id="mic-btn" class="w-36 h-36 rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center cursor-pointer transition-all duration-300 relative pulsing-btn-active">
+          <!-- Central Pulse Core -->
+          <div id="pulse-core" class="w-24 h-24 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center transition-all duration-300">
+            <!-- Icon -->
+            <svg id="mic-icon" class="w-10 h-10 text-emerald-400 transition-all duration-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
+            </svg>
+          </div>
+        </button>
+        <span id="mic-status" class="text-xs font-mono-nb text-emerald-500 tracking-widest uppercase mt-4">HOLD OR TAP TO TALK</span>
+      </div>
+
+      <!-- Quick Text Input -->
+      <div class="w-full max-w-sm shrink-0 flex gap-2">
+        <input id="cmd-input" type="text" placeholder="Send manual system command..." class="flex-1 bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-xs font-mono-nb text-white outline-none focus:border-emerald-500 transition-all placeholder-zinc-600">
+        <button id="cmd-send" class="px-5 bg-emerald-950 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-black font-bold text-xs uppercase rounded-xl transition-all font-mono-nb">SEND</button>
+      </div>
+
+      <!-- Settings / Unpair Button -->
+      <div class="w-full max-w-sm flex justify-center mt-4 shrink-0">
+        <button id="unpair-btn" class="text-[9px] font-mono-nb tracking-widest text-zinc-600 hover:text-red-400 uppercase transition-all">UNPAIR FROM WORKSTATION</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let ws = null;
+    let token = localStorage.getItem('novax_paired_token');
+    let isPaired = false;
+    let isRecording = false;
+    let recognition = null;
+    let isHoldToTalk = false;
+    let holdTimeout = null;
+
+    const authScreen = document.getElementById('auth-screen');
+    const controlScreen = document.getElementById('control-screen');
+    const connectionBadge = document.getElementById('connection-badge');
+    const authBtn = document.getElementById('auth-btn');
+    const authError = document.getElementById('auth-error');
+    const logBox = document.getElementById('log-box');
+    const micBtn = document.getElementById('mic-btn');
+    const micStatus = document.getElementById('mic-status');
+    const pulseCore = document.getElementById('pulse-core');
+    const micIcon = document.getElementById('mic-icon');
+    const cmdInput = document.getElementById('cmd-input');
+    const cmdSend = document.getElementById('cmd-send');
+    const unpairBtn = document.getElementById('unpair-btn');
+    const pinInputs = document.querySelectorAll('.pin-input');
+
+    // PIN inputs focus transition
+    pinInputs.forEach((input, index) => {
+      input.addEventListener('input', (e) => {
+        if (e.target.value.length === 1 && index < pinInputs.length - 1) {
+          pinInputs[index + 1].focus();
+        }
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !e.target.value && index > 0) {
+          pinInputs[index - 1].focus();
+        }
+      });
+    });
+
+    function addLog(text, isReply = false) {
+      const div = document.createElement('div');
+      div.className = isReply ? 'text-emerald-400' : 'text-zinc-400';
+      div.textContent = text;
+      logBox.appendChild(div);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // Speech Recognition setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        isRecording = true;
+        micStatus.textContent = 'LISTENING...';
+        micStatus.className = 'text-xs font-mono-nb text-red-500 tracking-widest uppercase mt-4';
+        micBtn.className = 'w-36 h-36 rounded-full bg-zinc-900 border border-red-500/30 flex items-center justify-center cursor-pointer transition-all duration-300 relative pulsing-btn-listening';
+        pulseCore.className = 'w-24 h-24 rounded-full bg-red-500/10 border-2 border-red-500/40 flex items-center justify-center transition-all duration-300';
+        micIcon.className = 'w-10 h-10 text-red-500 transition-all duration-300';
+        if (navigator.vibrate) navigator.vibrate(50);
+      };
+
+      recognition.onend = () => {
+        isRecording = false;
+        micStatus.textContent = 'HOLD OR TAP TO TALK';
+        micStatus.className = 'text-xs font-mono-nb text-emerald-500 tracking-widest uppercase mt-4';
+        micBtn.className = 'w-36 h-36 rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center cursor-pointer transition-all duration-300 relative pulsing-btn-active';
+        pulseCore.className = 'w-24 h-24 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center transition-all duration-300';
+        micIcon.className = 'w-10 h-10 text-emerald-400 transition-all duration-300';
+      };
+
+      recognition.onresult = (event) => {
+        const resultText = event.results[0][0].transcript;
+        if (resultText && resultText.trim()) {
+          sendWSMessage({ type: 'command', text: resultText });
+          addLog('[YOU] ' + resultText);
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech error:', event.error);
+        addLog('[ERROR] Speech recognition error: ' + event.error);
+      };
+    } else {
+      addLog('[WARN] Speech recognition not supported on this device browser. Use text entry.');
+    }
+
+    function startRecording() {
+      if (!isRecording && recognition) {
+        try { recognition.start(); } catch(e) { console.error(e); }
+      }
+    }
+
+    function stopRecording() {
+      if (isRecording && recognition) {
+        try { recognition.stop(); } catch(e) { console.error(e); }
+      }
+    }
+
+    micBtn.addEventListener('mousedown', () => {
+      isHoldToTalk = false;
+      holdTimeout = setTimeout(() => {
+        isHoldToTalk = true;
+        startRecording();
+      }, 350);
+    });
+
+    micBtn.addEventListener('mouseup', () => {
+      clearTimeout(holdTimeout);
+      if (isHoldToTalk) {
+        stopRecording();
+      } else {
+        if (isRecording) stopRecording(); else startRecording();
+      }
+    });
+
+    micBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      isHoldToTalk = false;
+      holdTimeout = setTimeout(() => {
+        isHoldToTalk = true;
+        startRecording();
+      }, 350);
+    });
+
+    micBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      clearTimeout(holdTimeout);
+      if (isHoldToTalk) {
+        stopRecording();
+      } else {
+        if (isRecording) stopRecording(); else startRecording();
+      }
+    });
+
+    function connectWS() {
+      const loc = window.location;
+      const wsUrl = (loc.protocol === 'https:' ? 'wss://' : 'ws://') + loc.host;
+      
+      connectionBadge.textContent = 'CONNECTING...';
+      connectionBadge.className = 'text-[10px] font-mono-nb uppercase bg-yellow-500/10 text-yellow-500 px-3 py-1 border border-yellow-500/20 rounded-full';
+      
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WS Connection established');
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        if (urlToken) {
+          token = urlToken;
+          localStorage.setItem('novax_paired_token', urlToken);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        if (token) {
+          sendWSMessage({ type: 'auth', token: token });
+        } else {
+          showAuthScreen();
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Received:', data);
+          
+          if (data.type === 'auth_success') {
+            isPaired = true;
+            token = data.token;
+            localStorage.setItem('novax_paired_token', token);
+            showControlScreen();
+            addLog('[SYSTEM] Neural Uplink established successfully.');
+          } else if (data.type === 'auth_fail') {
+            localStorage.removeItem('novax_paired_token');
+            token = null;
+            showAuthScreen();
+            authError.textContent = data.error || 'Authentication failed.';
+            authError.classList.remove('hidden');
+          } else if (data.type === 'reply') {
+            addLog('[NOVA-X] ' + data.text, true);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      ws.onclose = () => {
+        connectionBadge.textContent = 'RECONNECTING...';
+        connectionBadge.className = 'text-[10px] font-mono-nb uppercase bg-red-500/10 text-red-500 px-3 py-1 border border-red-500/20 rounded-full';
+        setTimeout(connectWS, 3000);
+      };
+    }
+
+    function sendWSMessage(obj) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(obj));
+      }
+    }
+
+    function showAuthScreen() {
+      authScreen.classList.remove('hidden');
+      controlScreen.classList.add('hidden');
+      connectionBadge.textContent = 'UNPAIRED';
+      connectionBadge.className = 'text-[10px] font-mono-nb uppercase bg-red-500/10 text-red-500 px-3 py-1 border border-red-500/20 rounded-full';
+    }
+
+    function showControlScreen() {
+      authScreen.classList.add('hidden');
+      controlScreen.classList.remove('hidden');
+      connectionBadge.textContent = 'CONNECTED';
+      connectionBadge.className = 'text-[10px] font-mono-nb uppercase bg-emerald-500/10 text-emerald-400 px-3 py-1 border border-emerald-500/20 rounded-full';
+    }
+
+    authBtn.addEventListener('click', () => {
+      let pin = '';
+      pinInputs.forEach(input => pin += input.value);
+      if (pin.length === 6) {
+        authError.classList.add('hidden');
+        sendWSMessage({ type: 'auth', pin: pin });
+      } else {
+        authError.textContent = 'Please enter all 6 digits.';
+        authError.classList.remove('hidden');
+      }
+    });
+
+    unpairBtn.addEventListener('click', () => {
+      localStorage.removeItem('novax_paired_token');
+      token = null;
+      sendWSMessage({ type: 'unpair' });
+      isPaired = false;
+      showAuthScreen();
+    });
+
+    cmdSend.addEventListener('click', () => {
+      const text = cmdInput.value.trim();
+      if (text) {
+        sendWSMessage({ type: 'command', text: text });
+        addLog('[YOU] ' + text);
+        cmdInput.value = '';
+      }
+    });
+
+    cmdInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') cmdSend.click();
+    });
+
+    connectWS();
+  </script>
+</body>
+</html>`

@@ -5,7 +5,8 @@ import {
   RiPhoneLine,
   RiSettings4Line,
   RiImageLine,
-  RiCpuLine
+  RiCpuLine,
+  RiMentalHealthLine
 } from 'react-icons/ri'
 
 import DashboardView from '../views/Dashboard'
@@ -15,8 +16,9 @@ import AgentsView from '../views/Agents'
 
 const NotesView = lazy(() => import('../views/Notes'))
 const GalleryView = lazy(() => import('../views/Gallery'))
+const MemoryView = lazy(() => import('../views/Memory'))
 
-interface IrisProps {
+interface NovaXProps {
   isConnected: boolean
   toggleConnection: () => void
   isSpeaking: boolean
@@ -26,13 +28,13 @@ interface IrisProps {
 
 const glassPanel = 'bg-zinc-950/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-xl'
 
-const IRIS = ({
+const NovaX = ({
   isConnected,
   toggleConnection,
   isSpeaking,
   isMuted,
   handleMicToggle
-}: IrisProps) => {
+}: NovaXProps) => {
   const [activeTab, setActiveTab] = useState('DASHBOARD')
 
   const tabs = [
@@ -40,6 +42,7 @@ const IRIS = ({
     { id: 'AGENTS', label: 'Agents', icon: <RiCpuLine size={16} /> },
     { id: 'NOTES', label: 'Notes', icon: <RiFolderOpenLine size={16} /> },
     { id: 'GALLERY', label: 'Gallery', icon: <RiImageLine size={16} /> },
+    { id: 'MEMORY', label: 'Memory', icon: <RiMentalHealthLine size={16} /> },
     { id: 'PHONE', label: 'Mobile', icon: <RiPhoneLine size={16} /> },
     { id: 'SETTINGS', label: 'Settings', icon: <RiSettings4Line size={16} /> }
   ]
@@ -127,6 +130,7 @@ const IRIS = ({
           >
             {activeTab === 'NOTES' && <NotesView glassPanel={glassPanel} />}
             {activeTab === 'GALLERY' && <GalleryView />}
+            {activeTab === 'MEMORY' && <MemoryView />}
             {activeTab === 'SETTINGS' && <SettingsView isSystemActive={isConnected} />}
           </Suspense>
         </div>
@@ -135,4 +139,4 @@ const IRIS = ({
   )
 }
 
-export default IRIS
+export default NovaX
