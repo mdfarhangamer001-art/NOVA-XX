@@ -24,7 +24,10 @@ jobs:
           node-version: 22
 
       - name: Install Dependencies
-        run: npm install --no-audit --no-fund
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --no-audit --no-fund
+        shell: bash
 
       - name: Sync package.json version with Release Tag
         run: |
