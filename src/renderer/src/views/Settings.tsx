@@ -235,7 +235,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                         ))}
                       </div>
                       <p className="text-[10px] text-zinc-500 mt-2 font-mono italic">
-                        Adjusts NOVA-X's linguistic personality and interaction style.
+                        Adjusts NOVA-X&apos;s linguistic personality and interaction style.
                       </p>
                     </div>
                   </div>

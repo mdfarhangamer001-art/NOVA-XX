@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { LANGUAGES } from '../data/languages'
+import Logo from '../public/Logo.png'
 
 // JWT token decode helper for real Google login profile parsing
 const decodeJwt = (token: string): any => {
@@ -653,7 +654,7 @@ export default function Dashboard({
           <div className="mb-6 flex flex-col items-center gap-3">
             <div className="relative w-16 h-16 flex items-center justify-center border border-[#00f3ff]/30 rounded-xl bg-zinc-900/60 shadow-[0_0_20px_rgba(0,243,255,0.15)] overflow-hidden">
               <div className="absolute inset-0 border border-emerald-400/10 rounded-lg animate-ping scale-105" />
-              <img src="/Logo.png" className="w-11 h-11" />
+              <img src={Logo} className="w-11 h-11" />
             </div>
             <div>
               <h2 className="text-2xl font-black tracking-[0.35em] text-white font-mono">

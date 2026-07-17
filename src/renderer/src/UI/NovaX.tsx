@@ -18,6 +18,8 @@ const NotesView = lazy(() => import('../views/Notes'))
 const GalleryView = lazy(() => import('../views/Gallery'))
 const MemoryView = lazy(() => import('../views/Memory'))
 
+import Logo from '../public/Logo.png'
+
 interface NovaXProps {
   isConnected: boolean
   toggleConnection: () => void
@@ -51,7 +53,7 @@ const NovaX = ({
     <div className="flex flex-col h-screen w-full bg-black text-zinc-100 font-sans overflow-hidden select-none relative">
       <div className="h-16 w-full flex items-center justify-between px-6 bg-black border-b border-white/5 z-50">
         <div className="flex items-center gap-3 w-48 cursor-pointer">
-          <img src="/Logo.png" className="w-14 h-14" />
+          <img src={Logo} className="w-14 h-14" />
 
           <div
             onClick={() => {
