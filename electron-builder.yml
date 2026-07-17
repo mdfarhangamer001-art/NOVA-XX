@@ -4,7 +4,7 @@ directories:
   buildResources: resources
 
 asar: true
-compression: maximum
+compression: store
 
 files:
   - '!**/.vscode/*'
