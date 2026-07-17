@@ -112,7 +112,7 @@ body:
     id: logs
     attributes:
       label: Logs, Screenshots, and Evidence
-      description: Paste relevant Electron main process logs, React console errors, or attach screenshots. **CRITICAL: Ensure all API Keys are redacted before posting.**
+      description: 'Paste relevant Electron main process logs, React console errors, or attach screenshots. **CRITICAL: Ensure all API Keys are redacted before posting.**'
       render: shell
       placeholder: |
         Paste logs here...
