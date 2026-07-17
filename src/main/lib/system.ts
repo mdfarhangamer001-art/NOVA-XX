@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { IpcMain, app, dialog, BrowserWindow, shell, safeStorage } from 'electron'
+import { IpcMain, app, dialog, BrowserWindow, shell, safeStorage, desktopCapturer, screen } from 'electron'
 import os from 'os'
 import { exec } from 'child_process'
 import fs from 'fs'
@@ -669,6 +669,111 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     })
 
     return response.text?.trim() || ''
+  })
+
+  // ==================== Screen Vision & Physical Control ====================
+
+  ipcMain.removeHandler('take-screenshot')
+  ipcMain.handle('take-screenshot', async () => {
+    const primaryDisplay = screen.getPrimaryDisplay()
+    const { width, height } = primaryDisplay.workAreaSize
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width, height }
+    })
+    if (!sources.length) {
+      throw new Error('No screen source available to capture.')
+    }
+    const png = sources[0].thumbnail.toPNG()
+    return { base64: png.toString('base64'), width, height }
+  })
+
+  ipcMain.removeHandler('analyze-screen')
+  ipcMain.handle('analyze-screen', async (_event, question?: string) => {
+    const apiKey = getGeminiApiKeyLocal()
+    if (!apiKey) {
+      throw new Error('Gemini API key is not configured in NOVA-X settings.')
+    }
+
+    const primaryDisplay = screen.getPrimaryDisplay()
+    const { width, height } = primaryDisplay.workAreaSize
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width, height }
+    })
+    if (!sources.length) {
+      throw new Error('No screen source available to capture.')
+    }
+    const base64Image = sources[0].thumbnail.toPNG().toString('base64')
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    })
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: question || 'Describe what is currently visible on this screen, concisely.' },
+            { inlineData: { mimeType: 'image/png', data: base64Image } }
+          ]
+        }
+      ]
+    })
+
+    return response.text?.trim() || ''
+  })
+
+  // Types text at the current cursor focus (uses OS-level key injection, no native module required)
+  ipcMain.removeHandler('type-text')
+  ipcMain.handle('type-text', async (_event, text: string) => {
+    const platform = os.platform()
+    const safeText = text.replace(/"/g, '\\"')
+
+    if (platform === 'win32') {
+      // SendKeys special characters need escaping
+      const sendKeysEscaped = text.replace(/([+^%~(){}])/g, '{$1}').replace(/"/g, '`"')
+      const psCommand = `Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait("${sendKeysEscaped}")`
+      await runCommand(`powershell -NoProfile -Command "${psCommand.replace(/"/g, '\\"')}"`)
+    } else if (platform === 'darwin') {
+      await runCommand(`osascript -e 'tell application "System Events" to keystroke "${safeText}"'`)
+    } else {
+      await runCommand(`xdotool type "${safeText}"`)
+    }
+    return { success: true }
+  })
+
+  // Moves the mouse to (x, y) and performs a click. Coordinates are absolute screen pixels.
+  ipcMain.removeHandler('click-at')
+  ipcMain.handle('click-at', async (_event, payload: { x: number; y: number }) => {
+    const { x, y } = payload
+    const platform = os.platform()
+
+    if (platform === 'win32') {
+      const psScript = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -TypeDefinition '
+using System;
+using System.Runtime.InteropServices;
+public class MouseOps {
+  [DllImport("user32.dll")]
+  public static extern void mouse_event(int flags, int dx, int dy, int data, int extra);
+}'
+[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y})
+Start-Sleep -Milliseconds 100
+[MouseOps]::mouse_event(0x0002, 0, 0, 0, 0)
+[MouseOps]::mouse_event(0x0004, 0, 0, 0, 0)
+`.replace(/\r?\n/g, ';')
+      await runCommand(`powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`)
+    } else if (platform === 'darwin') {
+      await runCommand(`osascript -e 'tell application "System Events" to click at {${x}, ${y}}'`)
+    } else {
+      await runCommand(`xdotool mousemove ${x} ${y} click 1`)
+    }
+    return { success: true }
   })
 
   ipcMain.removeHandler('get-installed-apps')
