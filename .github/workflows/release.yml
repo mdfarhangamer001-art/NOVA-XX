@@ -26,11 +26,19 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Cache electron-builder assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron-builder/Cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-builder-
+
       - name: Install Dependencies
         run: |
           rm -rf node_modules package-lock.json
           npm install --no-audit --no-fund
-          npm install recharts
         shell: bash
 
       - name: Sync package.json version
@@ -40,6 +48,13 @@ jobs:
 
       - name: Build NOVA-X Installer
         run: npm run dist:win
+
+      - name: Report exact build size
+        run: |
+          Get-ChildItem -Path dist -Filter *.exe | ForEach-Object {
+            "$($_.Name): $($_.Length) bytes ($([math]::Round($_.Length / 1MB, 2)) MB)"
+          }
+        shell: pwsh
 
       - name: Configure Git & Push Tag
         run: |
