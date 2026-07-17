@@ -315,6 +315,31 @@ function getGeminiApiKeyLocal(): string {
   return ''
 }
 
+function getGroqApiKeyLocal(): string {
+  const envKey = process.env.GROQ_API_KEY
+  if (envKey) return envKey
+
+  try {
+    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
+    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
+      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
+      const parsed = JSON.parse(decrypted)
+      if (parsed.groqKey) return parsed.groqKey
+      if (parsed.GROQ_API_KEY) return parsed.GROQ_API_KEY
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const secureKeys: any = store.get('secure_api_keys')
+  if (secureKeys) {
+    if (secureKeys.groqKey) return secureKeys.groqKey
+    if (secureKeys.GROQ_API_KEY) return secureKeys.GROQ_API_KEY
+  }
+
+  return ''
+}
+
 export default function registerSystemHandlers(ipcMain: IpcMain) {
   ipcMain.removeHandler('gemini-chat-call')
   ipcMain.handle('gemini-chat-call', async (event, payload: { contents: any[]; systemInstruction: string; stream?: boolean }) => {
@@ -465,13 +490,39 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
 
   ipcMain.removeHandler('iris-transcribe-audio')
   ipcMain.handle('iris-transcribe-audio', async (_event, payload: { base64Audio: string; mimeType: string }) => {
-    const apiKey = getGeminiApiKeyLocal()
-    if (!apiKey) {
-      throw new Error('Gemini API key required for transcription.')
+    let { base64Audio, mimeType } = payload
+    mimeType = mimeType.split(';')[0] // Clean mimetype
+
+    const groqKey = getGroqApiKeyLocal()
+    if (groqKey) {
+      const audioBuffer = Buffer.from(base64Audio, 'base64')
+      const ext = mimeType.includes('wav') ? 'wav' : mimeType.includes('webm') ? 'webm' : mimeType.includes('ogg') ? 'ogg' : 'wav'
+
+      const form = new FormData()
+      form.append('file', new Blob([audioBuffer], { type: mimeType }), `audio.${ext}`)
+      form.append('model', 'whisper-large-v3-turbo')
+      form.append('response_format', 'json')
+
+      const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${groqKey}` },
+        body: form
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(`Groq transcription failed (${res.status}): ${errText}`)
+      }
+
+      const data: any = await res.json()
+      return (data.text || '').trim()
     }
 
-    let { base64Audio, mimeType } = payload
-    mimeType = mimeType.split(';')[0] // Clean mimetype for Gemini
+    // Fallback to Gemini only if no Groq key is configured
+    const apiKey = getGeminiApiKeyLocal()
+    if (!apiKey) {
+      throw new Error('Add a Groq or Gemini API key in Settings to enable voice input.')
+    }
 
     const ai = new GoogleGenAI({
       apiKey,
