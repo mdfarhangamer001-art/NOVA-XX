@@ -21,13 +21,9 @@ export default function RightPanel(): JSX.Element {
 
   const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<string> => {
     if (window.iris?.transcribeAudio) {
-      try {
-        return await window.iris.transcribeAudio(base64Audio, mimeType)
-      } catch (err) {
-        console.error('Transcription failed via bridge', err)
-      }
+      return await window.iris.transcribeAudio(base64Audio, mimeType)
     }
-    return ""
+    throw new Error('Voice bridge (window.iris) is not available — are you running inside Electron?')
   }
 
   const startRecording = async () => {
@@ -66,10 +62,16 @@ export default function RightPanel(): JSX.Element {
             if (transcript && transcript.trim().length > 0) {
               setUserInput(transcript)
               await executeCoreCommand(transcript)
+            } else {
+              const errorMessage: Message = { role: 'model', text: 'Mic captured audio but transcription came back empty, Boss. Try speaking closer to the mic, or check your Groq/Gemini API key in Settings.' }
+              setChatHistory((prev) => [...prev, errorMessage].slice(-30))
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error('Audio transcription error:', err)
             setActiveModelText('')
+            const detail = err?.message || String(err)
+            const errorMessage: Message = { role: 'model', text: `Transcription failed, Boss: ${detail}` }
+            setChatHistory((prev) => [...prev, errorMessage].slice(-30))
           }
         }
       }
@@ -368,7 +370,7 @@ export default function RightPanel(): JSX.Element {
           window.electron.ipcRenderer.off('gemini-stream-chunk', streamHandler)
         }
 
-        const modelReply = result?.candidates?.[0]?.content?.parts?.[0]?.text || fullReplyText || "System under heavy load, Boss. Please check your credentials."
+        const modelReply = result?.candidates?.[0]?.content?.parts?.[0]?.text || fullReplyText || "No response text was returned by the model, Boss, but no error was thrown either — check the DevTools console for details."
         
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: modelReply }
@@ -385,10 +387,11 @@ export default function RightPanel(): JSX.Element {
           ;(window as any).speakText(modelReply)
         }
 
-      } catch (err) {
+      } catch (err: any) {
         console.error('Gemini call failed', err)
         setActiveModelText('')
-        const errorMessage: Message = { role: 'model', text: 'Error in cognitive link, Boss. Verify your Gemini API Key in Settings.' }
+        const detail = err?.message || String(err)
+        const errorMessage: Message = { role: 'model', text: `Error in cognitive link, Boss: ${detail}` }
         setChatHistory((prev) => [...prev, errorMessage].slice(-30))
       }
     } else {
