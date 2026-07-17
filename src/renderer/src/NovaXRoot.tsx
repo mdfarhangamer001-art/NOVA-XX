@@ -126,8 +126,12 @@ const IndexRoot = (): JSX.Element => {
                         }
                       }
                     }
-                  } catch (err) {
+                  } catch (err: any) {
                     console.error('[NOVA-X VAD] Transcription error:', err)
+                    const message = err?.message || String(err)
+                    // Surface the real failure reason on-screen so it isn't silently
+                    // swallowed — previously this only went to the DevTools console.
+                    alert('NOVA-X could not hear you: ' + message)
                   }
                 }
               }
