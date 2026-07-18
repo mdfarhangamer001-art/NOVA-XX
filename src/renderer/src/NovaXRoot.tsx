@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import NovaX from './UI/NovaX'
 import TitleBar from './components/Titlebar'
 import { installGlobalTts, setTtsLang, ensureVoicesLoaded, speak, stopSpeaking } from './utils/ttsEngine'
+import { onMoodChange, setMood, type Mood } from './lib/cognitiveCore'
 
 export type VisionMode = 'camera' | 'screen' | 'none'
 
@@ -9,6 +10,7 @@ const IndexRoot = (): JSX.Element => {
   const [isConnected, setIsConnected] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
+  const [mood, setMoodState] = useState<Mood>('idle')
 
   // Install robust TTS engine + link speaking state to 3D core animation
   useEffect(() => {
@@ -40,11 +42,15 @@ const IndexRoot = (): JSX.Element => {
       ensureVoicesLoaded().then((ready) => {
         console.log(`[NOVA-X TTS] Voice engine ready: ${ready}`)
       })
-    }
-    return () => {
-      if (typeof window !== 'undefined') {
-        /* eslint-disable-next-line @typescript-eslint/no-dynamic-delete */
-        delete (window as any).setIsSpeaking
+
+      // Subscribe to cognitive mood changes to drive the 3D sphere
+      const unsub = onMoodChange((s) => setMoodState(s.mood))
+      return () => {
+        unsub()
+        if (typeof window !== 'undefined') {
+          /* eslint-disable-next-line @typescript-eslint/no-dynamic-delete */
+          delete (window as any).setIsSpeaking
+        }
       }
     }
   }, [])
@@ -53,9 +59,11 @@ const IndexRoot = (): JSX.Element => {
     if (isConnected) {
       setIsConnected(false)
       setIsMuted(false)
+      setMood('idle', 0)
     } else {
       setIsConnected(true)
       setIsSpeaking(false) // Wait for user speech first
+      setMood('idle', 0.2)
     }
   }
 
@@ -222,6 +230,7 @@ const IndexRoot = (): JSX.Element => {
           isSpeaking={isSpeaking}
           isMuted={isMuted}
           handleMicToggle={handleMicToggle}
+          mood={mood}
         />
       </div>
     </div>

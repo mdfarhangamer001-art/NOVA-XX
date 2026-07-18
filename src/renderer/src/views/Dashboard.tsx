@@ -22,6 +22,7 @@ const decodeJwt = (token: string): any => {
 import { Camera, Mic, MicOff, Phone, PhoneOff, Monitor, Cpu, Thermometer, Database, Radio, ArrowUp, ArrowDown, Activity, LogIn, Lock, LogOut, FileSliders as Sliders, Volume2, Tv } from 'lucide-react'
 import RightPanel from '@renderer/components/UI/RightPanel'
 import AICore from '@renderer/components/UI/AICoreSphere'
+import type { Mood } from '@renderer/lib/cognitiveCore'
 import { getSystemStatus, SystemStats } from '@renderer/services/system-info'
 
 // 4 Custom Futuristic Neural Voices
@@ -92,13 +93,15 @@ export default function Dashboard({
   toggleConnection,
   isSpeaking,
   isMuted,
-  handleMicToggle
+  handleMicToggle,
+  mood
 }: {
   isConnected: boolean
   toggleConnection: () => void
   isSpeaking: boolean
   isMuted: boolean
   handleMicToggle: () => void
+  mood: Mood
 }): JSX.Element {
   const [visionMode, setVisionMode] = useState<'off' | 'camera' | 'screen'>('off')
 
@@ -1107,7 +1110,7 @@ export default function Dashboard({
             </div>
 
             {/* Embedded 3D Core with dynamic type and size scale properties */}
-            <AICore isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} coreSize={coreSize} />
+            <AICore isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} coreSize={coreSize} mood={mood} />
 
             {/* FLANKING DOCK LEFT (Optics mode switch) */}
             <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20 bg-zinc-950/80 backdrop-blur-2xl border border-white/10 p-1.5 rounded-2xl shadow-2xl">

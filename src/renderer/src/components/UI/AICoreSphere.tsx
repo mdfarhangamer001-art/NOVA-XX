@@ -2,6 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { useMemo, useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { ErrorBoundary } from './ErrorBoundary'
+import { MOOD_COLORS, type Mood } from '../../lib/cognitiveCore'
 
 // Premium futuristic color palette for NOVA-X Fusion Core
 const IDLE_COLOR = new THREE.Color('#00f3ff') // Electric Cyan
@@ -16,10 +17,15 @@ const _ringColor = new THREE.Color()
 const _scaleVec = new THREE.Vector3()
 
 // Model 1: Central Quantum Crystal Core (Default)
-function CoreCrystal({ isConnected, isSpeaking }: { isConnected: boolean; isSpeaking: boolean }) {
+function CoreCrystal({ isConnected, isSpeaking, mood }: { isConnected: boolean; isSpeaking: boolean; mood: Mood }) {
   const meshRef = useRef<THREE.Mesh>(null)
   const wireRef = useRef<THREE.Mesh>(null)
   const volRef = useRef(0)
+
+  const moodColors = MOOD_COLORS[mood]
+  const idleColor = useMemo(() => new THREE.Color(moodColors.primary), [moodColors.primary])
+  const activeColor = useMemo(() => new THREE.Color(moodColors.secondary), [moodColors.secondary])
+  const coreColor = useMemo(() => new THREE.Color(moodColors.accent), [moodColors.accent])
 
   useFrame((state, delta) => {
     if (!meshRef.current || !wireRef.current) return
@@ -48,13 +54,13 @@ function CoreCrystal({ isConnected, isSpeaking }: { isConnected: boolean; isSpea
     meshRef.current.scale.copy(_scaleVec)
     wireRef.current.scale.copy(_scaleVec).multiplyScalar(1.22)
 
-    _coreColor.lerpColors(IDLE_COLOR, ACTIVE_COLOR, Math.min(vol * 2.2, 1))
+    _coreColor.lerpColors(idleColor, activeColor, Math.min(vol * 2.2, 1))
     
     const mat = meshRef.current.material as THREE.MeshBasicMaterial
     const wireMat = wireRef.current.material as THREE.MeshBasicMaterial
     
     mat.color.copy(_coreColor)
-    wireMat.color.lerpColors(CORE_COLOR, ACTIVE_COLOR, Math.min(vol * 1.5, 1))
+    wireMat.color.lerpColors(coreColor, activeColor, Math.min(vol * 1.5, 1))
     
     mat.opacity = isConnected ? 0.18 + vol * 0.4 : 0.08
     wireMat.opacity = isConnected ? 0.65 + vol * 0.35 : 0.25
@@ -65,7 +71,7 @@ function CoreCrystal({ isConnected, isSpeaking }: { isConnected: boolean; isSpea
       <mesh ref={meshRef}>
         <icosahedronGeometry args={[0.55, 1]} />
         <meshBasicMaterial
-          color={IDLE_COLOR}
+          color={idleColor}
           transparent
           opacity={0.15}
           wireframe={false}
@@ -77,7 +83,7 @@ function CoreCrystal({ isConnected, isSpeaking }: { isConnected: boolean; isSpea
       <mesh ref={wireRef}>
         <icosahedronGeometry args={[0.56, 1]} />
         <meshBasicMaterial
-          color={CORE_COLOR}
+          color={coreColor}
           transparent
           opacity={0.5}
           wireframe
@@ -865,11 +871,13 @@ function PhoenixCore({ isConnected, isSpeaking }: { isConnected: boolean; isSpea
 function AIOrb({
   isConnected,
   isSpeaking,
-  coreType = 'quantum'
+  coreType = 'quantum',
+  mood = 'idle'
 }: {
   isConnected: boolean
   isSpeaking: boolean
   coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix'
+  mood?: Mood
 }) {
   const groupRef = useRef<THREE.Group>(null)
 
@@ -886,7 +894,7 @@ function AIOrb({
     <group ref={groupRef}>
       {coreType === 'quantum' && (
         <>
-          <CoreCrystal isConnected={isConnected} isSpeaking={isSpeaking} />
+          <CoreCrystal isConnected={isConnected} isSpeaking={isSpeaking} mood={mood} />
           <ParticleShell isConnected={isConnected} isSpeaking={isSpeaking} />
           <OrbitalRing radius={1.6} tube={0.007} tilt={Math.PI * 0.15} rotSpeed={0.22} isConnected={isConnected} isSpeaking={isSpeaking} phase={0} />
           <OrbitalRing radius={1.85} tube={0.004} tilt={Math.PI * 0.45} rotSpeed={-0.14} isConnected={isConnected} isSpeaking={isSpeaking} phase={2} />
@@ -1027,12 +1035,14 @@ export default function AICore({
   isConnected = false,
   isSpeaking = false,
   coreType = 'quantum',
-  coreSize = 0.65
+  coreSize = 0.65,
+  mood = 'idle'
 }: {
   isConnected?: boolean
   isSpeaking?: boolean
   coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix'
   coreSize?: number
+  mood?: Mood
 }) {
   const [perfMode, setPerfMode] = useState<'high' | 'medium' | 'low'>(() => {
     const saved = localStorage.getItem('novax_perf_mode') as 'high' | 'medium' | 'low'
@@ -1122,7 +1132,7 @@ export default function AICore({
           }}
         >
           <group scale={[coreSize, coreSize, coreSize]}>
-            <AIOrb isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} />
+            <AIOrb isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} mood={mood} />
           </group>
         </Canvas>
       </ErrorBoundary>

@@ -32,6 +32,7 @@ interface NovaXProps {
   isSpeaking: boolean
   isMuted: boolean
   handleMicToggle: () => void
+  mood: import('../lib/cognitiveCore').Mood
 }
 
 const glassPanel = 'bg-zinc-950/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-xl'
@@ -41,7 +42,8 @@ const NovaX = ({
   toggleConnection,
   isSpeaking,
   isMuted,
-  handleMicToggle
+  handleMicToggle,
+  mood
 }: NovaXProps) => {
   const [activeTab, setActiveTab] = useState('DASHBOARD')
 
@@ -185,6 +187,7 @@ const NovaX = ({
               isSpeaking={isSpeaking}
               isMuted={isMuted}
               handleMicToggle={handleMicToggle}
+              mood={mood}
             />
           </div>
 

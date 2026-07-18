@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Copy, Check, Mic, MicOff } from 'lucide-react'
+import { setMood, detectMood } from '../../lib/cognitiveCore'
 
 interface Message {
   role: 'user' | 'model' | 'system'
@@ -275,6 +276,10 @@ export default function RightPanel(): JSX.Element {
 
     const cleanQuery = query.trim()
 
+    // 0. Detect emotional nuance from user input and broadcast mood
+    const userMood = detectMood(cleanQuery, true)
+    setMood(userMood.mood, userMood.intensity)
+
     // 1. Locally update conversation flow
     const userMessage: Message = { role: 'user', text: cleanQuery }
     setChatHistory((prev) => {
@@ -326,6 +331,7 @@ export default function RightPanel(): JSX.Element {
     // 3. Forward query to Gemini Cognitive Core via Secure Bridge
     if (window.electron?.ipcRenderer) {
       setActiveModelText('Thinking...')
+      setMood('focused', 0.7)
       try {
         const historyContext = chatHistoryRef.current.slice(-6).map(msg => ({
           role: msg.role === 'user' ? 'user' : 'model',
@@ -369,7 +375,9 @@ export default function RightPanel(): JSX.Element {
         }
 
         const modelReply = result?.candidates?.[0]?.content?.parts?.[0]?.text || fullReplyText || "System under heavy load, Boss. Please check your credentials."
-        
+
+        // Detect mood from model's own reply for the sphere's reaction
+        const replyMood = detectMood(modelReply, false)
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: modelReply }
         setChatHistory((prev) => {
@@ -382,12 +390,16 @@ export default function RightPanel(): JSX.Element {
           window.electron.ipcRenderer.invoke('phone-broadcast-reply', modelReply)
         }
         if ((window as any).speakText) {
+          setMood('speaking', Math.max(0.6, replyMood.intensity))
           ;(window as any).speakText(modelReply)
+        } else {
+          setMood(replyMood.mood, replyMood.intensity)
         }
 
       } catch (err) {
         console.error('Gemini call failed', err)
         setActiveModelText('')
+        setMood('alert', 0.8)
         const errorMessage: Message = { role: 'model', text: 'Error in cognitive link, Boss. Verify your Gemini API Key in Settings.' }
         setChatHistory((prev) => [...prev, errorMessage].slice(-30))
       }
