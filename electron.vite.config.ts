@@ -15,12 +15,17 @@ function obfuscatePlugin() {
           try {
             const result = JavaScriptObfuscator.obfuscate(file.code, {
               compact: true,
-              controlFlowFlattening: true,
-              controlFlowFlatteningThreshold: 0.75,
-              numbersToExpressions: true,
+              // FIX: controlFlowFlattening breaks execution order of code that
+              // depends on window.electron / contextBridge being ready
+              // (this was the cause of "Cannot read properties of undefined
+              // (reading 'ipcRenderer')"). Keep it OFF.
+              controlFlowFlattening: false,
+              numbersToExpressions: false,
               simplify: true,
               stringArray: true,
-              stringArrayThreshold: 0.75
+              // FIX: lowered from 0.75 -> safer value, reduces risk of the
+              // string-decoding step interfering with runtime globals
+              stringArrayThreshold: 0.5
             })
             file.code = result.getObfuscatedCode()
           } catch (err) {
