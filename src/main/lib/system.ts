@@ -418,6 +418,101 @@ async function runWebSearch(query: string): Promise<string> {
   }
 }
 
+const phoneQuickActionTool: FunctionDeclaration = {
+  name: 'phone_quick_action',
+  description: 'Send a quick control action to the currently paired Android phone over ADB (wireless debugging). Use this whenever the operator gives a voice command about their phone, e.g. "wake my phone", "lock my phone", "go to home screen on my phone", "open the camera on my phone".',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      action: {
+        type: Type.STRING,
+        description: 'One of: wake, lock, home, camera'
+      }
+    },
+    required: ['action']
+  }
+}
+
+const phoneTelemetryTool: FunctionDeclaration = {
+  name: 'phone_get_telemetry',
+  description: 'Read live telemetry (battery level, charging state, model, Android version) from the paired Android phone over ADB. Use this when the operator asks things like "what\'s my phone battery" or "check my phone status".',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {}
+  }
+}
+
+const phoneScreenshotTool: FunctionDeclaration = {
+  name: 'phone_screenshot',
+  description: 'Capture a screenshot from the paired Android phone over ADB and save it into the local gallery. Use this when the operator asks to "screenshot my phone" or "capture my phone screen".',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {}
+  }
+}
+
+async function runPhoneQuickAction(action: string): Promise<string> {
+  if (!isAdbConnected) {
+    return 'No phone is connected over ADB right now. Ask the operator to pair a device on the Phone tab first.'
+  }
+  try {
+    let keycode = ''
+    if (action === 'wake') keycode = 'KEYCODE_WAKEUP'
+    if (action === 'lock') keycode = 'KEYCODE_POWER'
+    if (action === 'home') keycode = 'KEYCODE_HOME'
+
+    if (keycode) {
+      await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell input keyevent ${keycode}`)
+    } else if (action === 'camera') {
+      await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell am start -a android.media.action.IMAGE_CAPTURE`)
+    } else {
+      return `Unknown phone action "${action}". Valid actions are: wake, lock, home, camera.`
+    }
+    return `Phone action "${action}" executed successfully over ADB.`
+  } catch (e: any) {
+    return `Phone action "${action}" failed: ${e.message}`
+  }
+}
+
+async function runPhoneTelemetry(): Promise<string> {
+  if (!isAdbConnected) {
+    return 'No phone is connected over ADB right now. Ask the operator to pair a device on the Phone tab first.'
+  }
+  try {
+    const modelOutput = await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell getprop ro.product.model`)
+    const osOutput = await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell getprop ro.build.version.release`)
+    const batteryOutput = await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell dumpsys battery`)
+    let level = 100
+    let isCharging = false
+    if (batteryOutput) {
+      const lvMatch = batteryOutput.match(/level:\s*(\d+)/)
+      if (lvMatch) level = parseInt(lvMatch[1], 10)
+      isCharging = batteryOutput.includes('AC powered: true') || batteryOutput.includes('USB powered: true') || batteryOutput.includes('Wireless powered: true')
+    }
+    return `Phone: ${modelOutput || 'Unknown model'}, Android ${osOutput || '?'}, battery ${level}% ${isCharging ? '(charging)' : '(not charging)'}.`
+  } catch (e: any) {
+    return `Could not read phone telemetry: ${e.message}`
+  }
+}
+
+async function runPhoneScreenshot(): Promise<string> {
+  if (!isAdbConnected) {
+    return 'No phone is connected over ADB right now. Ask the operator to pair a device on the Phone tab first.'
+  }
+  try {
+    const capture = await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} exec-out screencap -p | base64`)
+    if (!capture || !capture.trim()) {
+      return 'Screenshot capture returned empty data. Check the phone display authorization.'
+    }
+    const galleryDir = getGalleryDir()
+    const filename = `phone_screenshot_${Date.now()}.png`
+    fs.writeFileSync(path.join(galleryDir, filename), Buffer.from(capture.trim().replace(/\s+/g, ''), 'base64'))
+    return `Phone screenshot captured and saved to the gallery as "${filename}".`
+  } catch (e: any) {
+    return `Phone screenshot failed: ${e.message}`
+  }
+}
+
 export default function registerSystemHandlers(ipcMain: IpcMain) {
   ipcMain.removeHandler('gemini-chat-call')
   ipcMain.handle('gemini-chat-call', async (event, payload: { contents: any[]; systemInstruction: string; stream?: boolean }) => {
@@ -455,7 +550,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     // few times, before producing the final user-facing reply.
     let workingContents = [...contents]
     let usedTool = false
-    const toolsConfig = { tools: [{ functionDeclarations: [webSearchTool] }] }
+    const toolsConfig = {
+      tools: [{ functionDeclarations: [webSearchTool, phoneQuickActionTool, phoneTelemetryTool, phoneScreenshotTool] }]
+    }
     const maxToolLoops = 3
     for (let i = 0; i < maxToolLoops; i++) {
       const toolResponse = await ai.models.generateContent({
@@ -475,11 +572,21 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       if (modelContent) workingContents.push(modelContent)
 
       for (const call of calls) {
-        const query = (call.args as any)?.query || ''
-        const result = await runWebSearch(query)
+        let result = ''
+        if (call.name === 'web_search') {
+          result = await runWebSearch((call.args as any)?.query || '')
+        } else if (call.name === 'phone_quick_action') {
+          result = await runPhoneQuickAction((call.args as any)?.action || '')
+        } else if (call.name === 'phone_get_telemetry') {
+          result = await runPhoneTelemetry()
+        } else if (call.name === 'phone_screenshot') {
+          result = await runPhoneScreenshot()
+        } else {
+          result = `Unknown tool "${call.name}" requested.`
+        }
         workingContents.push({
           role: 'user',
-          parts: [{ functionResponse: { name: 'web_search', response: { result } } }]
+          parts: [{ functionResponse: { name: call.name, response: { result } } }]
         })
       }
     }
