@@ -2,69 +2,6 @@ import { useState, useEffect } from 'react'
 import NovaX from './UI/NovaX'
 import TitleBar from './components/Titlebar'
 
-// Gemini's audio transcription only accepts WAV, MP3, AIFF, AAC, OGG, or FLAC.
-// The browser's MediaRecorder only produces webm/opus, which Gemini silently
-// rejects. This decodes the recorded audio and re-encodes it as WAV before
-// sending it, which fixes transcription never returning any text.
-async function convertBlobToWav(blob: Blob): Promise<Blob> {
-  const arrayBuffer = await blob.arrayBuffer()
-  const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
-  const audioCtx = new AudioCtx()
-  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
-  const wavBuffer = encodeWav(audioBuffer)
-  await audioCtx.close()
-  return new Blob([wavBuffer], { type: 'audio/wav' })
-}
-
-function encodeWav(audioBuffer: AudioBuffer): ArrayBuffer {
-  const numChannels = audioBuffer.numberOfChannels
-  const sampleRate = audioBuffer.sampleRate
-  const bitDepth = 16
-
-  let samples: Float32Array
-  if (numChannels === 2) {
-    const left = audioBuffer.getChannelData(0)
-    const right = audioBuffer.getChannelData(1)
-    samples = new Float32Array(left.length + right.length)
-    for (let i = 0; i < left.length; i++) {
-      samples[i * 2] = left[i]
-      samples[i * 2 + 1] = right[i]
-    }
-  } else {
-    samples = audioBuffer.getChannelData(0)
-  }
-
-  const dataLength = samples.length * (bitDepth / 8)
-  const buffer = new ArrayBuffer(44 + dataLength)
-  const view = new DataView(buffer)
-
-  const writeString = (offset: number, str: string): void => {
-    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
-  }
-
-  writeString(0, 'RIFF')
-  view.setUint32(4, 36 + dataLength, true)
-  writeString(8, 'WAVE')
-  writeString(12, 'fmt ')
-  view.setUint32(16, 16, true)
-  view.setUint16(20, 1, true) // PCM
-  view.setUint16(22, numChannels, true)
-  view.setUint32(24, sampleRate, true)
-  view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true)
-  view.setUint16(32, numChannels * (bitDepth / 8), true)
-  view.setUint16(34, bitDepth, true)
-  writeString(36, 'data')
-  view.setUint32(40, dataLength, true)
-
-  let offset = 44
-  for (let i = 0; i < samples.length; i++, offset += 2) {
-    const s = Math.max(-1, Math.min(1, samples[i]))
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true)
-  }
-
-  return buffer
-}
-
 export type VisionMode = 'camera' | 'screen' | 'none'
 
 const IndexRoot = (): JSX.Element => {
@@ -170,35 +107,28 @@ const IndexRoot = (): JSX.Element => {
               }
               mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: mimeType })
-                try {
-                  const wavBlob = await convertBlobToWav(audioBlob)
-                  const reader = new FileReader()
-                  reader.readAsDataURL(wavBlob)
-                  reader.onloadend = async () => {
-                    const base64data = (reader.result as string).split(',')[1]
-                    console.log('[NOVA-X VAD] Transcribing audio...')
-                    try {
+                const reader = new FileReader()
+                reader.readAsDataURL(audioBlob)
+                reader.onloadend = async () => {
+                  const base64data = (reader.result as string).split(',')[1]
+                  console.log('[NOVA-X VAD] Transcribing audio...')
+                  try {
+                    // @ts-ignore
+                    if (window.iris?.transcribeAudio) {
                       // @ts-ignore
-                      if (window.iris?.transcribeAudio) {
+                      const transcript = await window.iris.transcribeAudio(base64data, audioBlob.type)
+                      console.log('[NOVA-X VAD] Transcript:', transcript)
+                      if (transcript && transcript.trim().length > 0) {
                         // @ts-ignore
-                        const transcript = await window.iris.transcribeAudio(base64data, 'audio/wav')
-                        console.log('[NOVA-X VAD] Transcript:', transcript)
-                        if (transcript && transcript.trim().length > 0) {
+                        if (window.triggerVoiceCommand) {
                           // @ts-ignore
-                          if (window.triggerVoiceCommand) {
-                            // @ts-ignore
-                            window.triggerVoiceCommand(transcript)
-                          }
+                          window.triggerVoiceCommand(transcript)
                         }
                       }
-                    } catch (err: any) {
-                      console.error('[NOVA-X VAD] Transcription error:', err)
-                      const message = err?.message || String(err)
-                      alert('NOVA-X could not hear you: ' + message)
                     }
+                  } catch (err) {
+                    console.error('[NOVA-X VAD] Transcription error:', err)
                   }
-                } catch (convErr) {
-                  console.error('[NOVA-X VAD] Audio conversion error:', convErr)
                 }
               }
               mediaRecorder.start()

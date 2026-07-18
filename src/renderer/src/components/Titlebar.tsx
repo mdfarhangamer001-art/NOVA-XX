@@ -20,12 +20,12 @@ export default function TitleBar() {
     }
   }, [])
 
-  const minimize = () => window.electron?.ipcRenderer?.send('window-min')
+  const minimize = () => window.electron.ipcRenderer.send('window-min')
   const toggleMaximize = () => {
     setIsMaximized(!isMaximized)
-    window.electron?.ipcRenderer?.send('window-max')
+    window.electron.ipcRenderer.send('window-max')
   }
-  const close = () => window.electron?.ipcRenderer?.send('window-close')
+  const close = () => window.electron.ipcRenderer.send('window-close')
 
   return (
     <div className="w-full h-12 flex items-center justify-between bg-[#08080a] backdrop-blur-3xl border-b border-white/5 drag-region select-none z-50 relative">

@@ -1,6 +1,4 @@
-if (import.meta.env.DEV) {
-  import('./mock-electron')
-}
+import './mock-electron'
 import './assets/main.css'
 
 import { StrictMode } from 'react'

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { IpcMain, app, dialog, BrowserWindow, shell, safeStorage, desktopCapturer, screen, clipboard, nativeImage } from 'electron'
+import { IpcMain, app, dialog, BrowserWindow, shell, safeStorage } from 'electron'
 import os from 'os'
 import { exec } from 'child_process'
 import fs from 'fs'
@@ -10,8 +10,7 @@ import http from 'http'
 import crypto from 'crypto'
 import { WebSocketServer } from 'ws'
 import Store from 'electron-store'
-import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai'
-import Groq, { toFile } from 'groq-sdk'
+import { GoogleGenAI } from '@google/genai'
 
 const store = new Store()
 
@@ -316,203 +315,6 @@ function getGeminiApiKeyLocal(): string {
   return ''
 }
 
-function getGroqApiKeyLocal(): string {
-  const envKey = process.env.GROQ_API_KEY
-  if (envKey) return envKey
-
-  try {
-    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
-    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
-      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
-      const parsed = JSON.parse(decrypted)
-      if (parsed.groqKey) return parsed.groqKey
-      if (parsed.GROQ_API_KEY) return parsed.GROQ_API_KEY
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  const secureKeys: any = store.get('secure_api_keys')
-  if (secureKeys) {
-    if (secureKeys.groqKey) return secureKeys.groqKey
-    if (secureKeys.GROQ_API_KEY) return secureKeys.GROQ_API_KEY
-  }
-
-  return ''
-}
-
-function getTavilyApiKeyLocal(): string {
-  const envKey = process.env.TAVILY_API_KEY
-  if (envKey) return envKey
-
-  try {
-    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
-    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
-      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
-      const parsed = JSON.parse(decrypted)
-      if (parsed.tavilyKey) return parsed.tavilyKey
-      if (parsed.TAVILY_API_KEY) return parsed.TAVILY_API_KEY
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  const secureKeys: any = store.get('secure_api_keys')
-  if (secureKeys) {
-    if (secureKeys.tavilyKey) return secureKeys.tavilyKey
-    if (secureKeys.TAVILY_API_KEY) return secureKeys.TAVILY_API_KEY
-  }
-
-  return ''
-}
-
-const webSearchTool: FunctionDeclaration = {
-  name: 'web_search',
-  description: 'Search the live internet for current information, news, facts, or anything not known from training data. Use this whenever the operator asks about current events, prices, or anything time-sensitive.',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      query: {
-        type: Type.STRING,
-        description: 'The search query to look up on the web.'
-      }
-    },
-    required: ['query']
-  }
-}
-
-async function runWebSearch(query: string): Promise<string> {
-  const tavilyKey = getTavilyApiKeyLocal()
-  if (!tavilyKey) {
-    return 'Web search is unavailable: no Tavily API key configured in Settings > API Vault.'
-  }
-
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: tavilyKey,
-        query,
-        search_depth: 'basic',
-        max_results: 5,
-        include_answer: true
-      })
-    })
-
-    if (!res.ok) {
-      return `Web search failed with status ${res.status}.`
-    }
-
-    const data: any = await res.json()
-    const parts: string[] = []
-    if (data.answer) parts.push(`Summary: ${data.answer}`)
-    if (Array.isArray(data.results)) {
-      data.results.slice(0, 5).forEach((r: any, i: number) => {
-        parts.push(`[${i + 1}] ${r.title}\n${r.content}\nSource: ${r.url}`)
-      })
-    }
-    return parts.join('\n\n') || 'No results found.'
-  } catch (e: any) {
-    return `Web search error: ${e?.message || 'unknown error'}`
-  }
-}
-
-const phoneQuickActionTool: FunctionDeclaration = {
-  name: 'phone_quick_action',
-  description: 'Send a quick control action to the currently paired Android phone over ADB (wireless debugging). Use this whenever the operator gives a voice command about their phone, e.g. "wake my phone", "lock my phone", "go to home screen on my phone", "open the camera on my phone".',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      action: {
-        type: Type.STRING,
-        description: 'One of: wake, lock, home, camera'
-      }
-    },
-    required: ['action']
-  }
-}
-
-const phoneTelemetryTool: FunctionDeclaration = {
-  name: 'phone_get_telemetry',
-  description: 'Read live telemetry (battery level, charging state, model, Android version) from the paired Android phone over ADB. Use this when the operator asks things like "what\'s my phone battery" or "check my phone status".',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {}
-  }
-}
-
-const phoneScreenshotTool: FunctionDeclaration = {
-  name: 'phone_screenshot',
-  description: 'Capture a screenshot from the paired Android phone over ADB and save it into the local gallery. Use this when the operator asks to "screenshot my phone" or "capture my phone screen".',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {}
-  }
-}
-
-async function runPhoneQuickAction(action: string): Promise<string> {
-  if (!isAdbConnected) {
-    return 'No phone is connected over ADB right now. Ask the operator to pair a device on the Phone tab first.'
-  }
-  try {
-    let keycode = ''
-    if (action === 'wake') keycode = 'KEYCODE_WAKEUP'
-    if (action === 'lock') keycode = 'KEYCODE_POWER'
-    if (action === 'home') keycode = 'KEYCODE_HOME'
-
-    if (keycode) {
-      await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell input keyevent ${keycode}`)
-    } else if (action === 'camera') {
-      await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell am start -a android.media.action.IMAGE_CAPTURE`)
-    } else {
-      return `Unknown phone action "${action}". Valid actions are: wake, lock, home, camera.`
-    }
-    return `Phone action "${action}" executed successfully over ADB.`
-  } catch (e: any) {
-    return `Phone action "${action}" failed: ${e.message}`
-  }
-}
-
-async function runPhoneTelemetry(): Promise<string> {
-  if (!isAdbConnected) {
-    return 'No phone is connected over ADB right now. Ask the operator to pair a device on the Phone tab first.'
-  }
-  try {
-    const modelOutput = await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell getprop ro.product.model`)
-    const osOutput = await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell getprop ro.build.version.release`)
-    const batteryOutput = await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} shell dumpsys battery`)
-    let level = 100
-    let isCharging = false
-    if (batteryOutput) {
-      const lvMatch = batteryOutput.match(/level:\s*(\d+)/)
-      if (lvMatch) level = parseInt(lvMatch[1], 10)
-      isCharging = batteryOutput.includes('AC powered: true') || batteryOutput.includes('USB powered: true') || batteryOutput.includes('Wireless powered: true')
-    }
-    return `Phone: ${modelOutput || 'Unknown model'}, Android ${osOutput || '?'}, battery ${level}% ${isCharging ? '(charging)' : '(not charging)'}.`
-  } catch (e: any) {
-    return `Could not read phone telemetry: ${e.message}`
-  }
-}
-
-async function runPhoneScreenshot(): Promise<string> {
-  if (!isAdbConnected) {
-    return 'No phone is connected over ADB right now. Ask the operator to pair a device on the Phone tab first.'
-  }
-  try {
-    const capture = await runCommand(`adb -s ${adbDeviceIp}:${adbDevicePort} exec-out screencap -p | base64`)
-    if (!capture || !capture.trim()) {
-      return 'Screenshot capture returned empty data. Check the phone display authorization.'
-    }
-    const galleryDir = getGalleryDir()
-    const filename = `phone_screenshot_${Date.now()}.png`
-    fs.writeFileSync(path.join(galleryDir, filename), Buffer.from(capture.trim().replace(/\s+/g, ''), 'base64'))
-    return `Phone screenshot captured and saved to the gallery as "${filename}".`
-  } catch (e: any) {
-    return `Phone screenshot failed: ${e.message}`
-  }
-}
-
 export default function registerSystemHandlers(ipcMain: IpcMain) {
   ipcMain.removeHandler('gemini-chat-call')
   ipcMain.handle('gemini-chat-call', async (event, payload: { contents: any[]; systemInstruction: string; stream?: boolean }) => {
@@ -531,11 +333,14 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       }
     })
 
-    const genConfig = {
+    const model = ai.getGenerativeModel({
+      model: 'gemini-2.0-flash',
       systemInstruction,
-      temperature: 0.7,
-      maxOutputTokens: 1024
-    }
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024
+      }
+    })
 
     // Memory Augmentation: Include facts if available
     const memories = store.get('novax_memories', []) as any[]
@@ -544,96 +349,19 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       contents[contents.length - 1].parts.push({ text: `\n\n${memoryContext}` })
     }
 
-    // --- Tool Resolution Pass: let Nova decide if it needs to search the web ---
-    // Run a quick non-streaming pass with the web_search tool available. If the
-    // model requests it, execute the search and feed results back, looping a
-    // few times, before producing the final user-facing reply.
-    let workingContents = [...contents]
-    let usedTool = false
-    const toolsConfig = {
-      tools: [{ functionDeclarations: [webSearchTool, phoneQuickActionTool, phoneTelemetryTool, phoneScreenshotTool] }]
-    }
-    const maxToolLoops = 3
-    for (let i = 0; i < maxToolLoops; i++) {
-      const toolResponse = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: workingContents,
-        config: { ...genConfig, ...toolsConfig }
-      })
-
-      const calls = toolResponse.functionCalls
-      if (!calls || calls.length === 0) {
-        // No tool needed (or tools exhausted) — this is effectively our final answer
-        break
-      }
-
-      usedTool = true
-      const modelContent = toolResponse.candidates?.[0]?.content
-      if (modelContent) workingContents.push(modelContent)
-
-      for (const call of calls) {
-        let result = ''
-        if (call.name === 'web_search') {
-          result = await runWebSearch((call.args as any)?.query || '')
-        } else if (call.name === 'phone_quick_action') {
-          result = await runPhoneQuickAction((call.args as any)?.action || '')
-        } else if (call.name === 'phone_get_telemetry') {
-          result = await runPhoneTelemetry()
-        } else if (call.name === 'phone_screenshot') {
-          result = await runPhoneScreenshot()
-        } else {
-          result = `Unknown tool "${call.name}" requested.`
-        }
-        workingContents.push({
-          role: 'user',
-          parts: [{ functionResponse: { name: call.name, response: { result } } }]
-        })
-      }
-    }
-
-    // IMPORTANT: if the tool loop ever used the web_search function, the conversation
-    // history now contains functionCall/functionResponse parts. The follow-up call MUST
-    // keep the same `tools` declaration, otherwise Gemini treats it as a malformed
-    // conversation and silently returns an empty response instead of throwing an error.
-    const finalConfig = usedTool ? { ...genConfig, ...toolsConfig } : genConfig
-
     let fullText = ''
-    let lastFinishReason: string | undefined
-    try {
-      if (stream) {
-        const result = await ai.models.generateContentStream({
-          model: 'gemini-2.0-flash',
-          contents: workingContents,
-          config: finalConfig
-        })
-        const webContents = event.sender
-
-        for await (const chunk of result) {
-          lastFinishReason = chunk.candidates?.[0]?.finishReason || lastFinishReason
-          const chunkText = chunk.text || ''
-          fullText += chunkText
-          webContents.send('gemini-stream-chunk', chunkText)
-        }
-      } else {
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
-          contents: workingContents,
-          config: finalConfig
-        })
-        lastFinishReason = response.candidates?.[0]?.finishReason
-        fullText = response.text || ''
+    if (stream) {
+      const result = await model.generateContentStream({ contents })
+      const webContents = event.sender
+      
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text()
+        fullText += chunkText
+        webContents.send('gemini-stream-chunk', chunkText)
       }
-    } catch (err: any) {
-      console.error('[Gemini] generateContent failed:', err?.message || err)
-      throw new Error(`Gemini API error: ${err?.message || 'unknown error'}`)
-    }
-
-    if (!fullText) {
-      console.error('[Gemini] Empty response. finishReason =', lastFinishReason)
-      throw new Error(
-        `Gemini returned an empty response (finishReason: ${lastFinishReason || 'unknown'}). ` +
-        `This usually means: rate limit / quota exceeded, safety filters blocked the reply, or an invalid model name.`
-      )
+    } else {
+      const response = await model.generateContent({ contents })
+      fullText = response.response.text()
     }
 
     // Proactive Memory Extraction (Background)
@@ -644,16 +372,14 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
 
   async function extractAndStoreMemories(apiKey: string, text: string) {
     const ai = new GoogleGenAI({ apiKey })
+    const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' })
     const prompt = `Extract important personal facts about the operator from this text (e.g. name, preferences, habits). 
     Respond ONLY with a JSON array of strings: ["fact 1", "fact 2"]. If nothing important, respond [].
     Text: ${text}`
     
     try {
-      const res = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt
-      })
-      const content = (res.text || '').trim()
+      const res = await model.generateContent(prompt)
+      const content = res.response.text().trim()
       const newFacts = JSON.parse(content.match(/\[.*\]/s)?.[0] || '[]')
       if (Array.isArray(newFacts) && newFacts.length > 0) {
         const existing = store.get('novax_memories', []) as any[]
@@ -739,40 +465,13 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
 
   ipcMain.removeHandler('iris-transcribe-audio')
   ipcMain.handle('iris-transcribe-audio', async (_event, payload: { base64Audio: string; mimeType: string }) => {
-    let { base64Audio, mimeType } = payload
-    mimeType = mimeType.split(';')[0]
-
-    const groqApiKey = getGroqApiKeyLocal()
-
-    // Preferred path: Groq-hosted Whisper — much lower latency than Gemini for STT
-    if (groqApiKey) {
-      try {
-        const groq = new Groq({ apiKey: groqApiKey })
-        const ext = mimeType.includes('webm') ? 'webm'
-          : mimeType.includes('ogg') ? 'ogg'
-          : mimeType.includes('wav') ? 'wav'
-          : mimeType.includes('mp3') || mimeType.includes('mpeg') ? 'mp3'
-          : 'webm'
-
-        const audioBuffer = Buffer.from(base64Audio, 'base64')
-        const transcription = await groq.audio.transcriptions.create({
-          file: await toFile(audioBuffer, `audio.${ext}`),
-          model: 'whisper-large-v3-turbo',
-          response_format: 'json'
-        })
-
-        return transcription.text?.trim() || ''
-      } catch (e) {
-        console.error('[Groq Transcription] Failed, falling back to Gemini:', e)
-        // fall through to Gemini path below
-      }
-    }
-
-    // Fallback: Gemini multimodal transcription
     const apiKey = getGeminiApiKeyLocal()
     if (!apiKey) {
-      throw new Error('No transcription provider configured. Add a Groq or Gemini API key in Settings.')
+      throw new Error('Gemini API key required for transcription.')
     }
+
+    let { base64Audio, mimeType } = payload
+    mimeType = mimeType.split(';')[0] // Clean mimetype for Gemini
 
     const ai = new GoogleGenAI({
       apiKey,
@@ -797,111 +496,6 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     })
 
     return response.text?.trim() || ''
-  })
-
-  // ==================== Screen Vision & Physical Control ====================
-
-  ipcMain.removeHandler('take-screenshot')
-  ipcMain.handle('take-screenshot', async () => {
-    const primaryDisplay = screen.getPrimaryDisplay()
-    const { width, height } = primaryDisplay.workAreaSize
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width, height }
-    })
-    if (!sources.length) {
-      throw new Error('No screen source available to capture.')
-    }
-    const png = sources[0].thumbnail.toPNG()
-    return { base64: png.toString('base64'), width, height }
-  })
-
-  ipcMain.removeHandler('analyze-screen')
-  ipcMain.handle('analyze-screen', async (_event, question?: string) => {
-    const apiKey = getGeminiApiKeyLocal()
-    if (!apiKey) {
-      throw new Error('Gemini API key is not configured in NOVA-X settings.')
-    }
-
-    const primaryDisplay = screen.getPrimaryDisplay()
-    const { width, height } = primaryDisplay.workAreaSize
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width, height }
-    })
-    if (!sources.length) {
-      throw new Error('No screen source available to capture.')
-    }
-    const base64Image = sources[0].thumbnail.toPNG().toString('base64')
-
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-    })
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: question || 'Describe what is currently visible on this screen, concisely.' },
-            { inlineData: { mimeType: 'image/png', data: base64Image } }
-          ]
-        }
-      ]
-    })
-
-    return response.text?.trim() || ''
-  })
-
-  // Types text at the current cursor focus (uses OS-level key injection, no native module required)
-  ipcMain.removeHandler('type-text')
-  ipcMain.handle('type-text', async (_event, text: string) => {
-    const platform = os.platform()
-    const safeText = text.replace(/"/g, '\\"')
-
-    if (platform === 'win32') {
-      // SendKeys special characters need escaping
-      const sendKeysEscaped = text.replace(/([+^%~(){}])/g, '{$1}').replace(/"/g, '`"')
-      const psCommand = `Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait("${sendKeysEscaped}")`
-      await runCommand(`powershell -NoProfile -Command "${psCommand.replace(/"/g, '\\"')}"`)
-    } else if (platform === 'darwin') {
-      await runCommand(`osascript -e 'tell application "System Events" to keystroke "${safeText}"'`)
-    } else {
-      await runCommand(`xdotool type "${safeText}"`)
-    }
-    return { success: true }
-  })
-
-  // Moves the mouse to (x, y) and performs a click. Coordinates are absolute screen pixels.
-  ipcMain.removeHandler('click-at')
-  ipcMain.handle('click-at', async (_event, payload: { x: number; y: number }) => {
-    const { x, y } = payload
-    const platform = os.platform()
-
-    if (platform === 'win32') {
-      const psScript = `
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -TypeDefinition '
-using System;
-using System.Runtime.InteropServices;
-public class MouseOps {
-  [DllImport("user32.dll")]
-  public static extern void mouse_event(int flags, int dx, int dy, int data, int extra);
-}'
-[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y})
-Start-Sleep -Milliseconds 100
-[MouseOps]::mouse_event(0x0002, 0, 0, 0, 0)
-[MouseOps]::mouse_event(0x0004, 0, 0, 0, 0)
-`.replace(/\r?\n/g, ';')
-      await runCommand(`powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`)
-    } else if (platform === 'darwin') {
-      await runCommand(`osascript -e 'tell application "System Events" to click at {${x}, ${y}}'`)
-    } else {
-      await runCommand(`xdotool mousemove ${x} ${y} click 1`)
-    }
-    return { success: true }
   })
 
   ipcMain.removeHandler('get-installed-apps')
@@ -1521,190 +1115,6 @@ Start-Sleep -Milliseconds 100
       } catch (e) {}
     }
     return { success: true }
-  })
-
-  // ============================================================
-  // Clipboard History — NEW: this feature had a UI but no backend
-  // at all, so every button in the Clipboard tab threw an error.
-  // ============================================================
-  interface ClipboardEntry {
-    id: string
-    type: 'text' | 'image'
-    content: string
-    timestamp: number
-    pinned?: boolean
-  }
-
-  const MAX_CLIPBOARD_ENTRIES = 100
-  let lastClipboardText = clipboard.readText() || ''
-  let lastClipboardImageDataUrl = ''
-
-  function getClipboardHistory(): ClipboardEntry[] {
-    return (store.get('clipboard_history') as ClipboardEntry[]) || []
-  }
-
-  function saveClipboardHistory(entries: ClipboardEntry[]): void {
-    store.set('clipboard_history', entries.slice(0, MAX_CLIPBOARD_ENTRIES))
-  }
-
-  function addClipboardEntry(type: 'text' | 'image', content: string): void {
-    const history = getClipboardHistory()
-    // Avoid duplicate consecutive entries
-    if (history[0] && history[0].type === type && history[0].content === content) return
-    const entry: ClipboardEntry = {
-      id: crypto.randomUUID(),
-      type,
-      content,
-      timestamp: Date.now()
-    }
-    const pinned = history.filter((e) => e.pinned)
-    const unpinned = history.filter((e) => !e.pinned)
-    saveClipboardHistory([...pinned, entry, ...unpinned])
-  }
-
-  // Poll the OS clipboard every 1.5s for changes (Electron has no native
-  // clipboard-change event, so polling is the standard approach here).
-  setInterval(() => {
-    try {
-      const text = clipboard.readText()
-      if (text && text !== lastClipboardText) {
-        lastClipboardText = text
-        addClipboardEntry('text', text)
-        return
-      }
-      const image = clipboard.readImage()
-      if (!image.isEmpty()) {
-        const dataUrl = image.toDataURL()
-        if (dataUrl !== lastClipboardImageDataUrl) {
-          lastClipboardImageDataUrl = dataUrl
-          addClipboardEntry('image', dataUrl)
-        }
-      }
-    } catch (e) {
-      console.error('[NOVA-X Clipboard] Poll error:', e)
-    }
-  }, 1500)
-
-  ipcMain.removeHandler('get-clipboard-history')
-  ipcMain.handle('get-clipboard-history', async () => {
-    return getClipboardHistory()
-  })
-
-  ipcMain.removeHandler('copy-to-clipboard')
-  ipcMain.handle('copy-to-clipboard', async (_event, payload: { type: 'text' | 'image'; content: string }) => {
-    if (payload.type === 'image') {
-      clipboard.writeImage(nativeImage.createFromDataURL(payload.content))
-      lastClipboardImageDataUrl = payload.content
-    } else {
-      clipboard.writeText(payload.content)
-      lastClipboardText = payload.content
-    }
-    return { success: true }
-  })
-
-  ipcMain.removeHandler('delete-clipboard-entry')
-  ipcMain.handle('delete-clipboard-entry', async (_event, id: string) => {
-    const updated = getClipboardHistory().filter((e) => e.id !== id)
-    saveClipboardHistory(updated)
-    return updated
-  })
-
-  ipcMain.removeHandler('toggle-pin-clipboard-entry')
-  ipcMain.handle('toggle-pin-clipboard-entry', async (_event, id: string) => {
-    const updated = getClipboardHistory().map((e) =>
-      e.id === id ? { ...e, pinned: !e.pinned } : e
-    )
-    saveClipboardHistory(updated)
-    return updated
-  })
-
-  ipcMain.removeHandler('clear-clipboard-history')
-  ipcMain.handle('clear-clipboard-history', async () => {
-    // Keep pinned entries when clearing
-    const kept = getClipboardHistory().filter((e) => e.pinned)
-    saveClipboardHistory(kept)
-    return kept
-  })
-
-  // ============================================================
-  // Activity Tracking — NEW: same situation, UI existed with no
-  // backend. This tracks NOVA-X app focus/usage sessions locally
-  // (no third-party "active window" package needed) and can
-  // summarize the day's log via Gemini.
-  // ============================================================
-  interface ActivityLogEntry {
-    id: string
-    timestamp: number
-    event: 'app-focused' | 'app-blurred' | 'app-started'
-    detail?: string
-  }
-
-  function getActivityTrackingEnabled(): boolean {
-    return store.get('activity_tracking_enabled') !== false // default ON
-  }
-
-  function getActivityLog(): ActivityLogEntry[] {
-    return (store.get('activity_log') as ActivityLogEntry[]) || []
-  }
-
-  function pushActivityLog(event: ActivityLogEntry['event'], detail?: string): void {
-    if (!getActivityTrackingEnabled()) return
-    const log = getActivityLog()
-    log.push({ id: crypto.randomUUID(), timestamp: Date.now(), event, detail })
-    // Keep last 500 entries to avoid unbounded growth
-    store.set('activity_log', log.slice(-500))
-  }
-
-  pushActivityLog('app-started')
-  BrowserWindow.getAllWindows().forEach((win) => {
-    win.on('focus', () => pushActivityLog('app-focused'))
-    win.on('blur', () => pushActivityLog('app-blurred'))
-  })
-  app.on('browser-window-created', (_e, win) => {
-    win.on('focus', () => pushActivityLog('app-focused'))
-    win.on('blur', () => pushActivityLog('app-blurred'))
-  })
-
-  ipcMain.removeHandler('get-activity-tracking-enabled')
-  ipcMain.handle('get-activity-tracking-enabled', async () => {
-    return getActivityTrackingEnabled()
-  })
-
-  ipcMain.removeHandler('set-activity-tracking-enabled')
-  ipcMain.handle('set-activity-tracking-enabled', async (_event, enabled: boolean) => {
-    store.set('activity_tracking_enabled', enabled)
-    return enabled
-  })
-
-  ipcMain.removeHandler('get-activity-log')
-  ipcMain.handle('get-activity-log', async () => {
-    return getActivityLog()
-  })
-
-  ipcMain.removeHandler('summarize-activity-day')
-  ipcMain.handle('summarize-activity-day', async () => {
-    const log = getActivityLog()
-    if (log.length === 0) {
-      return 'No activity recorded yet today, Boss.'
-    }
-    const apiKey = getGeminiApiKeyLocal()
-    if (!apiKey) {
-      return 'Gemini API key not configured, so I cannot generate a summary. Add it in Settings.'
-    }
-    try {
-      const ai = new GoogleGenAI({ apiKey })
-      const today = new Date().toDateString()
-      const todayLog = log.filter((e) => new Date(e.timestamp).toDateString() === today)
-      const summaryPrompt = `Summarize this user's NOVA-X desktop usage activity log for today in 3-4 short sentences, casual tone, addressing them as "Boss". Focus on total focused sessions and general usage pattern. Raw log (event:timestamp): ${JSON.stringify(todayLog.map((e) => `${e.event}:${e.timestamp}`))}`
-      const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: summaryPrompt
-      })
-      return result.text || 'Could not generate a summary right now.'
-    } catch (e) {
-      console.error('[NOVA-X Activity] Summary generation failed:', e)
-      return 'Failed to generate today\'s activity summary due to an error.'
-    }
   })
 
   // Start the Mobile Wireless Companion server

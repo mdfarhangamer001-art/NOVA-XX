@@ -1,5 +1,5 @@
-appId: com.novax.novax.app
-productName: NOVA-X
+appId: com.novanovax.app
+productName: novax
 directories:
   buildResources: build
 
@@ -22,20 +22,23 @@ asarUnpack:
   - resources/**
 
 win:
-  executableName: nova-x
-  icon: build/icon.png
+  executableName: novax
+  icon: build/icon.ico
   target:
     - target: nsis
 
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
-  oneClick: false
-  allowToChangeInstallationDirectory: true
+  oneClick: true
+  allowToChangeInstallationDirectory: false
   createDesktopShortcut: always
   createStartMenuShortcut: true
   runAfterFinish: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
 
 mac:
   entitlementsInherit: build/entitlements.mac.plist
@@ -55,7 +58,7 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: Harsh Pandey
+  maintainer: NOVA-X Team
   category: Utility
 
 appImage:
@@ -64,5 +67,5 @@ appImage:
 npmRebuild: false
 publish:
   provider: github
-  owner: 201Harsh
-  repo: IRIS-AI
+  owner: novax
+  repo: novax
