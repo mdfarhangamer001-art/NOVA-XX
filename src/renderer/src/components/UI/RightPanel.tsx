@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Copy, Check, Mic, MicOff } from 'lucide-react'
 import { setMood, detectMood } from '../../lib/cognitiveCore'
 import { saveConversationTurn, loadRecentContext } from '../../services/supabaseClient'
+import { configureWakeWordEngine, type WakeWordStatus } from '../../utils/wakeWordEngine'
 
 interface Message {
   role: 'user' | 'model' | 'system'
@@ -20,6 +21,10 @@ export default function RightPanel(): JSX.Element {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [wakeWordStatus, setWakeWordStatus] = useState<WakeWordStatus>('idle')
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(
+    () => localStorage.getItem('novax_wakeword_enabled') === 'true'
+  )
 
   const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<string> => {
     if (window.iris?.transcribeAudio) {
@@ -466,6 +471,48 @@ export default function RightPanel(): JSX.Element {
     }
   }, [executeCoreCommand])
 
+  // Wake-word engine: "Hey Nova" / "OK Boss" always-on activation.
+  // Toggled from Settings; runs continuous background speech recognition
+  // and hands off directly into the normal command pipeline.
+  useEffect(() => {
+    const engine = configureWakeWordEngine({
+      onStatusChange: setWakeWordStatus,
+      onWake: () => {
+        setMood('focused', 0.8)
+        if (navigator.vibrate) navigator.vibrate(40)
+      },
+      onCommand: (command: string) => {
+        if (command.trim()) {
+          executeCoreCommand(command.trim())
+        }
+      },
+      onError: (err: string) => {
+        console.warn('[NOVA-X WakeWord] recognition error:', err)
+      }
+    })
+
+    if (wakeWordEnabled) {
+      engine.start()
+    }
+
+    const handleToggle = (e: Event): void => {
+      const enabled = (e as CustomEvent<boolean>).detail
+      setWakeWordEnabled(enabled)
+      if (enabled) {
+        engine.start()
+      } else {
+        engine.stop()
+      }
+    }
+    window.addEventListener('novax_wakeword_toggled', handleToggle)
+
+    return () => {
+      window.removeEventListener('novax_wakeword_toggled', handleToggle)
+      engine.stop()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [executeCoreCommand])
+
   // Custom clear chat helper
   const clearLocalChat = (): void => {
     localStorage.removeItem('novax_chat_history')
@@ -596,6 +643,32 @@ export default function RightPanel(): JSX.Element {
         }}
         className="p-3 bg-black/40 border-t border-white/5 flex gap-2 items-center shrink-0"
       >
+        <button
+          type="button"
+          onClick={() => {
+            const next = !wakeWordEnabled
+            localStorage.setItem('novax_wakeword_enabled', next ? 'true' : 'false')
+            window.dispatchEvent(new CustomEvent('novax_wakeword_toggled', { detail: next }))
+          }}
+          className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 relative ${
+            wakeWordStatus === 'armed'
+              ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.4)]'
+              : wakeWordEnabled && wakeWordStatus === 'listening'
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                : 'bg-zinc-900/60 text-zinc-500 border-white/5 hover:text-zinc-300 hover:bg-zinc-800/40'
+          }`}
+          title={
+            wakeWordStatus === 'unsupported'
+              ? 'Wake word not supported on this browser engine'
+              : wakeWordEnabled
+                ? `Wake word ON — say "Hey Nova" (${wakeWordStatus})`
+                : 'Wake word OFF — click to enable "Hey Nova"'
+          }
+        >
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-0.5">
+            {wakeWordStatus === 'armed' ? '●●●' : wakeWordEnabled ? '●' : '○'}
+          </span>
+        </button>
         <button
           type="button"
           onClick={toggleRecording}
