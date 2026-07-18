@@ -1024,8 +1024,8 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
               const profileData = await userinfoRes.json()
               
               const profile = {
-                name: profileData.name || 'Tehzeeb',
-                email: profileData.email || 'xtehzeeb.x7@gmail.com',
+                name: profileData.name || 'Operator',
+                email: profileData.email || 'operator@novax.local',
                 avatar: profileData.picture || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
                 provider: 'GOOGLE_AUTH',
                 syncTime: new Date().toLocaleTimeString()

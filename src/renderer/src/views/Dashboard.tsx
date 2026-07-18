@@ -454,22 +454,55 @@ export default function Dashboard({
     speakVoiceIntro(voiceId)
   }
 
-  // Initialize Electron OAuth
-  // NOTE: Real Google/Firebase OAuth bypass kar diya hai (client ID/Firebase setup ki zaroorat nahi).
-  // Ab sirf ek local "operator" profile bana ke localStorage mein save karte hain.
+  // Google Sign-In: tries real OAuth via Electron IPC, falls back to local bypass.
+  // Owner identity is intentionally mysterious - NOVA-X never reveals who its owner is.
   const triggerGoogleSignIn = async (): Promise<void> => {
     setShowGoogleModal(true)
     setGoogleStep('waiting')
     setAuthLoading(true)
-    setAuthProgress('Signing in locally...')
+    setAuthProgress('Establishing secure uplink...')
 
+    // Attempt 1: Real Google OAuth via Electron main process
+    if (window.electron?.ipcRenderer) {
+      try {
+        setAuthProgress('Requesting Google authentication...')
+        const result = await window.electron.ipcRenderer.invoke('google-sign-in')
+        if (result?.success) {
+          const operatorUser: OperatorUser = {
+            name: result.name || 'Operator',
+            email: result.email || 'operator@novax.local',
+            provider: 'GOOGLE_AUTH',
+            syncTime: new Date().toLocaleTimeString(),
+            avatar: result.avatar || ''
+          }
+          localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
+          setGoogleStep('success')
+          setAuthProgress('Google identity synced. Uplink active.')
+          setTimeout(() => {
+            setAuthOperator(operatorUser)
+            setAuthLoading(false)
+            setShowGoogleModal(false)
+            playDiagnosticChime(880)
+          }, 800)
+          return
+        }
+        // OAuth failed or not configured - fall through to local bypass
+        console.warn('[NOVA-X Auth] Google OAuth unavailable, falling back to local bypass:', result?.error)
+        setAuthProgress('OAuth not configured. Enabling offline bypass...')
+      } catch (err) {
+        console.warn('[NOVA-X Auth] IPC OAuth failed, falling back to local bypass:', err)
+        setAuthProgress('Offline bypass activating...')
+      }
+    }
+
+    // Attempt 2: Local bypass - owner identity stays mysterious
     try {
       const existingRaw = localStorage.getItem('novax_operator')
       const existing = existingRaw ? JSON.parse(existingRaw) : null
 
       const operatorUser: OperatorUser = {
         name: existing?.name || 'Operator',
-        email: existing?.email || 'operator@local.novax',
+        email: existing?.email || 'operator@novax.local',
         provider: 'LOCAL_AUTH',
         syncTime: new Date().toLocaleTimeString(),
         avatar: existing?.avatar || ''
@@ -478,7 +511,7 @@ export default function Dashboard({
       localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
 
       setGoogleStep('success')
-      setAuthProgress('Local profile synced successfully!')
+      setAuthProgress('Offline secure uplink established. Identity classified.')
       setTimeout(() => {
         setAuthOperator(operatorUser)
         setAuthLoading(false)
@@ -487,7 +520,7 @@ export default function Dashboard({
       }, 800)
     } catch (err: any) {
       setGoogleStep('failed')
-      setAuthProgress(err?.message || 'Local sign-in failed.')
+      setAuthProgress(err?.message || 'Authentication failed.')
       setAuthLoading(false)
       playDiagnosticChime(150)
     }
