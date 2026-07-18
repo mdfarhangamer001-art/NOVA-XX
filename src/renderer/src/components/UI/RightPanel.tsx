@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Copy, Check, Mic, MicOff } from 'lucide-react'
 import { setMood, detectMood } from '../../lib/cognitiveCore'
+import { saveConversationTurn, loadRecentContext } from '../../services/supabaseClient'
 
 interface Message {
   role: 'user' | 'model' | 'system'
@@ -132,6 +133,29 @@ export default function RightPanel(): JSX.Element {
             console.error('Error parsing local offline history', e)
           }
         }
+      }
+
+      // Merge in persisted multi-turn context from Supabase (cognitive memory)
+      try {
+        const remoteHistory = await loadRecentContext(12)
+        if (remoteHistory.length > 0) {
+          const remoteMessages = remoteHistory.map((r) => ({
+            role: r.role as 'user' | 'model' | 'system',
+            text: r.content
+          }))
+          // Prefer remote history if local is empty or shorter; otherwise append remote tail
+          if (loadedHistory.length === 0) {
+            loadedHistory = remoteMessages
+          } else {
+            const existingTexts = new Set(loadedHistory.map((m: any) => m.text))
+            for (const m of remoteMessages) {
+              if (!existingTexts.has(m.text)) loadedHistory.push(m)
+            }
+            loadedHistory = loadedHistory.slice(-30)
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load Supabase conversation context', e)
       }
 
       setChatHistory(loadedHistory)
@@ -279,6 +303,7 @@ export default function RightPanel(): JSX.Element {
     // 0. Detect emotional nuance from user input and broadcast mood
     const userMood = detectMood(cleanQuery, true)
     setMood(userMood.mood, userMood.intensity)
+    const turnId = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
 
     // 1. Locally update conversation flow
     const userMessage: Message = { role: 'user', text: cleanQuery }
@@ -287,6 +312,7 @@ export default function RightPanel(): JSX.Element {
       localStorage.setItem('novax_chat_history', JSON.stringify(updated))
       return updated
     })
+    saveConversationTurn('user', cleanQuery, userMood.mood, turnId)
 
     // 2. Intercept and run direct physical commands or telemetry scans
     const launchMatch = cleanQuery.toLowerCase().match(/^(open|launch|start|run)\s+(.+)$/i)
@@ -385,6 +411,7 @@ export default function RightPanel(): JSX.Element {
           localStorage.setItem('novax_chat_history', JSON.stringify(updated))
           return updated
         })
+        saveConversationTurn('model', modelReply, replyMood.mood, turnId)
         
         if (window.electron?.ipcRenderer) {
           window.electron.ipcRenderer.invoke('phone-broadcast-reply', modelReply)

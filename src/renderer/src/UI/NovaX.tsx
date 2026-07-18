@@ -23,6 +23,7 @@ const MemoryView = lazy(() => import('../views/Memory'))
 const ClipboardView = lazy(() => import('../views/Clipboard'))
 const ActivityView = lazy(() => import('../views/Activity'))
 const GmailView = lazy(() => import('../views/Gmail'))
+const SystemCommandView = lazy(() => import('../views/SystemCommandCenter'))
 
 import NovaXLogo from '../components/UI/NovaXLogo'
 
@@ -120,6 +121,7 @@ const NovaX = ({
     { id: 'GALLERY', label: 'Gallery', icon: <RiImageLine size={16} /> },
     { id: 'MEMORY', label: 'Memory', icon: <RiMentalHealthLine size={16} /> },
     { id: 'GMAIL', label: 'Gmail', icon: <RiMailLine size={16} /> },
+    { id: 'SYSTEM', label: 'System', icon: <RiCpuLine size={16} /> },
     { id: 'PHONE', label: 'Mobile', icon: <RiPhoneLine size={16} /> },
     { id: 'SETTINGS', label: 'Settings', icon: <RiSettings4Line size={16} /> }
   ]
@@ -212,6 +214,7 @@ const NovaX = ({
             {activeTab === 'CLIPBOARD' && <ClipboardView />}
             {activeTab === 'ACTIVITY' && <ActivityView />}
             {activeTab === 'GMAIL' && <GmailView />}
+            {activeTab === 'SYSTEM' && <SystemCommandView />}
             {activeTab === 'SETTINGS' && <SettingsView isSystemActive={isConnected} />}
           </Suspense>
         </div>
