@@ -26,19 +26,11 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Cache electron-builder assets
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/AppData/Local/electron-builder/Cache
-          key: ${{ runner.os }}-electron-builder-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-builder-
-
       - name: Install Dependencies
         run: |
           rm -rf node_modules package-lock.json
           npm install --no-audit --no-fund
+          npm install @electron-toolkit/preload
         shell: bash
 
       - name: Sync package.json version
