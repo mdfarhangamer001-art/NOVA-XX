@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session, protocol, net } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session, protocol, net, Menu } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -60,7 +60,8 @@ function createSplashWindow(): void {
     backgroundColor: '#00000000',
     webPreferences: {
       sandbox: true,
-      contextIsolation: true
+      contextIsolation: true,
+      devTools: false
     }
   })
   splashWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(SPLASH_HTML))
@@ -82,14 +83,38 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
-      contextIsolation: true
+      contextIsolation: true,
+      // SECURITY HARDENING: fully disable DevTools in production builds so
+      // the packaged app's bundled/obfuscated source can't be inspected via
+      // the Chromium inspector. Kept enabled in dev mode so you can still debug.
+      devTools: is.dev
     }
   })
 
-  mainWindow.webContents.on('before-input-event', (_event, input) => {
-    if (input.key === 'F12') {
-      mainWindow.webContents.toggleDevTools()
+  // SECURITY HARDENING: Block DevTools shortcuts (F12, Ctrl+Shift+I/J/C, Ctrl+U)
+  // so casual users/inspectors can't easily open the inspector to view source,
+  // network calls, or IPC traffic.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const key = input.key.toLowerCase()
+    const blockCombo =
+      key === 'f12' ||
+      (input.control && input.shift && (key === 'i' || key === 'j' || key === 'c')) ||
+      (input.control && key === 'u') ||
+      (input.meta && input.alt && key === 'i') // macOS Cmd+Opt+I
+    if (blockCombo) {
+      event.preventDefault()
     }
+  })
+
+  // Belt-and-braces: if DevTools somehow gets opened (e.g. via a debugger
+  // attach or automation), force it closed immediately.
+  mainWindow.webContents.on('devtools-opened', () => {
+    mainWindow.webContents.closeDevTools()
+  })
+
+  // Block the default right-click context menu (which can expose "Inspect")
+  mainWindow.webContents.on('context-menu', (event) => {
+    event.preventDefault()
   })
 
   // Reset stable run timer after 10 seconds of active window session
@@ -147,6 +172,11 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
+
+  // SECURITY HARDENING: remove the default application menu entirely
+  // (Windows/Linux menu bar also exposes a "Toggle Developer Tools" item
+  // by default in dev builds — this removes that surface too).
+  Menu.setApplicationMenu(null)
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -223,3 +253,4 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+
