@@ -11,6 +11,7 @@ import crypto from 'crypto'
 import { WebSocketServer } from 'ws'
 import Store from 'electron-store'
 import { GoogleGenAI } from '@google/genai'
+import { getGeminiApiKey, getApiKeys, saveApiKeys, isKeyStorageSecure } from './secureKeys'
 
 const store = new Store()
 
@@ -362,30 +363,11 @@ const getGalleryDir = () => {
   return galleryDir
 }
 
-function getGeminiApiKeyLocal(): string {
-  const envKey = process.env.GEMINI_API_KEY
-  if (envKey) return envKey
-
-  try {
-    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
-    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
-      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
-      const parsed = JSON.parse(decrypted)
-      if (parsed.geminiKey) return parsed.geminiKey
-      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  const secureKeys: any = store.get('secure_api_keys')
-  if (secureKeys) {
-    if (secureKeys.geminiKey) return secureKeys.geminiKey
-    if (secureKeys.GEMINI_API_KEY) return secureKeys.GEMINI_API_KEY
-  }
-
-  return ''
-}
+// Gemini key retrieval now lives in ./secureKeys (single source of truth,
+// no more duplicated/weak crypto fallback). Kept this name as an alias
+// so all the existing call sites below (getGeminiApiKeyLocal(...)) don't
+// need to be touched individually.
+const getGeminiApiKeyLocal = getGeminiApiKey
 
 export default function registerSystemHandlers(ipcMain: IpcMain) {
   console.log('[NOVA-X Main] registerSystemHandlers starting registration...')
@@ -598,34 +580,24 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     return { success: true }
   })
 
-  // API Vault Store Handlers
+  // API Vault Store Handlers (now backed by ./secureKeys — single source
+  // of truth, no weak custom crypto, and reports back whether the keys
+  // were actually encrypted so the UI can warn the user if not).
   ipcMain.removeHandler('secure-save-keys')
   ipcMain.handle('secure-save-keys', (_event, keys: any) => {
-    try {
-      if (safeStorage && safeStorage.isEncryptionAvailable()) {
-        const encrypted = safeStorage.encryptString(JSON.stringify(keys))
-        store.set('secure_api_keys_encrypted', encrypted.toString('base64'))
-      } else {
-        store.set('secure_api_keys', keys)
-      }
-    } catch (e) {
-      store.set('secure_api_keys', keys)
-    }
-    return { success: true }
+    return saveApiKeys(keys)
   })
 
   ipcMain.removeHandler('secure-get-keys')
   ipcMain.handle('secure-get-keys', () => {
-    try {
-      const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
-      if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
-        const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
-        return JSON.parse(decrypted)
-      }
-    } catch (e) {
-      // ignore safeStorage decryption error and fallback
-    }
-    return store.get('secure_api_keys') || {}
+    return getApiKeys()
+  })
+
+  // Lets the renderer (Settings UI) show a real warning banner if the
+  // OS can't encrypt keys at rest, instead of silently storing plaintext.
+  ipcMain.removeHandler('secure-key-storage-status')
+  ipcMain.handle('secure-key-storage-status', () => {
+    return { secure: isKeyStorageSecure() }
   })
 
   // Dynamic Versioning Handlers
