@@ -41,6 +41,7 @@ nsis:
   installerHeaderIcon: build/icon.ico
 
 mac:
+  icon: build/icon.icns
   entitlementsInherit: build/entitlements.mac.plist
   hardenedRuntime: true
   extendInfo:
@@ -54,6 +55,7 @@ dmg:
   artifactName: ${name}-${version}.${ext}
 
 linux:
+  icon: build/icons/
   target:
     - AppImage
     - snap
@@ -69,3 +71,4 @@ publish:
   provider: github
   owner: novax
   repo: novax
+  
