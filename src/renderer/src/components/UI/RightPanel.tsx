@@ -142,7 +142,7 @@ export default function RightPanel(): JSX.Element {
 
     // Setup live transcript listeners
     if ((window as any).iris) {
-      ;(window as any).iris.onTranscript(
+      ;(window as any).iris.onTranscript?.(
         (data: { role: string; text: string; isFinal: boolean }) => {
           if (data.role === 'user') {
             const newMessage: Message = { role: 'user', text: data.text }
@@ -157,7 +157,7 @@ export default function RightPanel(): JSX.Element {
         }
       )
 
-      ;(window as any).iris.onTranscriptComplete(() => {
+      ;(window as any).iris.onTranscriptComplete?.(() => {
         setActiveModelText((prev) => {
           if (prev.trim().length > 0) {
             const newMessage: Message = { role: 'model', text: prev.trim() }
