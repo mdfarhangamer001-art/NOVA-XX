@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { LANGUAGES } from '../data/languages'
 import Logo from '../assets/Logo.png'
-import { auth as firebaseAuth, googleAuthProvider } from '../services/firebase'
-import { signInWithPopup, GoogleAuthProvider as FirebaseGoogleAuthProvider } from 'firebase/auth'
 
 // JWT token decode helper for real Google login profile parsing
 const decodeJwt = (token: string): any => {
@@ -477,81 +475,41 @@ export default function Dashboard({
   }
 
   // Initialize Electron OAuth
+  // NOTE: Real Google/Firebase OAuth bypass kar diya hai (client ID/Firebase setup ki zaroorat nahi).
+  // Ab sirf ek local "operator" profile bana ke localStorage mein save karte hain.
   const triggerGoogleSignIn = async (): Promise<void> => {
     setShowGoogleModal(true)
     setGoogleStep('waiting')
     setAuthLoading(true)
-    setAuthProgress('Waiting for secure Google Browser Sign-In...')
-    
-    const isRealElectron = typeof window !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
-    if (window.electron?.ipcRenderer && isRealElectron) {
-      try {
-        const res = await window.electron.ipcRenderer.invoke('google-sign-in')
-        if (res && res.success) {
-          setGoogleStep('success')
-          setAuthProgress('Google profile synced successfully!')
-          const operatorUser: OperatorUser = {
-            name: res.name || 'Operator',
-            email: res.email || '',
-            provider: 'GOOGLE_AUTH',
-            syncTime: res.syncTime || new Date().toLocaleTimeString(),
-            avatar: res.avatar || ''
-          }
-          localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
-          setTimeout(() => {
-            setAuthOperator(operatorUser)
-            setAuthLoading(false)
-            setShowGoogleModal(false)
-            playDiagnosticChime(880)
-          }, 1500)
-        } else {
-          setGoogleStep('failed')
-          setAuthProgress(res?.error || 'Google Sign-In failed.')
-          setAuthLoading(false)
-          playDiagnosticChime(150)
-        }
-      } catch (err: any) {
-        setGoogleStep('failed')
-        setAuthProgress(err.message || 'Google Sign-In failed.')
-        setAuthLoading(false)
-        playDiagnosticChime(150)
-      }
-    } else {
-      // Real Web-based Google Sign-In using Firebase OAuth Popup
-      try {
-        setAuthProgress('Opening secure Google Authorization popup...')
-        const result = await signInWithPopup(firebaseAuth, googleAuthProvider)
-        const credential = FirebaseGoogleAuthProvider.credentialFromResult(result)
-        const accessToken = credential?.accessToken
+    setAuthProgress('Signing in locally...')
 
-        if (accessToken) {
-          setGoogleStep('success')
-          setAuthProgress('Google authentication successful! Core synchronized.')
-          const operatorUser: OperatorUser = {
-            name: result.user.displayName || 'Operator',
-            email: result.user.email || '',
-            provider: 'GOOGLE_AUTH',
-            syncTime: new Date().toLocaleTimeString(),
-            avatar: result.user.photoURL || '',
-            accessToken: accessToken
-          }
-          localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
-          setTimeout(() => {
-            setAuthOperator(operatorUser)
-            setAuthLoading(false)
-            setShowGoogleModal(false)
-            playDiagnosticChime(880)
-          }, 1500)
-        } else {
-          throw new Error('Google OAuth token extraction failed.')
-        }
-      } catch (err: any) {
-        console.error('[Web Google Sign-In] Error:', err)
-        setGoogleStep('failed')
-        setAuthProgress(err.message || 'Google Sign-In failed.')
-        setAuthLoading(false)
-        playDiagnosticChime(150)
+    try {
+      const existingRaw = localStorage.getItem('novax_operator')
+      const existing = existingRaw ? JSON.parse(existingRaw) : null
+
+      const operatorUser: OperatorUser = {
+        name: existing?.name || 'Operator',
+        email: existing?.email || 'operator@local.novax',
+        provider: 'LOCAL_AUTH',
+        syncTime: new Date().toLocaleTimeString(),
+        avatar: existing?.avatar || ''
       }
+
+      localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
+
+      setGoogleStep('success')
+      setAuthProgress('Local profile synced successfully!')
+      setTimeout(() => {
+        setAuthOperator(operatorUser)
+        setAuthLoading(false)
+        setShowGoogleModal(false)
+        playDiagnosticChime(880)
+      }, 800)
+    } catch (err: any) {
+      setGoogleStep('failed')
+      setAuthProgress(err?.message || 'Local sign-in failed.')
+      setAuthLoading(false)
+      playDiagnosticChime(150)
     }
   }
 
