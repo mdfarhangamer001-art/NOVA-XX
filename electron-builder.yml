@@ -1,10 +1,10 @@
-appId: com.nova-x.app
-productName: novax
+appId: com.tehzeebapp.novax
+productName: NOVA-X
 directories:
-  buildResources: resources
+  buildResources: build
 
 asar: true
-compression: store
+compression: maximum
 
 files:
   - '!**/.vscode/*'
@@ -22,23 +22,20 @@ asarUnpack:
   - resources/**
 
 win:
-  executableName: novax
-  icon: resources/icon.ico
+  executableName: nova-x
+  icon: build/icon.png
   target:
     - target: nsis
 
 nsis:
-  artifactName: ${productName}-${version}-setup.${ext}
+  artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
-  oneClick: true
-  allowToChangeInstallationDirectory: false
+  oneClick: false
+  allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
   runAfterFinish: true
-  installerIcon: resources/icon.ico
-  uninstallerIcon: resources/icon.ico
-  installerHeaderIcon: resources/icon.ico
 
 mac:
   entitlementsInherit: build/entitlements.mac.plist
@@ -58,7 +55,7 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: NOVA-X Team
+  maintainer: xtehzeeb.x
   category: Utility
 
 appImage:
@@ -67,5 +64,5 @@ appImage:
 npmRebuild: false
 publish:
   provider: github
-  owner: novax
-  repo: novax
+  owner: xtehzeeb.x
+  repo: NOVA-X
