@@ -10,5 +10,21 @@ declare global {
       }
     }
     api: unknown
+    iris: {
+      sendVisionFrame(base64Frame: string): Promise<any>
+      adbConnect(ip: string, port: string): Promise<{ success: boolean; error?: string }>
+      adbDisconnect(): Promise<{ success: boolean; error?: string }>
+      adbTelemetry(): Promise<{
+        success: boolean
+        error?: string
+        data?: {
+          model: string
+          os: string
+          battery: { level: number; isCharging: boolean; temp: string }
+          storage: { used: string; total: string; percent: number }
+        }
+      }>
+      adbQuickAction(action: 'wake' | 'lock' | 'home' | 'camera'): Promise<{ success: boolean; error?: string }>
+    }
   }
 }
