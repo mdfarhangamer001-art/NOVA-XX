@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { IpcMain, app, dialog, BrowserWindow, shell, safeStorage, desktopCapturer, screen } from 'electron'
+import { IpcMain, app, dialog, BrowserWindow, shell, safeStorage, desktopCapturer, screen, clipboard, nativeImage } from 'electron'
 import os from 'os'
 import { exec } from 'child_process'
 import fs from 'fs'
@@ -1414,6 +1414,190 @@ Start-Sleep -Milliseconds 100
       } catch (e) {}
     }
     return { success: true }
+  })
+
+  // ============================================================
+  // Clipboard History — NEW: this feature had a UI but no backend
+  // at all, so every button in the Clipboard tab threw an error.
+  // ============================================================
+  interface ClipboardEntry {
+    id: string
+    type: 'text' | 'image'
+    content: string
+    timestamp: number
+    pinned?: boolean
+  }
+
+  const MAX_CLIPBOARD_ENTRIES = 100
+  let lastClipboardText = clipboard.readText() || ''
+  let lastClipboardImageDataUrl = ''
+
+  function getClipboardHistory(): ClipboardEntry[] {
+    return (store.get('clipboard_history') as ClipboardEntry[]) || []
+  }
+
+  function saveClipboardHistory(entries: ClipboardEntry[]): void {
+    store.set('clipboard_history', entries.slice(0, MAX_CLIPBOARD_ENTRIES))
+  }
+
+  function addClipboardEntry(type: 'text' | 'image', content: string): void {
+    const history = getClipboardHistory()
+    // Avoid duplicate consecutive entries
+    if (history[0] && history[0].type === type && history[0].content === content) return
+    const entry: ClipboardEntry = {
+      id: crypto.randomUUID(),
+      type,
+      content,
+      timestamp: Date.now()
+    }
+    const pinned = history.filter((e) => e.pinned)
+    const unpinned = history.filter((e) => !e.pinned)
+    saveClipboardHistory([...pinned, entry, ...unpinned])
+  }
+
+  // Poll the OS clipboard every 1.5s for changes (Electron has no native
+  // clipboard-change event, so polling is the standard approach here).
+  setInterval(() => {
+    try {
+      const text = clipboard.readText()
+      if (text && text !== lastClipboardText) {
+        lastClipboardText = text
+        addClipboardEntry('text', text)
+        return
+      }
+      const image = clipboard.readImage()
+      if (!image.isEmpty()) {
+        const dataUrl = image.toDataURL()
+        if (dataUrl !== lastClipboardImageDataUrl) {
+          lastClipboardImageDataUrl = dataUrl
+          addClipboardEntry('image', dataUrl)
+        }
+      }
+    } catch (e) {
+      console.error('[NOVA-X Clipboard] Poll error:', e)
+    }
+  }, 1500)
+
+  ipcMain.removeHandler('get-clipboard-history')
+  ipcMain.handle('get-clipboard-history', async () => {
+    return getClipboardHistory()
+  })
+
+  ipcMain.removeHandler('copy-to-clipboard')
+  ipcMain.handle('copy-to-clipboard', async (_event, payload: { type: 'text' | 'image'; content: string }) => {
+    if (payload.type === 'image') {
+      clipboard.writeImage(nativeImage.createFromDataURL(payload.content))
+      lastClipboardImageDataUrl = payload.content
+    } else {
+      clipboard.writeText(payload.content)
+      lastClipboardText = payload.content
+    }
+    return { success: true }
+  })
+
+  ipcMain.removeHandler('delete-clipboard-entry')
+  ipcMain.handle('delete-clipboard-entry', async (_event, id: string) => {
+    const updated = getClipboardHistory().filter((e) => e.id !== id)
+    saveClipboardHistory(updated)
+    return updated
+  })
+
+  ipcMain.removeHandler('toggle-pin-clipboard-entry')
+  ipcMain.handle('toggle-pin-clipboard-entry', async (_event, id: string) => {
+    const updated = getClipboardHistory().map((e) =>
+      e.id === id ? { ...e, pinned: !e.pinned } : e
+    )
+    saveClipboardHistory(updated)
+    return updated
+  })
+
+  ipcMain.removeHandler('clear-clipboard-history')
+  ipcMain.handle('clear-clipboard-history', async () => {
+    // Keep pinned entries when clearing
+    const kept = getClipboardHistory().filter((e) => e.pinned)
+    saveClipboardHistory(kept)
+    return kept
+  })
+
+  // ============================================================
+  // Activity Tracking — NEW: same situation, UI existed with no
+  // backend. This tracks NOVA-X app focus/usage sessions locally
+  // (no third-party "active window" package needed) and can
+  // summarize the day's log via Gemini.
+  // ============================================================
+  interface ActivityLogEntry {
+    id: string
+    timestamp: number
+    event: 'app-focused' | 'app-blurred' | 'app-started'
+    detail?: string
+  }
+
+  function getActivityTrackingEnabled(): boolean {
+    return store.get('activity_tracking_enabled') !== false // default ON
+  }
+
+  function getActivityLog(): ActivityLogEntry[] {
+    return (store.get('activity_log') as ActivityLogEntry[]) || []
+  }
+
+  function pushActivityLog(event: ActivityLogEntry['event'], detail?: string): void {
+    if (!getActivityTrackingEnabled()) return
+    const log = getActivityLog()
+    log.push({ id: crypto.randomUUID(), timestamp: Date.now(), event, detail })
+    // Keep last 500 entries to avoid unbounded growth
+    store.set('activity_log', log.slice(-500))
+  }
+
+  pushActivityLog('app-started')
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.on('focus', () => pushActivityLog('app-focused'))
+    win.on('blur', () => pushActivityLog('app-blurred'))
+  })
+  app.on('browser-window-created', (_e, win) => {
+    win.on('focus', () => pushActivityLog('app-focused'))
+    win.on('blur', () => pushActivityLog('app-blurred'))
+  })
+
+  ipcMain.removeHandler('get-activity-tracking-enabled')
+  ipcMain.handle('get-activity-tracking-enabled', async () => {
+    return getActivityTrackingEnabled()
+  })
+
+  ipcMain.removeHandler('set-activity-tracking-enabled')
+  ipcMain.handle('set-activity-tracking-enabled', async (_event, enabled: boolean) => {
+    store.set('activity_tracking_enabled', enabled)
+    return enabled
+  })
+
+  ipcMain.removeHandler('get-activity-log')
+  ipcMain.handle('get-activity-log', async () => {
+    return getActivityLog()
+  })
+
+  ipcMain.removeHandler('summarize-activity-day')
+  ipcMain.handle('summarize-activity-day', async () => {
+    const log = getActivityLog()
+    if (log.length === 0) {
+      return 'No activity recorded yet today, Boss.'
+    }
+    const apiKey = getGeminiApiKeyLocal()
+    if (!apiKey) {
+      return 'Gemini API key not configured, so I cannot generate a summary. Add it in Settings.'
+    }
+    try {
+      const ai = new GoogleGenAI({ apiKey })
+      const today = new Date().toDateString()
+      const todayLog = log.filter((e) => new Date(e.timestamp).toDateString() === today)
+      const summaryPrompt = `Summarize this user's NOVA-X desktop usage activity log for today in 3-4 short sentences, casual tone, addressing them as "Boss". Focus on total focused sessions and general usage pattern. Raw log (event:timestamp): ${JSON.stringify(todayLog.map((e) => `${e.event}:${e.timestamp}`))}`
+      const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: summaryPrompt
+      })
+      return result.text || 'Could not generate a summary right now.'
+    } catch (e) {
+      console.error('[NOVA-X Activity] Summary generation failed:', e)
+      return 'Failed to generate today\'s activity summary due to an error.'
+    }
   })
 
   // Start the Mobile Wireless Companion server
