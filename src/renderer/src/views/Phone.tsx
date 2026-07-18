@@ -12,8 +12,221 @@ import {
   AlertCircle,
   Terminal,
   Network,
-  Sparkles
+  Sparkles,
+  Usb,
+  Power,
+  Lock,
+  Home,
+  Camera,
+  Battery
 } from 'lucide-react'
+
+// ============================================================
+// ADB Direct Link panel — real backend, wired to the ADB IPC
+// handlers already registered in src/main/lib/system.ts
+// (adb-connect / adb-disconnect / adb-telemetry / adb-quick-action
+// via the 4 new window.iris.adb* preload channels, plus
+// adb-screenshot called generically through window.electron.ipcRenderer.invoke).
+// ============================================================
+const AdbDirectLink = () => {
+  const [ip, setIp] = useState('')
+  const [port, setPort] = useState('5555')
+  const [connecting, setConnecting] = useState(false)
+  const [connected, setConnected] = useState(false)
+  const [error, setError] = useState('')
+  const [telemetry, setTelemetry] = useState<any>(null)
+  const [screenshot, setScreenshot] = useState<string>('')
+  const [actionBusy, setActionBusy] = useState<string>('')
+
+  const handleConnect = async () => {
+    if (!ip) {
+      setError("Enter your phone's Wi-Fi debugging IP address first.")
+      return
+    }
+    setConnecting(true)
+    setError('')
+    try {
+      const res = window.iris?.adbConnect
+        ? await window.iris.adbConnect(ip, port)
+        : await window.electron.ipcRenderer.invoke('adb-connect', { ip, port })
+      if (res.success) {
+        setConnected(true)
+        refreshTelemetry()
+      } else {
+        setConnected(false)
+        setError(res.error || 'Connection failed.')
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Connection failed.')
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    if (window.iris?.adbDisconnect) await window.iris.adbDisconnect()
+    else await window.electron.ipcRenderer.invoke('adb-disconnect')
+    setConnected(false)
+    setTelemetry(null)
+    setScreenshot('')
+  }
+
+  const refreshTelemetry = async () => {
+    const res = window.iris?.adbTelemetry
+      ? await window.iris.adbTelemetry()
+      : await window.electron.ipcRenderer.invoke('adb-telemetry')
+    if (res.success) {
+      setTelemetry(res.data)
+    } else {
+      setError(res.error || 'Could not read telemetry.')
+    }
+  }
+
+  const handleQuickAction = async (action: 'wake' | 'lock' | 'home' | 'camera') => {
+    setActionBusy(action)
+    if (window.iris?.adbQuickAction) await window.iris.adbQuickAction(action)
+    else await window.electron.ipcRenderer.invoke('adb-quick-action', { action })
+    setActionBusy('')
+  }
+
+  const handleScreenshot = async () => {
+    setActionBusy('screenshot')
+    if (window.electron?.ipcRenderer) {
+      const res = await window.electron.ipcRenderer.invoke('adb-screenshot')
+      if (res.success) setScreenshot(res.image)
+      else setError(res.error || 'Screenshot failed.')
+    }
+    setActionBusy('')
+  }
+
+  useEffect(() => {
+    if (!connected) return
+    const interval = setInterval(refreshTelemetry, 5000)
+    return () => clearInterval(interval)
+  }, [connected])
+
+  return (
+    <div className="border border-zinc-800/80 bg-zinc-950/40 rounded-2xl p-5 mt-6">
+      <h2 className="text-sm font-bold uppercase tracking-wider text-cyan-400 mb-4 font-mono flex items-center gap-2">
+        <Usb size={14} /> ADB Direct Link (Wireless Debugging)
+      </h2>
+
+      {!connected ? (
+        <div className="space-y-3">
+          <p className="text-[11px] text-zinc-400 leading-relaxed">
+            On your phone: Settings → Developer Options → Wireless Debugging → note the IP &amp; Port, then enter below.
+          </p>
+          <div className="flex gap-2">
+            <input
+              value={ip}
+              onChange={(e) => setIp(e.target.value)}
+              placeholder="192.168.1.15"
+              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 outline-none focus:border-cyan-500/50"
+            />
+            <input
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+              placeholder="5555"
+              className="w-24 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 outline-none focus:border-cyan-500/50"
+            />
+            <button
+              onClick={handleConnect}
+              disabled={connecting}
+              className="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500 text-cyan-400 hover:text-black font-mono font-bold text-[10px] tracking-wider uppercase rounded-lg transition-all border border-cyan-500/20 flex items-center gap-1.5"
+            >
+              {connecting ? <RefreshCw size={12} className="animate-spin" /> : <ArrowRight size={12} />}
+              Connect
+            </button>
+          </div>
+          {error && (
+            <div className="flex items-start gap-2 text-[10px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-lg p-2.5">
+              <AlertCircle size={12} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 uppercase">
+              <CheckCircle size={12} /> Connected to {ip}:{port}
+            </span>
+            <button
+              onClick={handleDisconnect}
+              className="text-[10px] font-mono text-red-400 hover:text-red-300 uppercase flex items-center gap-1"
+            >
+              <LogOut size={11} /> Disconnect
+            </button>
+          </div>
+
+          {telemetry && (
+            <div className="grid grid-cols-3 gap-2">
+              <div className="p-2.5 bg-zinc-950 border border-zinc-800/80 rounded-lg">
+                <span className="text-[8.5px] font-mono text-zinc-500 uppercase">Model</span>
+                <p className="text-[10px] font-mono font-bold text-zinc-300 truncate">{telemetry.model}</p>
+              </div>
+              <div className="p-2.5 bg-zinc-950 border border-zinc-800/80 rounded-lg">
+                <span className="text-[8.5px] font-mono text-zinc-500 uppercase flex items-center gap-1">
+                  <Battery size={9} /> Battery
+                </span>
+                <p className="text-[10px] font-mono font-bold text-zinc-300">
+                  {telemetry.battery?.level}% {telemetry.battery?.isCharging ? '⚡' : ''}
+                </p>
+              </div>
+              <div className="p-2.5 bg-zinc-950 border border-zinc-800/80 rounded-lg">
+                <span className="text-[8.5px] font-mono text-zinc-500 uppercase">OS</span>
+                <p className="text-[10px] font-mono font-bold text-zinc-300 truncate">{telemetry.os}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-5 gap-2">
+            {[
+              { key: 'wake', icon: Power, label: 'Wake' },
+              { key: 'lock', icon: Lock, label: 'Lock' },
+              { key: 'home', icon: Home, label: 'Home' },
+              { key: 'camera', icon: Camera, label: 'Camera' }
+            ].map(({ key, icon: Icon, label }) => (
+              <button
+                key={key}
+                onClick={() => handleQuickAction(key as any)}
+                disabled={actionBusy === key}
+                className="flex flex-col items-center gap-1 p-2.5 bg-zinc-950 border border-zinc-800/80 rounded-lg hover:border-cyan-500/40 hover:bg-cyan-500/5 transition-all"
+              >
+                {actionBusy === key ? (
+                  <RefreshCw size={14} className="animate-spin text-cyan-400" />
+                ) : (
+                  <Icon size={14} className="text-zinc-400" />
+                )}
+                <span className="text-[8.5px] font-mono text-zinc-500 uppercase">{label}</span>
+              </button>
+            ))}
+            <button
+              onClick={handleScreenshot}
+              disabled={actionBusy === 'screenshot'}
+              className="flex flex-col items-center gap-1 p-2.5 bg-zinc-950 border border-zinc-800/80 rounded-lg hover:border-cyan-500/40 hover:bg-cyan-500/5 transition-all"
+            >
+              {actionBusy === 'screenshot' ? (
+                <RefreshCw size={14} className="animate-spin text-cyan-400" />
+              ) : (
+                <Smartphone size={14} className="text-zinc-400" />
+              )}
+              <span className="text-[8.5px] font-mono text-zinc-500 uppercase">Capture</span>
+            </button>
+          </div>
+
+          {screenshot && (
+            <img src={screenshot} alt="Phone screenshot" className="w-full rounded-lg border border-zinc-800" />
+          )}
+
+          <p className="text-[10px] text-zinc-500 leading-relaxed">
+            Tip: say things like "wake my phone" or "check my phone battery" to the assistant — these now execute for real over this ADB link.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
   const [companionStatus, setCompanionStatus] = useState<{
@@ -387,6 +600,8 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                 </button>
               </div>
             </div>
+
+            <AdbDirectLink />
           </div>
         </div>
       </div>
