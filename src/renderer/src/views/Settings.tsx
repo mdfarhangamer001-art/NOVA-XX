@@ -40,6 +40,9 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   const [tavilyKey, settavilyKey] = useState(() => localStorage.getItem('novax_tavily_key') || '')
   const [openrouterKey, setOpenrouterKey] = useState(() => localStorage.getItem('novax_openrouter_key') || '')
   const [systemTone, setSystemTone] = useState(() => localStorage.getItem('novax_system_tone') || 'authoritative')
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(
+    () => localStorage.getItem('novax_wakeword_enabled') === 'true'
+  )
 
   const [perfMode, setPerfMode] = useState<'high' | 'medium' | 'low'>(() => {
     const saved = localStorage.getItem('novax_perf_mode') as 'high' | 'medium' | 'low'
@@ -253,7 +256,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                     <div className="md:col-span-2 mt-4 pt-6 border-t border-white/5">
                       <label className={labelClass}>Neural Cognitive Tone</label>
                       <div className="flex gap-3 mt-3">
-                        {['authoritative', 'friendly', 'minimalist'].map((tone) => (
+                        {['authoritative', 'friendly', 'minimalist', 'hinglish'].map((tone) => (
                           <button
                             key={tone}
                             onClick={() => setSystemTone(tone)}
@@ -269,6 +272,35 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                       </div>
                       <p className="text-[10px] text-zinc-500 mt-2 font-mono italic">
                         Adjusts NOVA-X&apos;s linguistic personality and interaction style.
+                      </p>
+                    </div>
+
+                    <div className="md:col-span-2 mt-4 pt-6 border-t border-white/5">
+                      <label className={labelClass}>Wake-Word Activation</label>
+                      <div className="flex gap-3 mt-3 items-center">
+                        <button
+                          onClick={() => {
+                            const next = !wakeWordEnabled
+                            setWakeWordEnabled(next)
+                            localStorage.setItem('novax_wakeword_enabled', next ? 'true' : 'false')
+                            window.dispatchEvent(new CustomEvent('novax_wakeword_toggled', { detail: next }))
+                          }}
+                          className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${
+                            wakeWordEnabled
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                              : 'bg-white/5 text-zinc-500 border border-transparent hover:bg-white/10'
+                          }`}
+                        >
+                          {wakeWordEnabled ? 'Enabled' : 'Disabled'}
+                        </button>
+                        <span className="text-[10px] text-zinc-500 font-mono">
+                          Say &quot;Hey Nova&quot; or &quot;OK Boss&quot; to activate hands-free
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-2 font-mono italic">
+                        Uses always-on background speech recognition. Mic access must be
+                        granted. NOVA-X pauses listening while it is speaking to avoid
+                        self-triggering.
                       </p>
                     </div>
                   </div>
