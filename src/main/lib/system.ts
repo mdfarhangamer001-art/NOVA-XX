@@ -14,6 +14,86 @@ import { GoogleGenAI } from '@google/genai'
 
 const store = new Store()
 
+let activityTrackingEnabled = store.get('activity_tracking_enabled', false) as boolean
+let activityInterval: NodeJS.Timeout | null = null
+
+function runCommand(cmd: string): Promise<string> {
+  return new Promise((resolve) => {
+    exec(cmd, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
+      if (error) {
+        resolve('')
+      } else {
+        resolve(stdout ? stdout.trim() : '')
+      }
+    })
+  })
+}
+
+async function getActiveApp(): Promise<string> {
+  const platform = process.platform
+  try {
+    if (platform === 'win32') {
+      const cmd = `powershell -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\\"user32.dll\\\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\\\"user32.dll\\\")] public static extern int GetWindowThreadProcessId(IntPtr handle, out int processId); }'; [IntPtr]$hwnd = [Win32]::GetForegroundWindow(); $pid = 0; [Win32]::GetWindowThreadProcessId($hwnd, [ref]$pid); if ($pid -gt 0) { (Get-Process -Id $pid).Name }"`
+      const output = await runCommand(cmd)
+      return output.trim() || 'System'
+    } else if (platform === 'darwin') {
+      const cmd = `osascript -e 'tell application "System Events" to get name of first process whose frontmost is true'`
+      const output = await runCommand(cmd)
+      return output.trim() || 'System'
+    } else if (platform === 'linux') {
+      const cmd = `xdotool getactivewindow getwindowpid 2>/dev/null | xargs ps -p -o comm= 2>/dev/null`
+      const output = await runCommand(cmd)
+      return output.trim() || 'Terminal'
+    }
+  } catch (e) {
+    return 'System'
+  }
+  return 'System'
+}
+
+function startActivityTracking() {
+  if (activityInterval) return
+  activityInterval = setInterval(async () => {
+    if (!activityTrackingEnabled) return
+    try {
+      const appName = await getActiveApp()
+      if (!appName) return
+      
+      let normalized = appName
+      const lower = appName.toLowerCase()
+      if (lower.includes('chrome')) normalized = 'Chrome'
+      else if (lower.includes('code') || lower.includes('vs')) normalized = 'VS Code'
+      else if (lower.includes('spotify')) normalized = 'Spotify'
+      else if (lower.includes('discord')) normalized = 'Discord'
+      else if (lower.includes('slack')) normalized = 'Slack'
+      else if (lower.includes('terminal') || lower.includes('bash') || lower.includes('zsh')) normalized = 'Terminal'
+      
+      const today = new Date().toISOString().split('T')[0]
+      const rawLogs: any[] = (store.get('activity_logs') as any[]) || []
+      
+      const index = rawLogs.findIndex((l: any) => l.date === today && l.app === normalized)
+      if (index !== -1) {
+        rawLogs[index].duration += 10
+      } else {
+        rawLogs.push({ date: today, app: normalized, duration: 10 })
+      }
+      
+      store.set('activity_logs', rawLogs.slice(-100))
+    } catch (e) {}
+  }, 10000)
+}
+
+function stopActivityTracking() {
+  if (activityInterval) {
+    clearInterval(activityInterval)
+    activityInterval = null
+  }
+}
+
+if (activityTrackingEnabled) {
+  startActivityTracking()
+}
+
 export function getAppVersion(): string {
   try {
     const pkgPath = path.join(app.getAppPath(), 'package.json')
@@ -49,14 +129,6 @@ export function bumpAppVersion(): string {
   return '1.6.4'
 }
 
-const runCommand = (cmd: string): Promise<string> => {
-  return new Promise((resolve) => {
-    exec(cmd, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
-      if (error) resolve('')
-      resolve(stdout ? stdout.trim() : '')
-    })
-  })
-}
 
 let cpuLastSnapshot = os.cpus()
 
@@ -316,8 +388,10 @@ function getGeminiApiKeyLocal(): string {
 }
 
 export default function registerSystemHandlers(ipcMain: IpcMain) {
-  ipcMain.removeHandler('gemini-chat-call')
-  ipcMain.handle('gemini-chat-call', async (event, payload: { contents: any[]; systemInstruction: string; stream?: boolean }) => {
+  console.log('[NOVA-X Main] registerSystemHandlers starting registration...')
+  try {
+    ipcMain.removeHandler('gemini-chat-call')
+    ipcMain.handle('gemini-chat-call', async (event, payload: { contents: any[]; systemInstruction: string; stream?: boolean }) => {
     const apiKey = getGeminiApiKeyLocal()
     if (!apiKey) {
       throw new Error('Gemini API key is not configured in NOVA-X settings.')
@@ -867,6 +941,15 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
   // Google Auth IPC Handlers
   ipcMain.removeHandler('google-sign-in')
   ipcMain.handle('google-sign-in', async () => {
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID || ''
+    if (!clientId || clientId.trim() === '' || clientId.includes('placeholder')) {
+      console.error('[NOVA-X OAuth] GOOGLE_OAUTH_CLIENT_ID is not configured in the environment.')
+      return {
+        success: false,
+        error: 'Google OAuth Client ID is not configured. Please set GOOGLE_OAUTH_CLIENT_ID in the application environment variables (under Settings).'
+      }
+    }
+
     return new Promise((resolve) => {
       let isResolved = false
       const codeVerifier = generateCodeVerifier()
@@ -880,7 +963,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             try {
               const tokenParams = new URLSearchParams({
                 code: code,
-                client_id: '930847920384-novax-google-client-id-placeholder.apps.googleusercontent.com',
+                client_id: clientId,
                 code_verifier: codeVerifier,
                 redirect_uri: `http://127.0.0.1:${port}/callback`,
                 grant_type: 'authorization_code'
@@ -896,37 +979,30 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
               const accessToken = tokens.access_token
               
               if (!accessToken) {
-                console.warn('[NOVA-X OAuth] Token exchange did not yield access_token. Falling back to secure bypass profile.')
-                const profile = {
-                  name: 'Systems Architect',
-                  email: 'cutegirla6777@gmail.com',
-                  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-                  provider: 'GOOGLE_AUTH',
-                  syncTime: new Date().toLocaleTimeString()
-                }
-                store.set('offline_operator_profile', profile)
+                const errorDesc = tokens.error_description || tokens.error || 'Token exchange failed - no access_token returned.'
+                console.error('[NOVA-X OAuth] Token exchange failed:', tokens)
                 
-                res.writeHead(200, { 'Content-Type': 'text/html' })
+                res.writeHead(400, { 'Content-Type': 'text/html' })
                 res.end(`
                   <html>
                     <head>
                       <style>
                         body { font-family: -apple-system, sans-serif; background: #030303; color: #fff; text-align: center; padding-top: 100px; }
-                        h1 { color: #10b981; font-family: monospace; letter-spacing: 0.1em; }
+                        h1 { color: #ef4444; font-family: monospace; letter-spacing: 0.1em; }
                         p { color: #71717a; font-family: monospace; }
                       </style>
                     </head>
                     <body>
-                      <h1>UPLINK ACTIVE</h1>
-                      <p>Google authentication successful. Return to NOVA-X.</p>
-                      <script>setTimeout(() => { window.close(); }, 2000);</script>
+                      <h1>AUTHENTICATION FAILED</h1>
+                      <p>${errorDesc}</p>
+                      <script>setTimeout(() => { window.close(); }, 4000);</script>
                     </body>
                   </html>
                 `)
                 
                 if (!isResolved) {
                   isResolved = true
-                  resolve({ success: true, ...profile })
+                  resolve({ success: false, error: errorDesc })
                 }
                 setTimeout(() => server.close(), 1000)
                 return
@@ -940,11 +1016,16 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
               }
               
               const userinfoRes = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`)
+              if (!userinfoRes.ok) {
+                const errorData = await userinfoRes.json().catch(() => ({}))
+                const errMsg = errorData.error_description || errorData.error || `Profile fetch failed with HTTP ${userinfoRes.status}`
+                throw new Error(errMsg)
+              }
               const profileData = await userinfoRes.json()
               
               const profile = {
-                name: profileData.name || 'Systems Architect',
-                email: profileData.email || 'NOVA-X7@gmail.com',
+                name: profileData.name || 'Tehzeeb',
+                email: profileData.email || 'xtehzeeb.x7@gmail.com',
                 avatar: profileData.picture || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
                 provider: 'GOOGLE_AUTH',
                 syncTime: new Date().toLocaleTimeString()
@@ -1006,7 +1087,6 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       let port = 0
       server.listen(0, '127.0.0.1', () => {
         port = (server.address() as any).port
-        const clientId = '930847920384-novax-google-client-id-placeholder.apps.googleusercontent.com'
         const redirectUri = `http://127.0.0.1:${port}/callback`
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email%20profile&code_challenge=${codeChallenge}&code_challenge_method=S256`
         
@@ -1029,7 +1109,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             server.close()
             resolve({
               success: false,
-              error: 'Authentication timed out. Falling back to local offline bypass.'
+              error: 'Authentication timed out. Google Sign-In was not completed.'
             })
           }
         }, 45000)
@@ -1054,6 +1134,79 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
   ipcMain.removeHandler('get-offline-profile')
   ipcMain.handle('get-offline-profile', async () => {
     return store.get('offline_operator_profile') || null
+  })
+
+  // Real Google Tokens decryptor/retriever
+  ipcMain.removeHandler('google-get-tokens')
+  ipcMain.handle('google-get-tokens', async () => {
+    if (safeStorage && safeStorage.isEncryptionAvailable()) {
+      const encToken = store.get('secure_google_tokens_encrypted') as string
+      if (encToken) {
+        try {
+          const decrypted = safeStorage.decryptString(Buffer.from(encToken, 'base64'))
+          return JSON.parse(decrypted)
+        } catch (e) {
+          console.error('[NOVA-X Main] Failed to decrypt Google tokens:', e)
+        }
+      }
+    }
+    return store.get('secure_google_tokens') || null
+  })
+
+  // Background active application tracking
+  ipcMain.removeHandler('get-activity-tracking-enabled')
+  ipcMain.handle('get-activity-tracking-enabled', () => {
+    return activityTrackingEnabled
+  })
+
+  ipcMain.removeHandler('set-activity-tracking-enabled')
+  ipcMain.handle('set-activity-tracking-enabled', (_event, enabled: boolean) => {
+    activityTrackingEnabled = !!enabled
+    store.set('activity_tracking_enabled', activityTrackingEnabled)
+    if (activityTrackingEnabled) {
+      startActivityTracking()
+    } else {
+      stopActivityTracking()
+    }
+    return activityTrackingEnabled
+  })
+
+  ipcMain.removeHandler('get-activity-log')
+  ipcMain.handle('get-activity-log', () => {
+    return store.get('activity_logs') || []
+  })
+
+  ipcMain.removeHandler('summarize-activity-day')
+  ipcMain.handle('summarize-activity-day', async () => {
+    const apiKey = getGeminiApiKeyLocal()
+    if (!apiKey) {
+      return "I need your Gemini API key to summarize your daily activity. Please configure it in Settings."
+    }
+    
+    const rawLogs: any[] = (store.get('activity_logs') as any[]) || []
+    if (rawLogs.length === 0) {
+      return "No activity logs have been recorded yet, Boss. Let's record some system actions first!"
+    }
+    
+    const today = new Date().toISOString().split('T')[0]
+    const todaysLogs = rawLogs.filter(l => l.date === today)
+    if (todaysLogs.length === 0) {
+      return "No telemetry tracked for today yet, Boss. Get to work and I will analyze your focus stream shortly!"
+    }
+    
+    const formattedLogs = todaysLogs.map(l => `- ${l.app}: ${(l.duration / 60).toFixed(1)} minutes`).join('\n')
+    const prompt = `You are NOVA-X, an advanced Voice-First Operating Layer. Summarize today's active application telemetry in a brief, encouraging, highly professional, non-verbose daily diagnostic briefing. Keep it to 1-2 paragraphs max, use bold text for app names and key times, and address the operator as 'Boss' or 'Operator'.
+    Today's telemetry logs:
+    ${formattedLogs}`
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey })
+      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const res = await model.generateContent(prompt)
+      return res.response.text().trim()
+    } catch (e: any) {
+      return `Failed to compile telemetry briefing: ${e.message}`
+    }
   })
 
   // Companion Wireless Connection IPC Handlers
@@ -1147,6 +1300,12 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     const win = BrowserWindow.fromWebContents(webContents)
     if (win) win.close()
   })
+  
+    console.log('[NOVA-X Main] registerSystemHandlers completed successfully.')
+  } catch (error: any) {
+    console.error('[NOVA-X Main] CRITICAL ERROR during registerSystemHandlers:', error)
+    throw error
+  }
 }
 
 // Global state variables for the Mobile Companion server

@@ -1,4 +1,4 @@
-import { useState, Suspense, lazy } from 'react'
+import { useState, Suspense, lazy, useEffect } from 'react'
 import {
   RiLayoutGridLine,
   RiFolderOpenLine,
@@ -8,7 +8,8 @@ import {
   RiCpuLine,
   RiMentalHealthLine,
   RiClipboardLine,
-  RiBarChartLine
+  RiBarChartLine,
+  RiMailLine
 } from 'react-icons/ri'
 
 import DashboardView from '../views/Dashboard'
@@ -21,6 +22,7 @@ const GalleryView = lazy(() => import('../views/Gallery'))
 const MemoryView = lazy(() => import('../views/Memory'))
 const ClipboardView = lazy(() => import('../views/Clipboard'))
 const ActivityView = lazy(() => import('../views/Activity'))
+const GmailView = lazy(() => import('../views/Gmail'))
 
 import Logo from '../assets/Logo.png'
 
@@ -43,6 +45,70 @@ const NovaX = ({
 }: NovaXProps) => {
   const [activeTab, setActiveTab] = useState('DASHBOARD')
 
+  // Netflix-level code protection & obfuscation sandbox
+  useEffect(() => {
+    // 1. Disable Right Click context menu completely
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault()
+    }
+    document.addEventListener('contextmenu', handleContextMenu)
+
+    // 2. Disable Inspect Element & View Source Shortcuts
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+      
+      // F12
+      if (e.key === 'F12') {
+        e.preventDefault()
+        return
+      }
+
+      // Ctrl+Shift+I or Cmd+Opt+I (Inspect)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key?.toLowerCase() === 'i') {
+        e.preventDefault()
+        return
+      }
+      if (isMac && e.metaKey && e.altKey && e.key?.toLowerCase() === 'i') {
+        e.preventDefault()
+        return
+      }
+
+      // Ctrl+Shift+J or Cmd+Opt+J (Console)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key?.toLowerCase() === 'j') {
+        e.preventDefault()
+        return
+      }
+      if (isMac && e.metaKey && e.altKey && e.key?.toLowerCase() === 'j') {
+        e.preventDefault()
+        return
+      }
+
+      // Ctrl+Shift+C (Inspect Element selection tool)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key?.toLowerCase() === 'c') {
+        e.preventDefault()
+        return
+      }
+
+      // Ctrl+U or Cmd+U (View Source)
+      if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'u') {
+        e.preventDefault()
+        return
+      }
+
+      // Ctrl+S or Cmd+S (Save Page)
+      if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 's') {
+        e.preventDefault()
+        return
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
   const tabs = [
     { id: 'DASHBOARD', label: 'Command', icon: <RiLayoutGridLine size={16} /> },
     { id: 'AGENTS', label: 'Agents', icon: <RiCpuLine size={16} /> },
@@ -51,6 +117,7 @@ const NovaX = ({
     { id: 'NOTES', label: 'Notes', icon: <RiFolderOpenLine size={16} /> },
     { id: 'GALLERY', label: 'Gallery', icon: <RiImageLine size={16} /> },
     { id: 'MEMORY', label: 'Memory', icon: <RiMentalHealthLine size={16} /> },
+    { id: 'GMAIL', label: 'Gmail', icon: <RiMailLine size={16} /> },
     { id: 'PHONE', label: 'Mobile', icon: <RiPhoneLine size={16} /> },
     { id: 'SETTINGS', label: 'Settings', icon: <RiSettings4Line size={16} /> }
   ]
@@ -141,6 +208,7 @@ const NovaX = ({
             {activeTab === 'MEMORY' && <MemoryView />}
             {activeTab === 'CLIPBOARD' && <ClipboardView />}
             {activeTab === 'ACTIVITY' && <ActivityView />}
+            {activeTab === 'GMAIL' && <GmailView />}
             {activeTab === 'SETTINGS' && <SettingsView isSystemActive={isConnected} />}
           </Suspense>
         </div>

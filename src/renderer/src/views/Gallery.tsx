@@ -49,6 +49,7 @@ const GalleryView = () => {
 
   const fetchGallery = async () => {
     try {
+      if (!window.electron?.ipcRenderer) return
       const data = await window.electron.ipcRenderer.invoke('get-gallery')
       if (Array.isArray(data)) {
         const typedData = data
@@ -78,7 +79,9 @@ const GalleryView = () => {
 
   const deleteMedia = async (filename: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
-    await window.electron.ipcRenderer.invoke('delete-image', filename)
+    if (window.electron?.ipcRenderer) {
+      await window.electron.ipcRenderer.invoke('delete-image', filename)
+    }
 
     if (selectedMedia) {
       const currentIndex = allMedia.findIndex((media) => media.filename === selectedMedia.filename)
@@ -90,12 +93,16 @@ const GalleryView = () => {
 
   const openLocation = async (path: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
-    await window.electron.ipcRenderer.invoke('open-image-location', path)
+    if (window.electron?.ipcRenderer) {
+      await window.electron.ipcRenderer.invoke('open-image-location', path)
+    }
   }
 
   const saveCopy = async (path: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
-    await window.electron.ipcRenderer.invoke('save-image-external', path)
+    if (window.electron?.ipcRenderer) {
+      await window.electron.ipcRenderer.invoke('save-image-external', path)
+    }
   }
 
   const navigateMedia = useCallback(

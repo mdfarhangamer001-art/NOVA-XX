@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { LANGUAGES } from '../data/languages'
 import Logo from '../assets/Logo.png'
+import { auth as firebaseAuth, googleAuthProvider } from '../services/firebase'
+import { signInWithPopup, GoogleAuthProvider as FirebaseGoogleAuthProvider } from 'firebase/auth'
 
 // JWT token decode helper for real Google login profile parsing
 const decodeJwt = (token: string): any => {
@@ -122,6 +124,36 @@ export default function Dashboard({
 }): JSX.Element {
   const [visionMode, setVisionMode] = useState<'off' | 'camera' | 'screen'>('off')
 
+  // Mic state & real-time input level tracking
+  const [micStatus, setMicStatus] = useState<'idle' | 'listening' | 'transcribing'>('idle')
+  const [micLevel, setMicLevel] = useState<number>(0)
+
+  useEffect(() => {
+    const handleMicState = (e: any) => {
+      if (e.detail?.status) {
+        setMicStatus(e.detail.status)
+      }
+    }
+    const handleMicLevel = (e: any) => {
+      setMicLevel(e.detail || 0)
+    }
+
+    window.addEventListener('novax_mic_state', handleMicState)
+    window.addEventListener('novax_mic_level', handleMicLevel)
+
+    return () => {
+      window.removeEventListener('novax_mic_state', handleMicState)
+      window.removeEventListener('novax_mic_level', handleMicLevel)
+    }
+  }, [])
+
+  const getMicPulseClass = () => {
+    if (micLevel > 0.08) return 'scale-125 border-emerald-400/85 shadow-[0_0_20px_rgba(52,211,153,0.6)]'
+    if (micLevel > 0.04) return 'scale-115 border-emerald-400/65 shadow-[0_0_15px_rgba(52,211,153,0.4)]'
+    if (micLevel > 0.01) return 'scale-105 border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.2)]'
+    return 'scale-100 border-emerald-500/30'
+  }
+
   // 3D Core customization states
   const [coreType, setCoreType] = useState<'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'>(
     (localStorage.getItem('novax_core_type') as 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis') || 'quantum'
@@ -169,7 +201,7 @@ export default function Dashboard({
   const [authProgress, setAuthProgress] = useState<string>('')
 
   // Interactive Google Sign-In step states
-  const [googleStep, setGoogleStep] = useState<'waiting' | 'success'>('waiting')
+  const [googleStep, setGoogleStep] = useState<'waiting' | 'success' | 'failed'>('waiting')
 
   // Selected voice state - lazy loaded
   const [activeVoice, setActiveVoice] = useState<string>(() => {
@@ -451,15 +483,16 @@ export default function Dashboard({
     setAuthLoading(true)
     setAuthProgress('Waiting for secure Google Browser Sign-In...')
     
-    if (window.electron?.ipcRenderer) {
+    const isRealElectron = typeof window !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
+    if (window.electron?.ipcRenderer && isRealElectron) {
       try {
         const res = await window.electron.ipcRenderer.invoke('google-sign-in')
         if (res && res.success) {
           setGoogleStep('success')
           setAuthProgress('Google profile synced successfully!')
           const operatorUser: OperatorUser = {
-            name: res.name || 'Systems Architect',
-            email: res.email || 'cutegirla6777@gmail.com',
+            name: res.name || 'Operator',
+            email: res.email || '',
             provider: 'GOOGLE_AUTH',
             syncTime: res.syncTime || new Date().toLocaleTimeString(),
             avatar: res.avatar || ''
@@ -472,69 +505,54 @@ export default function Dashboard({
             playDiagnosticChime(880)
           }, 1500)
         } else {
+          setGoogleStep('failed')
+          setAuthProgress(res?.error || 'Google Sign-In failed.')
           setAuthLoading(false)
-          setShowGoogleModal(false)
-          console.error('[Google SignIn Error]', res?.error)
+          playDiagnosticChime(150)
         }
       } catch (err: any) {
+        setGoogleStep('failed')
+        setAuthProgress(err.message || 'Google Sign-In failed.')
         setAuthLoading(false)
-        setShowGoogleModal(false)
-        console.error('[Google SignIn Error]', err)
+        playDiagnosticChime(150)
       }
     } else {
-      // Preview/mock environment fallback
-      setTimeout(() => {
-        setGoogleStep('success')
-        setAuthProgress('Google profile synced successfully (Web Preview Bypass)!')
-        const operatorUser: OperatorUser = {
-          name: 'Systems Architect',
-          email: 'cutegirla6777@gmail.com',
-          provider: 'GOOGLE_AUTH',
-          syncTime: new Date().toLocaleTimeString(),
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
-        }
-        localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
-        setTimeout(() => {
-          setAuthOperator(operatorUser)
-          setAuthLoading(false)
-          setShowGoogleModal(false)
-          playDiagnosticChime(880)
-        }, 1500)
-      }, 2000)
-    }
-  }
+      // Real Web-based Google Sign-In using Firebase OAuth Popup
+      try {
+        setAuthProgress('Opening secure Google Authorization popup...')
+        const result = await signInWithPopup(firebaseAuth, googleAuthProvider)
+        const credential = FirebaseGoogleAuthProvider.credentialFromResult(result)
+        const accessToken = credential?.accessToken
 
-  // Bypass Google Login and launch Local offline mode (Saving everything in operator laptop)
-  const triggerLocalOfflineBypass = (): void => {
-    setAuthLoading(true)
-    setGoogleStep('waiting')
-    setShowGoogleModal(true)
-    setAuthProgress('Bypassing online authentication systems...')
-
-    setTimeout(() => {
-      setAuthProgress('Activating Secure Sandbox memory matrices...')
-      setTimeout(() => {
-        setAuthProgress('Local Sandbox active. Persisting data inside operator laptop...')
-        setTimeout(() => {
+        if (accessToken) {
           setGoogleStep('success')
-          setAuthProgress('Local offline bypass active.')
-          const localUser: OperatorUser = {
-            name: 'Local Sandbox Operator',
-            email: 'offline.safe@local-host',
-            provider: 'LOCAL_BYPASS',
+          setAuthProgress('Google authentication successful! Core synchronized.')
+          const operatorUser: OperatorUser = {
+            name: result.user.displayName || 'Operator',
+            email: result.user.email || '',
+            provider: 'GOOGLE_AUTH',
             syncTime: new Date().toLocaleTimeString(),
-            avatar: ''
+            avatar: result.user.photoURL || '',
+            accessToken: accessToken
           }
-          localStorage.setItem('novax_operator', JSON.stringify(localUser))
+          localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
           setTimeout(() => {
-            setAuthOperator(localUser)
+            setAuthOperator(operatorUser)
             setAuthLoading(false)
             setShowGoogleModal(false)
-            playDiagnosticChime(320)
+            playDiagnosticChime(880)
           }, 1500)
-        }, 800)
-      }, 800)
-    }, 800)
+        } else {
+          throw new Error('Google OAuth token extraction failed.')
+        }
+      } catch (err: any) {
+        console.error('[Web Google Sign-In] Error:', err)
+        setGoogleStep('failed')
+        setAuthProgress(err.message || 'Google Sign-In failed.')
+        setAuthLoading(false)
+        playDiagnosticChime(150)
+      }
+    }
   }
 
   // Operator logout
@@ -594,7 +612,6 @@ export default function Dashboard({
 
           <p className="text-[11px] text-zinc-400 font-sans tracking-wide leading-relaxed mb-8 px-2">
             Securely link your Google Identity to enable real-time network sync and preserve dynamic nodes.
-            Alternatively, bypass authorization to encrypt telemetry and session logs locally in your sandbox.
           </p>
 
           <div className="flex flex-col gap-3">
@@ -606,16 +623,6 @@ export default function Dashboard({
             >
               <LogIn size={14} className="group-hover:translate-x-0.5 transition-transform" />
               Sign In with Google
-            </button>
-
-            {/* Local Offline Bypass */}
-            <button
-              onClick={triggerLocalOfflineBypass}
-              disabled={authLoading}
-              className="group cursor-pointer w-full py-3.5 bg-transparent text-zinc-400 border border-white/10 font-mono text-xs tracking-widest uppercase rounded-xl transition-all duration-300 hover:text-white hover:border-[#00f3ff]/40 hover:bg-[#00f3ff]/5 flex items-center justify-center gap-2"
-            >
-              <Lock size={14} />
-              Secure Offline Bypass
             </button>
           </div>
 
@@ -680,6 +687,28 @@ export default function Dashboard({
                     <p className="font-mono text-[9px] text-zinc-500 mt-2 text-center max-w-[90%] uppercase leading-relaxed">
                       {authProgress}
                     </p>
+                  </div>
+                )}
+
+                {googleStep === 'failed' && (
+                  <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in duration-200">
+                    <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mb-4 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                    <span className="font-mono text-[10px] tracking-[0.25em] text-red-400 uppercase">
+                      Sync Failed
+                    </span>
+                    <p className="font-mono text-[9px] text-zinc-400 mt-3 text-center max-w-[95%] uppercase leading-relaxed">
+                      {authProgress}
+                    </p>
+                    <button
+                      onClick={() => setShowGoogleModal(false)}
+                      className="mt-5 px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-white/10 rounded-lg text-[10px] font-mono uppercase tracking-wider text-zinc-300 transition-colors cursor-pointer"
+                    >
+                      Acknowledge
+                    </button>
                   </div>
                 )}
 
@@ -1169,8 +1198,26 @@ export default function Dashboard({
               <span className="font-mono text-[8px] tracking-[0.25em] text-zinc-400 font-bold uppercase">
                 Neural Comm Interface
               </span>
-              <span className="font-mono text-[8px] text-emerald-400 uppercase font-semibold">
-                {isConnected ? 'Bridge Secure' : 'Line Standby'}
+              <span className={`font-mono text-[8px] uppercase font-semibold transition-all duration-300 ${
+                isSpeaking
+                  ? 'text-cyan-400 animate-pulse'
+                  : micStatus === 'listening'
+                    ? 'text-emerald-400 animate-pulse font-bold'
+                    : micStatus === 'transcribing'
+                      ? 'text-amber-400 animate-pulse'
+                      : isConnected
+                        ? 'text-emerald-500'
+                        : 'text-zinc-500'
+              }`}>
+                {isSpeaking
+                  ? 'NOVA-X SPEAKING'
+                  : micStatus === 'listening'
+                    ? 'LISTENING...'
+                    : micStatus === 'transcribing'
+                      ? 'TRANSCRIBING...'
+                      : isConnected
+                        ? 'Bridge Secure'
+                        : 'Line Standby'}
               </span>
             </div>
 
@@ -1180,7 +1227,13 @@ export default function Dashboard({
                 {isConnected && !isMuted && (
                   <>
                     <div className="absolute w-14 h-14 rounded-full border border-emerald-500/20 animate-ping" />
-                    <div className={`absolute w-12 h-12 rounded-full border border-emerald-500/35 transition-all duration-300 ${isSpeaking ? 'scale-125 border-pink-500/40 animate-pulse' : 'scale-100'}`} />
+                    <div className={`absolute w-12 h-12 rounded-full border transition-all duration-300 ${
+                      isSpeaking 
+                        ? 'scale-125 border-pink-500/40 animate-pulse' 
+                        : micStatus === 'listening'
+                          ? getMicPulseClass()
+                          : 'scale-100 border-emerald-500/30'
+                    }`} />
                   </>
                 )}
                 <button

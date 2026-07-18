@@ -51,7 +51,7 @@ const SmartIcon = ({ name }: { name: string }) => {
 
 const AppCard = ({ app }: { app: AppItem }) => (
   <div
-    onClick={() => window.electron.ipcRenderer.invoke('open-app', app.name)}
+    onClick={() => window.electron?.ipcRenderer?.invoke('open-app', app.name)}
     className="bg-zinc-950/40 backdrop-blur-xl border border-white/5 rounded-xl p-4 flex items-center gap-4 hover:bg-white/10 hover:border-emerald-500/30 transition-all cursor-pointer group active:scale-95"
   >
     <SmartIcon name={app.name} />

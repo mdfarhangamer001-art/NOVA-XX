@@ -1,180 +1,88 @@
-// Mock Electron API for browser environments in AI Studio
+// Real HTTP/SSE Bridge for NOVA-X in the Web Sandbox
 if (typeof window !== 'undefined') {
-  // Mock window.electron
-  if (!window.electron) {
-    const apiKeys = {
-      geminiKey: localStorage.getItem('mock_geminiKey') || '',
-      groqKey: localStorage.getItem('mock_groqKey') || '',
-      hfKey: localStorage.getItem('mock_hfKey') || '',
-      tavilyKey: localStorage.getItem('mock_tavilyKey') || '',
+  // Setup SSE (Server-Sent Events) for real-time events from the backend (e.g. chat stream, companion commands)
+  const eventListeners: Record<string, Set<(...args: any[]) => void>> = {};
+
+  const setupSSE = () => {
+    console.log('[NOVA-X Bridge] Initializing EventStream connection...');
+    const eventSource = new EventSource('/api/ipc-events');
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const { channel, data } = JSON.parse(event.data);
+        console.log(`[NOVA-X SSE] Event received [${channel}]:`, data);
+        if (eventListeners[channel]) {
+          eventListeners[channel].forEach(listener => {
+            try {
+              listener({}, data);
+            } catch (err) {
+              console.error('[NOVA-X SSE] Callback error:', err);
+            }
+          });
+        }
+      } catch (e) {
+        console.error('[NOVA-X SSE] JSON Parse Error:', e);
+      }
     };
+    
+    eventSource.onerror = (e) => {
+      console.warn('[NOVA-X SSE] EventSource disconnected. Retrying in 3s...', e);
+      eventSource.close();
+      setTimeout(setupSSE, 3000);
+    };
+  };
+  
+  setupSSE();
 
-    const adbHistory = JSON.parse(localStorage.getItem('mock_adbHistory') || '[]');
-
-    let adbConnected = false;
-
+  // Define window.electron with a real bridge to /api/ipc
+  if (!window.electron) {
     const mockIpcRenderer = {
       send: (channel: string, ...args: any[]) => {
-        console.log(`[Mock Electron IPC] send: ${channel}`, args);
+        console.log(`[NOVA-X Bridge] send: ${channel}`, args);
+        fetch('/api/ipc-send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel, args })
+        }).catch(err => console.error('[NOVA-X Bridge] Send failure:', err));
       },
       on: (channel: string, func: (...args: any[]) => void) => {
-        console.log(`[Mock Electron IPC] on: ${channel}`);
-        return () => {};
+        if (!eventListeners[channel]) {
+          eventListeners[channel] = new Set();
+        }
+        eventListeners[channel].add(func);
+        return () => {
+          eventListeners[channel]?.delete(func);
+        };
       },
       off: (channel: string, func: (...args: any[]) => void) => {
-        console.log(`[Mock Electron IPC] off: ${channel}`);
+        eventListeners[channel]?.delete(func);
       },
       removeListener: (channel: string, func: (...args: any[]) => void) => {
-        console.log(`[Mock Electron IPC] removeListener: ${channel}`);
+        eventListeners[channel]?.delete(func);
       },
       removeAllListeners: (channel: string) => {
-        console.log(`[Mock Electron IPC] removeAllListeners: ${channel}`);
+        delete eventListeners[channel];
       },
       invoke: async (channel: string, ...args: any[]) => {
-        console.log(`[Mock Electron IPC] invoke: ${channel}`, args);
-        
-        if (channel === 'get-system-stats') {
-          // Generate realistic mock telemetry stats
-          const cpuValue = (20 + Math.random() * 40).toFixed(1);
-          const ramValue = (45 + Math.random() * 15).toFixed(1);
-          const tempValue = 38 + Math.random() * 12;
-          const txValue = Math.floor(Math.random() * 25) + 5;
-          const rxValue = Math.floor(Math.random() * 50) + 10;
-          return {
-            cpu: cpuValue,
-            memory: {
-              total: '16.0',
-              free: '8.4',
-              usedPercentage: ramValue
-            },
-            temperature: tempValue,
-            os: {
-              type: 'AI Studio Sandbox',
-              uptime: '2.4h'
-            },
-            network: {
-              tx: txValue,
-              rx: rxValue,
-              latency: Math.floor(20 + Math.random() * 15)
-            }
-          };
+        console.log(`[NOVA-X Bridge] invoke: ${channel}`, args);
+        try {
+          const res = await fetch('/api/ipc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel, args })
+          });
+          if (!res.ok) {
+            throw new Error(`HTTP Error ${res.status}`);
+          }
+          const data = await res.json();
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          return data.result;
+        } catch (err) {
+          console.error(`[NOVA-X Bridge] IPC channel ${channel} failed:`, err);
+          throw err;
         }
-
-        if (channel === 'get-installed-apps') {
-          return [
-            { name: 'Chrome Browser', id: 'chrome' },
-            { name: 'Visual Studio Code', id: 'vscode' },
-            { name: 'Spotify Music', id: 'spotify' },
-            { name: 'Discord Chat', id: 'discord' },
-            { name: 'Terminal Shell', id: 'terminal' },
-          ];
-        }
-
-        if (channel === 'get-drives') {
-          return [
-            { Name: 'System SSD (C:)', FreeGB: '142.5', TotalGB: '512.0' },
-            { Name: 'External Drive (D:)', FreeGB: '840.1', TotalGB: '1000.0' }
-          ];
-        }
-
-        if (channel === 'secure-get-keys') {
-          return apiKeys;
-        }
-
-        if (channel === 'secure-save-keys') {
-          const keys = args[0] || {};
-          Object.assign(apiKeys, keys);
-          localStorage.setItem('mock_geminiKey', keys.geminiKey || '');
-          localStorage.setItem('mock_groqKey', keys.groqKey || '');
-          localStorage.setItem('mock_hfKey', keys.hfKey || '');
-          localStorage.setItem('mock_tavilyKey', keys.tavilyKey || '');
-          return true;
-        }
-
-        if (channel === 'adb-get-history') {
-          return adbHistory.length > 0 ? adbHistory : [
-            { model: 'Pixel 8 Pro (Simulated)', ip: '192.168.1.15', port: '5555' }
-          ];
-        }
-
-        if (channel === 'adb-connect') {
-          adbConnected = true;
-          return { success: true };
-        }
-
-        if (channel === 'adb-disconnect') {
-          adbConnected = false;
-          return { success: true };
-        }
-
-        if (channel === 'adb-telemetry') {
-          return {
-            success: true,
-            data: {
-              model: 'PIXEL 8 PRO (SIM)',
-              os: 'ANDROID 14 (UPLINKED)',
-              battery: { level: 84, isCharging: true, temp: '34.2' },
-              storage: { used: '112.5 GB', total: '256.0 GB TOTAL', percent: 43.9 }
-            }
-          };
-        }
-
-        if (channel === 'adb-get-notifications') {
-          return { success: true, data: [] };
-        }
-
-        if (channel === 'adb-screenshot') {
-          return { 
-            success: true, 
-            image: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="650" viewBox="0 0 320 650"><rect width="100%" height="100%" fill="%23121214"/><text x="50%" y="45%" fill="%2300ff88" font-family="monospace" font-size="14" text-anchor="middle">ADB SCREEN FEED</text><text x="50%" y="50%" fill="%23ffffff" font-family="monospace" font-size="12" text-anchor="middle" opacity="0.5">Simulated Pixel 8 Pro</text></svg>' 
-          };
-        }
-
-        if (channel === 'adb-quick-action') {
-          console.log(`[Mock ADB Quick Action] ${args[0]?.action}`);
-          return { success: true };
-        }
-
-        if (channel === 'google-sign-in') {
-          return {
-            success: true,
-            name: 'Systems Architect',
-            email: 'NOVA-X7@gmail.com',
-            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-            syncTime: new Date().toLocaleTimeString()
-          };
-        }
-
-        if (channel === 'google-sign-out') {
-          return { success: true };
-        }
-
-        if (channel === 'get-companion-status') {
-          return {
-            connected: false,
-            connectedIp: '',
-            pin: '842931',
-            url: 'http://192.168.1.5:3021/?token=mock-token-123',
-            ip: '192.168.1.5',
-            port: 3021
-          };
-        }
-
-        if (channel === 'forget-companion-device') {
-          return {
-            connected: false,
-            pin: '123456',
-            url: 'http://192.168.1.5:3021/?token=new-mock-token',
-            ip: '192.168.1.5',
-            port: 3021
-          };
-        }
-
-        if (channel === 'phone-broadcast-reply') {
-          return { success: true };
-        }
-
-        return null;
       }
     };
 
@@ -186,58 +94,50 @@ if (typeof window !== 'undefined') {
     };
   }
 
-  // Mock window.iris
+  // Define window.iris with a real bridge to /api/ipc
   if (!(window as any).iris) {
-    const mockTranscriptCallbacks: any[] = [];
-    const mockTranscriptCompleteCallbacks: any[] = [];
-    const chatHistory = [
-      { role: 'user', text: 'Hello, system' },
-      { role: 'model', text: 'Greetings, Boss. I am NOVA-X. How can I assist you today?' }
-    ];
-
     (window as any).iris = {
-      getHistory: async () => chatHistory,
+      getHistory: async () => {
+        try {
+          return await window.electron.ipcRenderer.invoke('iris-get-history');
+        } catch (e) {
+          return [];
+        }
+      },
+      sendVisionFrame: async (base64Frame: string) => {
+        return await window.electron.ipcRenderer.invoke('iris-send-vision-frame', base64Frame);
+      },
+      transcribeAudio: async (base64Audio: string, mimeType: string) => {
+        return await window.electron.ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType });
+      },
+      getMemories: async () => {
+        return await window.electron.ipcRenderer.invoke('get-memories');
+      },
+      deleteMemory: async (index: number) => {
+        return await window.electron.ipcRenderer.invoke('delete-memory', index);
+      },
+      launchApp: async (appName: string) => {
+        return await window.electron.ipcRenderer.invoke('launch-app', appName);
+      },
+      adbConnect: async (ip: string, port: string) => {
+        return await window.electron.ipcRenderer.invoke('adb-connect', { ip, port });
+      },
+      adbDisconnect: async () => {
+        return await window.electron.ipcRenderer.invoke('adb-disconnect');
+      },
+      adbTelemetry: async () => {
+        return await window.electron.ipcRenderer.invoke('adb-telemetry');
+      },
+      adbQuickAction: async (action: string) => {
+        return await window.electron.ipcRenderer.invoke('adb-quick-action', { action });
+      },
       onTranscript: (callback: any) => {
-        mockTranscriptCallbacks.push(callback);
+        (window as any)._onTranscriptCallback = callback;
       },
       onTranscriptComplete: (callback: any) => {
-        mockTranscriptCompleteCallbacks.push(callback);
-      },
-      sendVisionFrame: (frame: string) => {
-        // Frame is a base64 jpeg
+        (window as any)._onTranscriptCompleteCallback = callback;
       }
     };
-
-    // Simulate occasional incoming transcript messages to make the interface look alive!
-    setTimeout(() => {
-      const triggerSimulatedChat = () => {
-        const triggers = [
-          { user: "Analyze current system stats", model: "Current CPU usage is 28.4%. Temperature is stabilized at 41.2°C. All telemetry nodes are running optimally." },
-          { user: "Show me connected devices", model: "Uplink is secure on device Pixel 8 Pro at port 5555. ADB bridge connection shows 84% battery charge." },
-          { user: "Check for updates", model: "System is fully up-to-date. NOVA-X Neural Engine is running version 1.6.3." }
-        ];
-        const randomTrigger = triggers[Math.floor(Math.random() * triggers.length)];
-        
-        mockTranscriptCallbacks.forEach(cb => cb({ role: 'user', text: randomTrigger.user, isFinal: true }));
-        
-        setTimeout(() => {
-          let words = randomTrigger.model.split(' ');
-          let currentWordIndex = 0;
-          const interval = setInterval(() => {
-            if (currentWordIndex < words.length) {
-              mockTranscriptCallbacks.forEach(cb => cb({ role: 'model', text: words[currentWordIndex] + ' ', isFinal: false }));
-              currentWordIndex++;
-            } else {
-              clearInterval(interval);
-              mockTranscriptCompleteCallbacks.forEach(cb => cb());
-            }
-          }, 120);
-        }, 1500);
-      };
-
-      triggerSimulatedChat();
-      setInterval(triggerSimulatedChat, 20000);
-    }, 5000);
   }
 }
 export {};

@@ -47,6 +47,7 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
 
   const fetchNotes = async () => {
     try {
+      if (!window.electron?.ipcRenderer) return
       const data = await window.electron.ipcRenderer.invoke('get-notes')
       setNotes(data)
     } catch (e) {
@@ -88,29 +89,34 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
   const saveManualNote = async () => {
     if (!newTitle.trim() || !newContent.trim()) return
 
-
-    await window.electron.ipcRenderer.invoke('save-note', {
-      title: newTitle,
-      content: newContent
-    })
+    if (window.electron?.ipcRenderer) {
+      await window.electron.ipcRenderer.invoke('save-note', {
+        title: newTitle,
+        content: newContent
+      })
+    }
 
     setIsEditorOpen(false)
     setEditOriginalFilename(null)
     fetchNotes()
 
     setTimeout(() => {
-      window.electron.ipcRenderer.invoke('get-notes').then((data: Note[]) => {
-        const created = data.find((n) =>
-          n.title.toLowerCase().includes(newTitle.toLowerCase().replace(/ /g, '_'))
-        )
-        if (created) setSelectedNote(created)
-      })
+      if (window.electron?.ipcRenderer) {
+        window.electron.ipcRenderer.invoke('get-notes').then((data: Note[]) => {
+          const created = data.find((n) =>
+            n.title.toLowerCase().includes(newTitle.toLowerCase().replace(/ /g, '_'))
+          )
+          if (created) setSelectedNote(created)
+        })
+      }
     }, 500)
   }
 
   const deleteNote = async (filename: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    await window.electron.ipcRenderer.invoke('delete-note', filename)
+    if (window.electron?.ipcRenderer) {
+      await window.electron.ipcRenderer.invoke('delete-note', filename)
+    }
     fetchNotes()
     if (selectedNote?.filename === filename) setSelectedNote(null)
   }

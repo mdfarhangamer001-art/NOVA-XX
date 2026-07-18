@@ -24,6 +24,7 @@ export interface AppItem {
 
 export const getSystemStatus = async (): Promise<SystemStats | null> => {
   try {
+    if (!window.electron?.ipcRenderer) return null
     return await window.electron.ipcRenderer.invoke('get-system-stats')
   } catch (error) {
     return null
@@ -32,6 +33,7 @@ export const getSystemStatus = async (): Promise<SystemStats | null> => {
 
 export const getAllApps = async (): Promise<AppItem[]> => {
   try {
+    if (!window.electron?.ipcRenderer) return []
     const apps = await window.electron.ipcRenderer.invoke('get-installed-apps')
     return Array.isArray(apps) ? apps : []
   } catch (error) {
@@ -41,6 +43,7 @@ export const getAllApps = async (): Promise<AppItem[]> => {
 
 export const getDrives = async (): Promise<any[]> => {
   try {
+    if (!window.electron?.ipcRenderer) return []
     return await window.electron.ipcRenderer.invoke('get-drives')
   } catch (error) {
     return []

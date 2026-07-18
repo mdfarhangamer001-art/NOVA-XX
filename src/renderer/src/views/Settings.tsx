@@ -38,6 +38,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   const [groqKey, setGroqKey] = useState(() => localStorage.getItem('novax_groq_key') || '')
   const [hfKey, setHfKey] = useState(() => localStorage.getItem('novax_hf_key') || '')
   const [tavilyKey, settavilyKey] = useState(() => localStorage.getItem('novax_tavily_key') || '')
+  const [openrouterKey, setOpenrouterKey] = useState(() => localStorage.getItem('novax_openrouter_key') || '')
   const [systemTone, setSystemTone] = useState(() => localStorage.getItem('novax_system_tone') || 'authoritative')
 
   const [perfMode, setPerfMode] = useState<'high' | 'medium' | 'low'>(() => {
@@ -62,6 +63,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
           if (keys.groqKey) setGroqKey(keys.groqKey)
           if (keys.hfKey) setHfKey(keys.hfKey)
           if (keys.tavilyKey) settavilyKey(keys.tavilyKey)
+          if (keys.openrouterKey) setOpenrouterKey(keys.openrouterKey)
         }
       })
     }
@@ -80,6 +82,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
       localStorage.removeItem('novax_groq_key')
       localStorage.removeItem('novax_hf_key')
       localStorage.removeItem('novax_tavily_key')
+      localStorage.removeItem('novax_openrouter_key')
       localStorage.setItem('novax_system_tone', systemTone)
 
       try {
@@ -87,7 +90,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
           groqKey,
           geminiKey,
           hfKey,
-          tavilyKey
+          tavilyKey,
+          openrouterKey
         })
         alert('API Keys securely encrypted and saved to NOVA-X Vault.')
       } catch (e) {
@@ -98,6 +102,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
       localStorage.setItem('novax_groq_key', groqKey)
       localStorage.setItem('novax_hf_key', hfKey)
       localStorage.setItem('novax_tavily_key', tavilyKey)
+      localStorage.setItem('novax_openrouter_key', openrouterKey)
       localStorage.setItem('novax_system_tone', systemTone)
       alert('API Keys saved to browser storage.')
     }
@@ -228,6 +233,18 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                           value={tavilyKey}
                           onChange={(e) => settavilyKey(e.target.value)}
                           placeholder="tvly-..."
+                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>OpenRouter API Key</label>
+                      <div className={inputContainerClass}>
+                        <input
+                          type="password"
+                          value={openrouterKey}
+                          onChange={(e) => setOpenrouterKey(e.target.value)}
+                          placeholder="sk-or-v1-..."
                           className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
                         />
                       </div>

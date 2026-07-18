@@ -65,7 +65,7 @@ const IndexRoot = (): JSX.Element => {
     let isRecordingInternal = false
     let animationFrame: number | null = null
 
-    const threshold = 0.02 // Volume threshold for VAD
+    const threshold = 0.005 // High-sensitivity RMS speech threshold
     const silenceDelay = 1500 // 1.5 seconds of silence to trigger transcription
 
     const startVAD = async () => {
@@ -75,19 +75,24 @@ const IndexRoot = (): JSX.Element => {
         analyser = audioContext.createAnalyser()
         microphone = audioContext.createMediaStreamSource(stream)
         microphone.connect(analyser)
-        analyser.fftSize = 512
+        analyser.fftSize = 1024
 
-        const dataArray = new Uint8Array(analyser.frequencyBinCount)
+        const dataArray = new Uint8Array(analyser.fftSize)
 
         const checkVolume = () => {
           if (!analyser) return
-          analyser.getByteFrequencyData(dataArray)
+          analyser.getByteTimeDomainData(dataArray)
           
-          let sum = 0
+          let sumSquares = 0
           for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i]
+            const normalized = (dataArray[i] - 128) / 128
+            sumSquares += normalized * normalized
           }
-          const average = sum / dataArray.length / 255
+          const rms = Math.sqrt(sumSquares / dataArray.length)
+          const average = rms
+
+          // Send current mic input level to update visualizers dynamically
+          window.dispatchEvent(new CustomEvent('novax_mic_level', { detail: average }))
 
           if (average > threshold) {
             // Speech detected
@@ -96,6 +101,8 @@ const IndexRoot = (): JSX.Element => {
               isRecordingInternal = true
               audioChunks = []
               
+              window.dispatchEvent(new CustomEvent('novax_mic_state', { detail: { status: 'listening' } }))
+
               // Determine best mimeType
               let mimeType = 'audio/webm'
               if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus'
@@ -106,6 +113,7 @@ const IndexRoot = (): JSX.Element => {
                 if (e.data.size > 0) audioChunks.push(e.data)
               }
               mediaRecorder.onstop = async () => {
+                window.dispatchEvent(new CustomEvent('novax_mic_state', { detail: { status: 'transcribing' } }))
                 const audioBlob = new Blob(audioChunks, { type: mimeType })
                 const reader = new FileReader()
                 reader.readAsDataURL(audioBlob)
@@ -128,6 +136,8 @@ const IndexRoot = (): JSX.Element => {
                     }
                   } catch (err) {
                     console.error('[NOVA-X VAD] Transcription error:', err)
+                  } finally {
+                    window.dispatchEvent(new CustomEvent('novax_mic_state', { detail: { status: 'idle' } }))
                   }
                 }
               }
