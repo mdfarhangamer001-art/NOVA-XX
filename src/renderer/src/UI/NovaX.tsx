@@ -24,7 +24,7 @@ const ClipboardView = lazy(() => import('../views/Clipboard'))
 const ActivityView = lazy(() => import('../views/Activity'))
 const GmailView = lazy(() => import('../views/Gmail'))
 
-import Logo from '../assets/Logo.png'
+import NovaXLogo from '../components/UI/NovaXLogo'
 
 interface NovaXProps {
   isConnected: boolean
@@ -126,7 +126,7 @@ const NovaX = ({
     <div className="flex flex-col h-screen w-full bg-black text-zinc-100 font-sans overflow-hidden select-none relative">
       <div className="h-16 w-full flex items-center justify-between px-6 bg-black border-b border-white/5 z-50">
         <div className="flex items-center gap-3 w-48 cursor-pointer">
-          <img src={Logo} className="w-14 h-14" />
+          <NovaXLogo size={48} />
 
           <div
             onClick={() => {

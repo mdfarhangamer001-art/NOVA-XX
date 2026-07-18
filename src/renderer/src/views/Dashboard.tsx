@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { LANGUAGES } from '../data/languages'
-import Logo from '../assets/Logo.png'
+import NovaXLogo from '../components/UI/NovaXLogo'
 
 // JWT token decode helper for real Google login profile parsing
 const decodeJwt = (token: string): any => {
@@ -19,27 +19,7 @@ const decodeJwt = (token: string): any => {
   }
 }
 
-import {
-  Camera,
-  Mic,
-  MicOff,
-  Phone,
-  PhoneOff,
-  Monitor,
-  Cpu,
-  Thermometer,
-  Database,
-  Radio,
-  ArrowUp,
-  ArrowDown,
-  Activity,
-  LogIn,
-  Lock,
-  LogOut,
-  Sliders,
-  Volume2,
-  Tv
-} from 'lucide-react'
+import { Camera, Mic, MicOff, Phone, PhoneOff, Monitor, Cpu, Thermometer, Database, Radio, ArrowUp, ArrowDown, Activity, LogIn, Lock, LogOut, FileSliders as Sliders, Volume2, Tv } from 'lucide-react'
 import RightPanel from '@renderer/components/UI/RightPanel'
 import AICore from '@renderer/components/UI/AICoreSphere'
 import { getSystemStatus, SystemStats } from '@renderer/services/system-info'
@@ -153,8 +133,8 @@ export default function Dashboard({
   }
 
   // 3D Core customization states
-  const [coreType, setCoreType] = useState<'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'>(
-    (localStorage.getItem('novax_core_type') as 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis') || 'quantum'
+  const [coreType, setCoreType] = useState<'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix'>(
+    (localStorage.getItem('novax_core_type') as 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix') || 'quantum'
   )
   const [coreSize, setCoreSize] = useState<number>(
     parseFloat(localStorage.getItem('novax_core_size') || '0.8')
@@ -556,7 +536,7 @@ export default function Dashboard({
           <div className="mb-6 flex flex-col items-center gap-3">
             <div className="relative w-16 h-16 flex items-center justify-center border border-[#00f3ff]/30 rounded-xl bg-zinc-900/60 shadow-[0_0_20px_rgba(0,243,255,0.15)] overflow-hidden">
               <div className="absolute inset-0 border border-emerald-400/10 rounded-lg animate-ping scale-105" />
-              <img src={Logo} className="w-11 h-11" />
+              <NovaXLogo size={44} />
             </div>
             <div>
               <h2 className="text-2xl font-black tracking-[0.35em] text-white font-mono">
@@ -1034,6 +1014,45 @@ export default function Dashboard({
                 }`}
               >
                 Jarvis grid
+              </button>
+              <button
+                onClick={() => {
+                  setCoreType('plasma')
+                  localStorage.setItem('novax_core_type', 'plasma')
+                }}
+                className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
+                  coreType === 'plasma'
+                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_8px_rgba(0,170,255,0.1)]'
+                    : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/5'
+                }`}
+              >
+                Plasma Knot
+              </button>
+              <button
+                onClick={() => {
+                  setCoreType('vortex')
+                  localStorage.setItem('novax_core_type', 'vortex')
+                }}
+                className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
+                  coreType === 'vortex'
+                    ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20 shadow-[0_0_8px_rgba(255,221,0,0.1)]'
+                    : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/5'
+                }`}
+              >
+                Vortex
+              </button>
+              <button
+                onClick={() => {
+                  setCoreType('phoenix')
+                  localStorage.setItem('novax_core_type', 'phoenix')
+                }}
+                className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
+                  coreType === 'phoenix'
+                    ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-[0_0_8px_rgba(255,102,0,0.1)]'
+                    : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/5'
+                }`}
+              >
+                Phoenix
               </button>
               
               <div className="h-4 w-px bg-white/10 mx-1 shrink-0" />

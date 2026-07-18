@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import NovaX from './UI/NovaX'
 import TitleBar from './components/Titlebar'
+import { installGlobalTts, setTtsLang, ensureVoicesLoaded, speak, stopSpeaking } from './utils/ttsEngine'
 
 export type VisionMode = 'camera' | 'screen' | 'none'
 
@@ -9,13 +10,36 @@ const IndexRoot = (): JSX.Element => {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
 
-  // Expose speaking state setter globally to link speech engine with Three.js rendering
+  // Install robust TTS engine + link speaking state to 3D core animation
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // @ts-ignore - Expose global setter for speaking animation state linkage
+      installGlobalTts()
+
+      // Expose speaking state setter globally to link speech engine with Three.js rendering
       window.setIsSpeaking = (val: boolean): void => {
         setIsSpeaking(val)
       }
+
+      // Override speakText to also drive the isSpeaking state for the 3D orb
+      ;(window as any).speakText = (text: string) => {
+        setIsSpeaking(true)
+        speak(text, {
+          onEnd: () => setIsSpeaking(false),
+          onStart: () => setIsSpeaking(true)
+        }).catch(() => {
+          setIsSpeaking(false)
+        })
+      }
+
+      ;(window as any).stopTts = () => {
+        stopSpeaking()
+        setIsSpeaking(false)
+      }
+
+      // Pre-warm voices immediately on mount
+      ensureVoicesLoaded().then((ready) => {
+        console.log(`[NOVA-X TTS] Voice engine ready: ${ready}`)
+      })
     }
     return () => {
       if (typeof window !== 'undefined') {
