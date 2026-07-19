@@ -1240,6 +1240,39 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     return store.get('activity_logs') || []
   })
 
+  // Persistent chat memory — backed by electron-store (a JSON file on
+  // disk), independent of the browser's localStorage. This survives
+  // even if the renderer's cache/localStorage gets cleared, and doesn't
+  // depend on Supabase env vars being configured. We keep a generous
+  // cap (500 turns) since it's just text.
+  const CHAT_HISTORY_CAP = 500
+  ipcMain.removeHandler('save-chat-history')
+  ipcMain.handle('save-chat-history', (_event, history: any[]) => {
+    try {
+      const trimmed = Array.isArray(history) ? history.slice(-CHAT_HISTORY_CAP) : []
+      store.set('novax_persistent_chat_history', trimmed)
+      return { success: true, count: trimmed.length }
+    } catch (e: any) {
+      console.error('[NOVA-X] Failed to save chat history:', e)
+      return { success: false, error: e.message }
+    }
+  })
+
+  ipcMain.removeHandler('load-chat-history')
+  ipcMain.handle('load-chat-history', () => {
+    try {
+      return store.get('novax_persistent_chat_history') || []
+    } catch (e) {
+      return []
+    }
+  })
+
+  ipcMain.removeHandler('clear-chat-history')
+  ipcMain.handle('clear-chat-history', () => {
+    store.delete('novax_persistent_chat_history')
+    return { success: true }
+  })
+
   ipcMain.removeHandler('summarize-activity-day')
   ipcMain.handle('summarize-activity-day', async () => {
     const apiKey = getGeminiApiKeyLocal()
