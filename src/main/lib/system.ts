@@ -185,16 +185,106 @@ export async function fetchInstalledApps() {
   }
 }
 
+// Real network throughput requires sampling byte counters over time (Node's
+// os module doesn't expose them directly). We keep a rolling previous-sample
+// so fetchSystemStats() can compute a real delta instead of faking numbers.
+let prevNetSample: { time: number; rx: number; tx: number } | null = null
+
+async function getRealNetworkBytes(): Promise<{ rx: number; tx: number } | null> {
+  try {
+    if (process.platform === 'win32') {
+      const out = await runCommand(
+        `powershell -Command "Get-NetAdapterStatistics | Where-Object { $_.ReceivedBytes -gt 0 } | Measure-Object -Property ReceivedBytes,SentBytes -Sum | Select-Object -ExpandProperty Sum"`
+      )
+      // Fallback to a more explicit two-value query if the above yields nothing usable
+      const detailed = await runCommand(
+        `powershell -Command "$s = Get-NetAdapterStatistics | Measure-Object -Property ReceivedBytes -Sum; $t = Get-NetAdapterStatistics | Measure-Object -Property SentBytes -Sum; Write-Output ($s.Sum.ToString() + ',' + $t.Sum.ToString())"`
+      )
+      const [rxStr, txStr] = detailed.split(',')
+      const rx = parseInt(rxStr, 10)
+      const tx = parseInt(txStr, 10)
+      if (!isNaN(rx) && !isNaN(tx)) return { rx, tx }
+      void out
+      return null
+    } else if (process.platform === 'linux') {
+      const out = await runCommand(`cat /proc/net/dev | tail -n +3`)
+      let rx = 0
+      let tx = 0
+      out.split('\n').forEach((line) => {
+        const parts = line.trim().split(/\s+/)
+        if (parts.length >= 10 && !parts[0].startsWith('lo')) {
+          rx += parseInt(parts[1], 10) || 0
+          tx += parseInt(parts[9], 10) || 0
+        }
+      })
+      return { rx, tx }
+    } else if (process.platform === 'darwin') {
+      const out = await runCommand(`netstat -ib | awk '$1 !~ /lo/ {rx+=$7; tx+=$10} END {print rx","tx}'`)
+      const [rxStr, txStr] = out.split(',')
+      const rx = parseInt(rxStr, 10)
+      const tx = parseInt(txStr, 10)
+      if (!isNaN(rx) && !isNaN(tx)) return { rx, tx }
+    }
+  } catch (e) {
+    // ignore, caller falls back to null
+  }
+  return null
+}
+
+async function getRealCpuTemp(): Promise<number | null> {
+  try {
+    if (process.platform === 'win32') {
+      // MSAcpi_ThermalZoneTemperature reports tenths of Kelvin. Not all
+      // hardware exposes this via WMI (common on desktops); returns null
+      // rather than a fabricated number when unavailable.
+      const out = await runCommand(
+        `powershell -Command "(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature | Select-Object -First 1 -ExpandProperty CurrentTemperature)"`
+      )
+      const tenthsKelvin = parseFloat(out)
+      if (!isNaN(tenthsKelvin) && tenthsKelvin > 0) {
+        return +(tenthsKelvin / 10 - 273.15).toFixed(1)
+      }
+      return null
+    } else if (process.platform === 'linux') {
+      const out = await runCommand(`cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null`)
+      const milliC = parseInt(out, 10)
+      if (!isNaN(milliC) && milliC > 0) return +(milliC / 1000).toFixed(1)
+      return null
+    } else if (process.platform === 'darwin') {
+      // macOS has no free/reliable CLI sensor read without extra native
+      // deps (e.g. osx-cpu-temp) — return null rather than fabricate.
+      return null
+    }
+  } catch (e) {
+    // ignore, caller falls back to null
+  }
+  return null
+}
+
 export async function fetchSystemStats() {
   const totalMem = os.totalmem()
   const freeMem = os.freemem()
 
   const cpuString = getSystemCpuUsage()
   const cpuNum = parseFloat(cpuString)
+  void cpuNum
 
-  const estimatedTemp = 40 + cpuNum * 0.4 + Math.random() * 2
-  const tx = Math.floor(Math.random() * 40) + (cpuNum > 20 ? 40 : 0)
-  const rx = Math.floor(Math.random() * 60) + (cpuNum > 10 ? 20 : 0)
+  const realTemp = await getRealCpuTemp()
+  const netBytes = await getRealNetworkBytes()
+
+  let tx = 0
+  let rx = 0
+  let latency = 0
+  if (netBytes) {
+    const now = Date.now()
+    if (prevNetSample) {
+      const dtSec = Math.max((now - prevNetSample.time) / 1000, 0.5)
+      // KB/s, floor at 0 in case of counter resets/wraparound
+      rx = Math.max(0, Math.round((netBytes.rx - prevNetSample.rx) / dtSec / 1024))
+      tx = Math.max(0, Math.round((netBytes.tx - prevNetSample.tx) / dtSec / 1024))
+    }
+    prevNetSample = { time: now, rx: netBytes.rx, tx: netBytes.tx }
+  }
 
   let osName = 'UNKNOWN'
   if (os.platform() === 'win32') osName = 'WIN 11'
@@ -208,9 +298,11 @@ export async function fetchSystemStats() {
       free: (freeMem / 1024 ** 3).toFixed(1),
       usedPercentage: (((totalMem - freeMem) / totalMem) * 100).toFixed(1)
     },
-    temperature: estimatedTemp,
+    // null when the OS/hardware doesn't expose a real sensor reading —
+    // UI should render "N/A" rather than a fabricated number.
+    temperature: realTemp,
     os: { type: osName, uptime: (os.uptime() / 3600).toFixed(1) + 'h' },
-    network: { tx, rx, latency: Math.floor(Math.random() * 15) + 20 }
+    network: { tx, rx, latency }
   }
 }
 
