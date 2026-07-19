@@ -89,16 +89,24 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
       localStorage.setItem('novax_system_tone', systemTone)
 
       try {
-        await window.electron.ipcRenderer.invoke('secure-save-keys', {
+        const result = await window.electron.ipcRenderer.invoke('secure-save-keys', {
           groqKey,
           geminiKey,
           hfKey,
           tavilyKey,
           openrouterKey
         })
-        alert('API Keys securely encrypted and saved to NOVA-X Vault.')
-      } catch (e) {
-        alert('Failed to save keys to the secure vault.')
+        if (result?.success) {
+          alert(
+            result.secure
+              ? 'API Keys securely encrypted and saved to NOVA-X Vault.'
+              : 'API Keys saved, but this machine could not encrypt them at rest (no OS keyring available) — stored as plaintext.'
+          )
+        } else {
+          alert(`Failed to save keys: ${result?.error || 'Unknown error — check the app logs.'}`)
+        }
+      } catch (e: any) {
+        alert(`Failed to save keys to the secure vault: ${e?.message || e}`)
       }
     } else {
       localStorage.setItem('novax_gemini_key', geminiKey)
