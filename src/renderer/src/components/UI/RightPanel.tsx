@@ -647,12 +647,14 @@ ${toneInstructions[tone]} ${emotionalInstruction[vibe]} ${contextualInjections}`
   // Globally bind the trigger Voice Command listener
   useEffect(() => {
     ;(window as any).triggerVoiceCommand = (q: string) => {
-      executeCoreCommand(q)
+      executeCoreCommand(q).catch((err) => console.error('[NOVA-X] Voice command failed:', err))
     }
 
     const handleMobileCommand = (_event: any, command: string) => {
       console.log('[RightPanel] Incoming mobile companion voice command:', command)
-      executeCoreCommand(command)
+      executeCoreCommand(command).catch((err) =>
+        console.error('[NOVA-X] Mobile command failed:', err)
+      )
     }
 
     if (window.electron?.ipcRenderer) {

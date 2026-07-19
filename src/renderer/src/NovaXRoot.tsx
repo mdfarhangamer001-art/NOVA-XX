@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import NovaX from './UI/NovaX'
 import TitleBar from './components/Titlebar'
 

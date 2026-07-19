@@ -2,12 +2,14 @@ import express from 'express'
 import { createServer as createViteServer } from 'vite'
 import path from 'path'
 import fs from 'fs'
+import { getApiKey, saveKeys, getGeminiClient, getGroqClient, getPrimaryEngine } from './src/main/ai-clients'
 
 async function startServer() {
   const app = express()
   const PORT = 3000
 
-  app.use(express.json())
+  app.use(express.json({ limit: '50mb' }))
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
   // Setup directories for Notes and Gallery
   const NOTES_DIR = path.join(process.cwd(), 'notes')
@@ -73,26 +75,6 @@ async function startServer() {
   }
 
   // Global Mock States
-  const credentialsPath = path.join(process.cwd(), 'credentials.json')
-  if (!global.mockKeys) {
-    global.mockKeys = {}
-    global.removedKeys = {}
-    if (fs.existsSync(credentialsPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'))
-        if (data.keys) {
-          global.mockKeys = data.keys
-          global.removedKeys = data.removed || {}
-          global.primaryEngine = data.primaryEngine || 'gemini'
-        } else {
-          global.mockKeys = data
-        }
-        console.log('[Web Preview] Successfully loaded credentials.json for mockKeys')
-      } catch (err) {
-        console.error('[Web Preview] Failed to read credentials.json:', err)
-      }
-    }
-  }
   if (!global.clipboardHistory) {
     global.clipboardHistory = [
       {
@@ -145,47 +127,13 @@ async function startServer() {
     console.log(`[Web Preview] IPC Invoke [${channel}]`, args)
 
     try {
-      const getApiKey = (key: string, envVal: string | undefined) => {
-        // If key is explicitly set to empty string or marked as removed, don't fall back to env
-        if (global.removedKeys && global.removedKeys[key]) return ''
-        if (global.mockKeys && global.mockKeys[key] === '') return ''
-        return global.mockKeys[key] || envVal || ''
-      }
-
       // Companion Status
       if (channel === 'get-companion-status') {
         result = { connected: false, url: '', ip: '', pin: '' }
       }
       // Save and Get Keys
       else if (channel === 'secure-save-keys') {
-        const newKeys = args[0]
-        global.mockKeys = { ...global.mockKeys, ...newKeys }
-        
-        // Ensure that if a key is explicitly set to empty string, it stays empty and doesn't fall back to process.env
-        // We'll mark these as "removed" in our internal state
-        if (!global.removedKeys) global.removedKeys = {}
-        Object.keys(newKeys).forEach(key => {
-          if (newKeys[key] === '') {
-            global.removedKeys[key] = true
-          } else if (newKeys[key]) {
-            global.removedKeys[key] = false
-          }
-        })
-
-        if (newKeys.primaryEngine) {
-          global.primaryEngine = newKeys.primaryEngine
-        }
-
-        try {
-          fs.writeFileSync(credentialsPath, JSON.stringify({
-            keys: global.mockKeys,
-            removed: global.removedKeys,
-            primaryEngine: global.primaryEngine
-          }, null, 2), 'utf8')
-          console.log('[Web Preview] Saved mockKeys to credentials.json successfully')
-        } catch (err) {
-          console.error('[Web Preview] Failed to save mockKeys to credentials.json:', err)
-        }
+        saveKeys(args[0])
         result = { success: true }
       } else if (channel === 'secure-get-keys') {
         result = {
@@ -195,7 +143,7 @@ async function startServer() {
           tavilyKey: getApiKey('tavilyKey', process.env.TAVILY_API_KEY),
           openrouterKey: getApiKey('openrouterKey', process.env.OPENROUTER_API_KEY),
           customKey: getApiKey('customKey', process.env.CUSTOM_API_KEY),
-          primaryEngine: global.primaryEngine || 'gemini'
+          primaryEngine: getPrimaryEngine()
         }
       }
       // Window Controls (Mock for Web)
@@ -235,97 +183,51 @@ async function startServer() {
       } else if (channel === 'bump-app-version') {
         result = '1.0.1'
       }
-      // Audio transcription (Upgraded model!)
+      // Audio transcription
       else if (channel === 'iris-transcribe-audio') {
-        const performGeminiTranscribe = async () => {
-          const { base64Audio, mimeType } = args[0]
-          const apiKey = getApiKey('geminiKey', process.env.GEMINI_API_KEY)
-          if (!apiKey) throw new Error('Gemini API key is required')
-          const { GoogleGenAI } = require('@google/genai')
-          const ai = new GoogleGenAI({ apiKey })
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add quotes or commentary.'
-                  },
-                  { inlineData: { mimeType: mimeType.split(';')[0], data: base64Audio } }
-                ]
-              }
-            ]
-          })
-          return response.text
-        }
-
-        const performGroqTranscribe = async () => {
-          const groqKey = getApiKey('groqKey', process.env.GROQ_API_KEY)
-          if (!groqKey) throw new Error('Groq API key required for fast voice mode')
-          
-          let Groq;
-          try {
-            Groq = require('groq-sdk');
-          } catch (err) {
-            console.error('[Web Preview] Groq SDK require failed:', err);
-            throw new Error('Groq SDK not installed correctly on server.');
-          }
-          
-          const groqClient = new Groq({ apiKey: groqKey })
-          const { base64Audio } = args[0]
-          const buffer = Buffer.from(base64Audio, 'base64')
-          const os = require('os')
-          const tmpFile = path.join(os.tmpdir(), `audio_${Date.now()}.webm`)
-          fs.writeFileSync(tmpFile, buffer)
-
-          const transcription = await groqClient.audio.transcriptions.create({
-            file: fs.createReadStream(tmpFile),
-            model: 'whisper-large-v3-turbo',
-            response_format: 'text'
-          })
-
-          fs.unlinkSync(tmpFile)
-          return transcription
-        }
-
+        const engine = getPrimaryEngine()
         try {
-          if (global.primaryEngine === 'groq') {
-            result = await performGroqTranscribe()
+          if (engine === 'groq') {
+            const groqClient = getGroqClient()
+            const { base64Audio } = args[0]
+            const buffer = Buffer.from(base64Audio, 'base64')
+            const os = require('os')
+            const tmpFile = path.join(os.tmpdir(), `audio_${Date.now()}.webm`)
+            fs.writeFileSync(tmpFile, buffer)
+
+            const transcription = await groqClient.audio.transcriptions.create({
+              file: fs.createReadStream(tmpFile),
+              model: 'whisper-large-v3-turbo',
+              response_format: 'text'
+            })
+            fs.unlinkSync(tmpFile)
+            result = typeof transcription === 'string' ? transcription : (transcription as any).text
           } else {
-            result = await performGeminiTranscribe()
+            const ai = getGeminiClient()
+            const { base64Audio, mimeType } = args[0]
+            const response = await ai.models.generateContent({
+              model: 'gemini-3.5-flash',
+              contents: [
+                { text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add quotes or commentary.' },
+                { inlineData: { mimeType: mimeType.split(';')[0], data: base64Audio } }
+              ]
+            })
+            result = response.text
           }
         } catch (err: any) {
-          if (err.message?.includes('429') || err.message?.includes('Quota exceeded')) {
-            // Automatic cross-engine fallback if primary fails
-            try {
-              if (global.primaryEngine === 'groq') {
-                result = await performGeminiTranscribe()
-              } else {
-                result = await performGroqTranscribe()
-              }
-              return
-            } catch (fallbackErr) {
-              console.error('[Web Preview] Transcribe Fallback Error:', fallbackErr)
-            }
-            result = '[API_RATE_LIMIT]'
-          } else if (err.message?.includes('required')) {
+          console.error(`[Web Preview] Transcribe Error (${engine}):`, err)
+          if (err.message?.includes('MISSING')) {
             result = '[API_KEY_REQUIRED]'
           } else {
-            console.error('[Web Preview] Transcribe Error:', err)
-            result = ''
+            result = `[ERROR] ${err.message}`
           }
         }
       }
       // Agent orchestration (Upgraded model!)
       else if (channel === 'agent-run-task') {
         try {
-          const apiKey = getApiKey('geminiKey', process.env.GEMINI_API_KEY)
-          if (!apiKey) throw new Error('Gemini API key is required')
-          const { GoogleGenAI } = require('@google/genai')
-          const ai = new GoogleGenAI({ apiKey })
+          const ai = getGeminiClient()
           const query = args[0]
-
           const execSync = require('child_process').execSync
           const workspaceRoot = process.cwd()
 
@@ -357,24 +259,24 @@ async function startServer() {
             { role: 'user', parts: [{ text: query }] }
           ]
 
+          const modelName = 'gemini-3.5-flash'
           const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
-            contents: contents,
+            model: modelName,
+            contents,
             config: {
               tools: [{ functionDeclarations: [runCommandDeclaration] }]
             }
           })
 
           let finalResponse = response
-          // Handle tool calls
-          if (response.functionCalls && response.functionCalls.length > 0) {
-            const call = response.functionCalls[0]
-            const cmdArgs = call.args
 
-            console.log('[Web Preview] Executing command:', cmdArgs.command)
+          if (finalResponse.functionCalls?.[0]) {
+            const call = finalResponse.functionCalls[0]
+            
+            console.log('[Web Preview] Executing command:', call.args.command)
             let resultOutput
             try {
-              const stdout = execSync(cmdArgs.command, { cwd: workspaceRoot, encoding: 'utf8' })
+              const stdout = execSync(call.args.command as string, { cwd: workspaceRoot, encoding: 'utf8' })
               resultOutput = { success: true, output: stdout.slice(0, 2000) }
             } catch (err) {
               resultOutput = { success: false, error: err.message }
@@ -386,11 +288,14 @@ async function startServer() {
               parts: [{ functionResponse: { name: 'runCommand', response: resultOutput } }]
             })
 
-            finalResponse = await ai.models.generateContent({
-              model: 'gemini-3.5-flash',
-              contents: contents,
-              config: { tools: [{ functionDeclarations: [runCommandDeclaration] }] }
+            const followUp = await ai.models.generateContent({
+              model: modelName,
+              contents,
+              config: {
+                tools: [{ functionDeclarations: [runCommandDeclaration] }]
+              }
             })
+            finalResponse = followUp
           }
 
           result = finalResponse.text
@@ -399,94 +304,85 @@ async function startServer() {
           result = 'Sorry, there was an error processing your request: ' + err.message
         }
       }
-      // Real-Time Secure Chat Call with Streaming (SSE integrated!)
+      // Real-Time Secure Chat Call with Streaming
       else if (channel === 'gemini-chat-call') {
-        const performGeminiChat = async () => {
-          const { contents, systemInstruction, stream } = args[0]
-          const apiKey = getApiKey('geminiKey', process.env.GEMINI_API_KEY)
-          if (!apiKey) throw new Error('Gemini API key is required')
-          const { GoogleGenAI } = require('@google/genai')
-          const ai = new GoogleGenAI({ apiKey })
-
-          if (stream) {
-            const responseStream = await ai.models.generateContentStream({
-              model: 'gemini-3.5-flash',
-              contents,
-              config: { systemInstruction, temperature: 0.7 }
-            })
-            let fullText = ''
-            for await (const chunk of responseStream) {
-              const chunkText = chunk.text
-              if (chunkText) {
-                fullText += chunkText
-                broadcast('gemini-stream-chunk', chunkText)
-              }
-            }
-            return {
-              candidates: [{ content: { parts: [{ text: fullText }] } }]
-            }
-          } else {
-            return await ai.models.generateContent({
-              model: 'gemini-3.5-flash',
-              contents,
-              config: { systemInstruction, temperature: 0.7 }
-            })
-          }
-        }
-
-        const performGroqChat = async () => {
-          const groqKey = getApiKey('groqKey', process.env.GROQ_API_KEY)
-          if (!groqKey) throw new Error('Groq API key required for fast voice mode')
-          const Groq = require('groq-sdk')
-          const groqClient = new Groq({ apiKey: groqKey })
-          const { contents, systemInstruction } = args[0]
-          const completion = await groqClient.chat.completions.create({
-            messages: [
+        const { contents, systemInstruction, stream } = args[0]
+        const engine = getPrimaryEngine()
+        
+        try {
+          if (engine === 'groq') {
+            const groqClient = getGroqClient()
+            const messages = [
               { role: 'system', content: systemInstruction },
               ...contents.map((c: any) => ({
-                role: c.role === 'model' ? 'assistant' : c.role,
-                content: typeof c.parts[0].text === 'string' ? c.parts[0].text : ''
+                role: c.role === 'model' ? 'assistant' : (c.role === 'assistant' ? 'assistant' : 'user'),
+                content: c.parts?.[0]?.text || ''
               }))
-            ],
-            model: 'llama-3.3-70b-versatile'
-          })
-          const reply = completion.choices[0]?.message?.content || ''
-          return {
-            candidates: [{ content: { parts: [{ text: reply }] } }]
-          }
-        }
-
-        try {
-          if (global.primaryEngine === 'groq') {
-            result = await performGroqChat()
+            ]
+            
+            if (stream) {
+              const responseStream = await groqClient.chat.completions.create({
+                messages,
+                model: 'llama-3.3-70b-versatile',
+                stream: true
+              })
+              let fullText = ''
+              for await (const chunk of responseStream) {
+                const chunkText = chunk.choices[0]?.delta?.content || ''
+                if (chunkText) {
+                  fullText += chunkText
+                  broadcast('gemini-stream-chunk', chunkText)
+                }
+              }
+              result = { candidates: [{ content: { parts: [{ text: fullText }] } }] }
+            } else {
+              const completion = await groqClient.chat.completions.create({
+                messages,
+                model: 'llama-3.3-70b-versatile'
+              })
+              result = { candidates: [{ content: { parts: [{ text: completion.choices[0]?.message?.content }] } }] }
+            }
           } else {
-            result = await performGeminiChat()
+            // Gemini
+            const ai = getGeminiClient()
+            const modelName = 'gemini-3.5-flash'
+            
+            if (stream) {
+              const responseStream = await ai.models.generateContentStream({
+                model: modelName,
+                contents,
+                config: {
+                  systemInstruction
+                }
+              })
+              let fullText = ''
+              for await (const chunk of responseStream) {
+                const chunkText = chunk.text
+                if (chunkText) {
+                  fullText += chunkText
+                  broadcast('gemini-stream-chunk', chunkText)
+                }
+              }
+              result = { candidates: [{ content: { parts: [{ text: fullText }] } }] }
+            } else {
+              const response = await ai.models.generateContent({
+                model: modelName,
+                contents,
+                config: {
+                  systemInstruction
+                }
+              })
+              result = { candidates: [{ content: { parts: [{ text: response.text }] } }] }
+            }
           }
         } catch (err: any) {
-          if (err.message?.includes('429') || err.message?.includes('Quota exceeded')) {
-            try {
-              if (global.primaryEngine === 'groq') {
-                result = await performGeminiChat()
-              } else {
-                result = await performGroqChat()
-              }
-              return
-            } catch (fallbackErr) {
-              console.error('[Web Preview] Chat Fallback Error:', fallbackErr)
-            }
-            result = {
-              error:
-                'API Rate limit exceeded, Boss. The Gemini free tier allows 15 requests per minute. Please wait a moment or upgrade your API key in Settings. If this persists or you need an enterprise key, please contact the creator at xtehzeeb.x7@gmail.com.'
-            }
-          } else if (err.message?.includes('required')) {
-            result = {
-              error: 'I need your API key, Boss. Please configure it in Settings.'
-            }
+          console.error(`[Web Preview] Chat Error (${engine}):`, err)
+          if (err.message?.includes('MISSING')) {
+            result = { error: 'I need your API key, Boss. Please configure it in Settings.' }
+          } else if (err.message?.includes('429') || err.message?.includes('Quota')) {
+            result = { error: 'API Rate limit exceeded, Boss. Please wait a moment or upgrade your API key in Settings.' }
           } else {
-            console.error('[Web Preview] Chat Error:', err)
-            result = {
-              error: `Error in cognitive link: ${err.message}. Please verify your API keys in Settings.`
-            }
+            result = { error: `Cognitive link error: ${err.message}. Please verify your keys in Settings.` }
           }
         }
       }
@@ -527,21 +423,19 @@ async function startServer() {
         result = global.activityLogs
       } else if (channel === 'summarize-activity-day') {
         try {
-          const apiKey = global.mockKeys.geminiKey || process.env.GEMINI_API_KEY
-          if (apiKey) {
-            const { GoogleGenAI } = require('@google/genai')
-            const ai = new GoogleGenAI({ apiKey })
-            const logSummary = JSON.stringify(global.activityLogs)
-            const response = await ai.models.generateContent({
-              model: 'gemini-3.5-flash',
-              contents: `Analyze these active window telemetry logs and write a concise, professional executive briefing addressing the user as "Boss": ${logSummary}`
-            })
-            result = response.text
+          const ai = getGeminiClient()
+          const logSummary = JSON.stringify(global.activityLogs)
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: `Analyze these active window telemetry logs and write a concise, professional executive briefing addressing the user as "Boss": ${logSummary}`
+          })
+          result = response.text
+        } catch (e: any) {
+          if (e.message?.includes('MISSING')) {
+            result = `Boss, based on today's telemetry, your productivity has been exceptionally structured. VS Code and Chrome were your primary tools. (AI key required for deep analysis)`
           } else {
-            result = `Boss, based on today's telemetry, your productivity has been exceptionally structured. You dedicated **4 hours** to development activities in VS Code and **2 hours** to research in Chrome. Solid performance!`
+            result = `Analysis completed Boss. CPU load and memory ratios remain optimal. (AI Link: ${e.message})`
           }
-        } catch (e) {
-          result = `Analysis completed Boss. CPU load and memory ratios remain optimal. (AI Link: ${e.message})`
         }
       }
       // Notes Handlers (using REAL fs folders!)
@@ -678,7 +572,7 @@ async function startServer() {
           try {
             const stdout = execSync(cmd, { cwd: process.cwd(), encoding: 'utf8' })
             result = { success: true, output: stdout }
-          } catch (err) {
+          } catch (err: any) {
             result = { success: false, error: err.message }
           }
         } else {
