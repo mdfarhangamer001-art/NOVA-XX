@@ -10,6 +10,29 @@ interface Message {
   text: string
 }
 
+// How many turns we keep around in the UI/localStorage/disk store, and
+// how many recent turns we actually feed back to Gemini as conversational
+// context. These used to be hardcoded to 30 and 6 respectively — bumped
+// up so NOVA-X actually "remembers" a meaningfully long conversation
+// instead of forgetting everything past the last few exchanges.
+const CHAT_HISTORY_LIMIT = 200
+const CONTEXT_WINDOW = 20
+
+// Writes through to BOTH localStorage (fast, synchronous-feeling) and the
+// disk-backed electron-store (survives cache clears / reinstall of the
+// renderer, doesn't depend on Supabase being configured). Fire-and-forget
+// on the disk write so it never blocks the UI.
+function persistHistory(updated: Message[]): void {
+  try {
+    localStorage.setItem('novax_chat_history', JSON.stringify(updated))
+  } catch (e) {
+    // localStorage can throw if full/disabled — non-fatal, disk store below still tries.
+  }
+  if ((window as any).iris?.saveChatHistory) {
+    ;(window as any).iris.saveChatHistory(updated).catch(() => {})
+  }
+}
+
 export default function RightPanel(): JSX.Element {
   const [chatHistory, setChatHistory] = useState<Message[]>([])
   const [activeModelText, setActiveModelText] = useState('')
@@ -113,12 +136,26 @@ export default function RightPanel(): JSX.Element {
     const loadHistory = async (): Promise<void> => {
       let loadedHistory: Message[] = []
 
+      // Primary source: disk-backed persistent store (electron-store),
+      // survives even if the browser cache/localStorage gets cleared and
+      // doesn't need Supabase configured.
+      if ((window as any).iris?.loadChatHistory) {
+        try {
+          const persisted = await (window as any).iris.loadChatHistory()
+          if (persisted && persisted.length > 0) {
+            loadedHistory = persisted.slice(-CHAT_HISTORY_LIMIT)
+          }
+        } catch (err) {
+          console.error('Failed to load persistent chat history', err)
+        }
+      }
+
       // Try IPC bridge first
-      if ((window as any).iris?.getHistory) {
+      if (loadedHistory.length === 0 && (window as any).iris?.getHistory) {
         try {
           const pastMemories = await (window as any).iris.getHistory()
           if (pastMemories && pastMemories.length > 0) {
-            loadedHistory = pastMemories.slice(-30).map((m: any) => ({
+            loadedHistory = pastMemories.slice(-CHAT_HISTORY_LIMIT).map((m: any) => ({
               role: m.role.toLowerCase() as 'user' | 'model' | 'system',
               text: m.text
             }))
@@ -156,7 +193,7 @@ export default function RightPanel(): JSX.Element {
             for (const m of remoteMessages) {
               if (!existingTexts.has(m.text)) loadedHistory.push(m)
             }
-            loadedHistory = loadedHistory.slice(-30)
+            loadedHistory = loadedHistory.slice(-CHAT_HISTORY_LIMIT)
           }
         }
       } catch (e) {
@@ -175,8 +212,8 @@ export default function RightPanel(): JSX.Element {
           if (data.role === 'user') {
             const newMessage: Message = { role: 'user', text: data.text }
             setChatHistory((prev) => {
-              const updated = [...prev, newMessage].slice(-30)
-              localStorage.setItem('novax_chat_history', JSON.stringify(updated))
+              const updated = [...prev, newMessage].slice(-CHAT_HISTORY_LIMIT)
+              persistHistory(updated)
               return updated
             })
           } else if (data.role === 'model') {
@@ -190,8 +227,8 @@ export default function RightPanel(): JSX.Element {
           if (prev.trim().length > 0) {
             const newMessage: Message = { role: 'model', text: prev.trim() }
             setChatHistory((history) => {
-              const updated = [...history, newMessage].slice(-30)
-              localStorage.setItem('novax_chat_history', JSON.stringify(updated))
+              const updated = [...history, newMessage].slice(-CHAT_HISTORY_LIMIT)
+              persistHistory(updated)
               return updated
             })
           }
@@ -313,8 +350,8 @@ export default function RightPanel(): JSX.Element {
     // 1. Locally update conversation flow
     const userMessage: Message = { role: 'user', text: cleanQuery }
     setChatHistory((prev) => {
-      const updated = [...prev, userMessage].slice(-30)
-      localStorage.setItem('novax_chat_history', JSON.stringify(updated))
+      const updated = [...prev, userMessage].slice(-CHAT_HISTORY_LIMIT)
+      persistHistory(updated)
       return updated
     })
     saveConversationTurn('user', cleanQuery, userMood.mood, turnId)
@@ -333,7 +370,7 @@ export default function RightPanel(): JSX.Element {
             const reply = `Target acquired. Launching ${appName} now, Boss.`
             if ((window as any).speakText) (window as any).speakText(reply)
             const modelMessage: Message = { role: 'model', text: reply }
-            setChatHistory(prev => [...prev, modelMessage].slice(-30))
+            setChatHistory(prev => [...prev, modelMessage].slice(-CHAT_HISTORY_LIMIT))
             setActiveModelText('')
             return
           }
@@ -346,8 +383,8 @@ export default function RightPanel(): JSX.Element {
       setActiveModelText('')
       const modelMessage: Message = { role: 'model', text: systemCheck.reply }
       setChatHistory((prev) => {
-        const updated = [...prev, modelMessage].slice(-30)
-        localStorage.setItem('novax_chat_history', JSON.stringify(updated))
+        const updated = [...prev, modelMessage].slice(-CHAT_HISTORY_LIMIT)
+        persistHistory(updated)
         return updated
       })
       if (window.electron?.ipcRenderer) {
@@ -364,7 +401,7 @@ export default function RightPanel(): JSX.Element {
       setActiveModelText('Thinking...')
       setMood('focused', 0.7)
       try {
-        const historyContext = chatHistoryRef.current.slice(-6).map(msg => ({
+        const historyContext = chatHistoryRef.current.slice(-CONTEXT_WINDOW).map(msg => ({
           role: msg.role === 'user' ? 'user' : 'model',
           parts: [{ text: msg.text }]
         }))
@@ -413,8 +450,8 @@ export default function RightPanel(): JSX.Element {
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: modelReply }
         setChatHistory((prev) => {
-          const updated = [...prev, modelMessage].slice(-30)
-          localStorage.setItem('novax_chat_history', JSON.stringify(updated))
+          const updated = [...prev, modelMessage].slice(-CHAT_HISTORY_LIMIT)
+          persistHistory(updated)
           return updated
         })
         saveConversationTurn('model', modelReply, replyMood.mood, turnId)
@@ -434,7 +471,7 @@ export default function RightPanel(): JSX.Element {
         setActiveModelText('')
         setMood('alert', 0.8)
         const errorMessage: Message = { role: 'model', text: 'Error in cognitive link, Boss. Verify your Gemini API Key in Settings.' }
-        setChatHistory((prev) => [...prev, errorMessage].slice(-30))
+        setChatHistory((prev) => [...prev, errorMessage].slice(-CHAT_HISTORY_LIMIT))
       }
     } else {
       // Browser fallback (should not happen in production)
@@ -443,7 +480,7 @@ export default function RightPanel(): JSX.Element {
         const randomAnswer = "Secure Bridge not found. Please run NOVA-X in Electron for full cognitive capacity, Boss."
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: randomAnswer }
-        setChatHistory((prev) => [...prev, modelMessage].slice(-30))
+        setChatHistory((prev) => [...prev, modelMessage].slice(-CHAT_HISTORY_LIMIT))
       }, 1000)
     }
   }, [])
@@ -534,6 +571,9 @@ export default function RightPanel(): JSX.Element {
   // Custom clear chat helper
   const clearLocalChat = (): void => {
     localStorage.removeItem('novax_chat_history')
+    if ((window as any).iris?.clearChatHistory) {
+      ;(window as any).iris.clearChatHistory().catch(() => {})
+    }
     setChatHistory([])
   }
 
