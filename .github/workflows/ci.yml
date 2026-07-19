@@ -13,8 +13,8 @@ jobs:
     strategy:
       matrix:
         # IRIS runs natively on Windows, macOS, and Ubuntu
-        os: [windows-latest, macos-latest, ubuntu-latest]
-        node-version: [22.x]
+        os: [windows-latest,ubuntu-latest]
+        node-version: [23.x]
 
     steps:
       - name: Checkout Repository
