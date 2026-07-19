@@ -513,6 +513,24 @@ export default function RightPanel(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executeCoreCommand])
 
+  // Screen-vision self-correction: surfaces anomalies detected by the
+  // vision pipeline (error dialogs, crashes, failed builds, etc.) as a
+  // proactive system chat message with a suggested fix. We deliberately
+  // do NOT auto-execute the fix — vision models can hallucinate, so Boss
+  // confirms before anything actually runs.
+  useEffect(() => {
+    const handleAnomaly = (e: Event): void => {
+      const detail = (e as CustomEvent).detail || {}
+      const msg: Message = {
+        role: 'system',
+        text: `⚠️ Boss, ${detail.activeApplication || 'screen'} par ek issue dikha: ${detail.description}\n\nSuggested fix: ${detail.suggestedAction}\n\nBolo to main isko fix karne ki koshish karu.`
+      }
+      setChatHistory((prev) => [...prev, msg])
+    }
+    window.addEventListener('novax_vision_anomaly', handleAnomaly)
+    return () => window.removeEventListener('novax_vision_anomaly', handleAnomaly)
+  }, [])
+
   // Custom clear chat helper
   const clearLocalChat = (): void => {
     localStorage.removeItem('novax_chat_history')
