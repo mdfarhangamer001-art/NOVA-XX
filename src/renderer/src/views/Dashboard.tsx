@@ -40,7 +40,13 @@ import {
   LogOut,
   Sliders,
   Volume2,
-  Tv
+  Tv,
+  Brain,
+  Zap,
+  Orbit,
+  Atom,
+  Flame,
+  Sparkles
 } from 'lucide-react'
 import RightPanel from '@renderer/components/UI/RightPanel'
 import AICore from '@renderer/components/UI/AICoreSphere'
@@ -207,6 +213,7 @@ export default function Dashboard({
   const [showGoogleModal, setShowGoogleModal] = useState<boolean>(false)
   const [authLoading, setAuthLoading] = useState<boolean>(false)
   const [authProgress, setAuthProgress] = useState<string>('')
+  const [localNickname, setLocalNickname] = useState<string>('Boss')
 
   // Interactive Google Sign-In step states
   const [googleStep, setGoogleStep] = useState<'waiting' | 'success' | 'failed'>('waiting')
@@ -221,6 +228,31 @@ export default function Dashboard({
   const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
     return localStorage.getItem('novax_lang') || 'en-US'
   })
+
+  // Customizable Neural Core Icon state
+  const systemIcons = [
+    { id: 'cpu', label: 'Quantum Matrix', component: Cpu, color: '#10b981', glow: 'rgba(16,185,129,0.5)', shadow: 'shadow-[0_0_20px_rgba(16,185,129,0.35)]' },
+    { id: 'brain', label: 'Cognitive Synapse', component: Brain, color: '#00f3ff', glow: 'rgba(0,243,255,0.5)', shadow: 'shadow-[0_0_20px_rgba(0,243,255,0.35)]' },
+    { id: 'zap', label: 'Tesla Core', component: Zap, color: '#fbbf24', glow: 'rgba(251,191,36,0.5)', shadow: 'shadow-[0_0_20px_rgba(251,191,36,0.35)]' },
+    { id: 'orbit', label: 'Cosmic Orbit', component: Orbit, color: '#a78bfa', glow: 'rgba(167,139,250,0.5)', shadow: 'shadow-[0_0_20px_rgba(167,139,250,0.35)]' },
+    { id: 'atom', label: 'Fusion Engine', component: Atom, color: '#ec4899', glow: 'rgba(236,72,153,0.5)', shadow: 'shadow-[0_0_20px_rgba(236,72,153,0.35)]' },
+    { id: 'flame', label: 'Plasma Core', component: Flame, color: '#f97316', glow: 'rgba(249,115,22,0.5)', shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.35)]' }
+  ]
+
+  const [selectedIconId, setSelectedIconId] = useState(() => {
+    return localStorage.getItem('novax_system_icon') || 'cpu'
+  })
+
+  const activeIconData = systemIcons.find((item) => item.id === selectedIconId) || systemIcons[0]
+  const ActiveIconComponent = activeIconData.component
+
+  useEffect(() => {
+    const handleStorage = () => {
+      setSelectedIconId(localStorage.getItem('novax_system_icon') || 'cpu')
+    }
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
 
   // Dynamic Google script loader and window bindings
   useEffect(() => {
@@ -540,160 +572,125 @@ export default function Dashboard({
     return `hsl(${hue}, 90%, 50%)`
   }
 
-  // Render Login Boot Gate if unauthenticated
+  // Render Local Identity Boot Gate if unauthenticated
   if (!authOperator) {
+    const handleLocalSyncInit = (): void => {
+      const operatorUser: OperatorUser = {
+        name: localNickname.trim() || 'Boss',
+        email: 'offline@novax.local',
+        provider: 'LOCAL_SECURE_VAULT',
+        syncTime: new Date().toLocaleTimeString(),
+        avatar: ''
+      }
+      localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
+      setAuthOperator(operatorUser)
+      playDiagnosticChime(880)
+    }
+
     return (
       <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 selection:bg-[#00f3ff]/20">
         {/* Dynamic Matrix-like Background */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,243,255,0.06)_0%,transparent_70%)] pointer-events-none" />
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#00f3ff]/20 to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.06)_0%,transparent_70%)] pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
 
-        <div className="w-full max-w-md bg-zinc-950/80 backdrop-blur-3xl border border-[#00f3ff]/20 rounded-2xl p-8 shadow-[0_0_50px_rgba(0,243,255,0.1)] flex flex-col text-center relative overflow-hidden">
+        <div className="w-full max-w-md bg-zinc-950/80 backdrop-blur-3xl border border-emerald-500/20 rounded-2xl p-8 shadow-[0_0_50px_rgba(16,185,129,0.1)] flex flex-col text-center relative overflow-hidden">
           {/* Hex decorative nodes */}
-          <div className="absolute top-2 left-2 font-mono text-[7px] text-[#00f3ff]/30 uppercase tracking-widest">
-            NODE // GATE_SYS_V1.6
+          <div className="absolute top-2 left-2 font-mono text-[7px] text-emerald-400/30 uppercase tracking-widest">
+            NODE // GATEWAY_V1.5
           </div>
           <div className="absolute top-2 right-2 font-mono text-[7px] text-emerald-400/30 uppercase tracking-widest animate-pulse">
-            ● SECURE CORE
+            ● SECURE ACCESS
           </div>
 
+          {/* Loading overlay */}
+          {authLoading && (
+            <div className="absolute inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center">
+              <div className="relative w-16 h-16 flex items-center justify-center border rounded-xl bg-zinc-900/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] overflow-hidden mb-4"
+                style={{ borderColor: `${activeIconData.color}40` }}
+              >
+                <ActiveIconComponent size={28} style={{ color: activeIconData.color }} className="animate-spin" />
+              </div>
+              <h3 className="text-sm font-bold font-mono text-white tracking-widest uppercase mb-2">Establishing Connection...</h3>
+              <p className="text-xs font-mono text-emerald-400 max-w-xs">{authProgress}</p>
+            </div>
+          )}
+
           <div className="mb-6 flex flex-col items-center gap-3">
-            <div className="relative w-16 h-16 flex items-center justify-center border border-[#00f3ff]/30 rounded-xl bg-zinc-900/60 shadow-[0_0_20px_rgba(0,243,255,0.15)] overflow-hidden">
-              <div className="absolute inset-0 border border-emerald-400/10 rounded-lg animate-ping scale-105" />
-              <img src={Logo} className="w-11 h-11" />
+            <div className="relative w-16 h-16 flex items-center justify-center border rounded-xl bg-zinc-900/60 transition-all duration-300 overflow-hidden"
+              style={{
+                borderColor: `${activeIconData.color}40`,
+                boxShadow: `0 0 20px ${activeIconData.color}25`
+              }}
+            >
+              <div className="absolute inset-0 rounded-lg animate-ping scale-105" style={{ border: `1px solid ${activeIconData.color}20` }} />
+              <ActiveIconComponent size={28} style={{ color: activeIconData.color }} className="animate-pulse" />
             </div>
             <div>
               <h2 className="text-2xl font-black tracking-[0.35em] text-white font-mono">NOVA-X</h2>
-              <p className="text-[10px] font-mono tracking-widest text-[#00f3ff]/70 uppercase mt-1">
+              <p className="text-[10px] font-mono tracking-widest text-emerald-400/70 uppercase mt-1">
                 Cognitive Operating System
               </p>
             </div>
           </div>
 
-          <p className="text-[11px] text-zinc-400 font-sans tracking-wide leading-relaxed mb-8 px-2">
-            Securely link your Google Identity to enable real-time network sync and preserve dynamic
-            nodes.
+          <p className="text-[11px] text-zinc-400 font-sans tracking-wide leading-relaxed mb-6 px-2">
+            Establish your identity. All memories and chat logs are stored inside your local app cache, with optional secure cloud sync.
           </p>
 
-          <div className="flex flex-col gap-3">
-            {/* Google Authentication Portal Trigger */}
-            <button
-              onClick={triggerGoogleSignIn}
-              disabled={authLoading}
-              className="group cursor-pointer w-full py-3.5 bg-white text-black font-mono font-bold text-xs tracking-widest uppercase rounded-xl transition-all duration-300 hover:bg-neutral-200 hover:shadow-[0_0_25px_rgba(255,255,255,0.4)] flex items-center justify-center gap-2 border border-white"
-            >
-              <LogIn size={14} className="group-hover:translate-x-0.5 transition-transform" />
-              Sign In with Google
-            </button>
-          </div>
-
-          {showGoogleModal && (
-            <div className="absolute inset-0 bg-zinc-950/98 backdrop-blur-md flex flex-col items-center justify-center p-6 z-50 animate-in fade-in zoom-in-95 duration-200">
-              <div className="w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-2xl relative text-left">
-                {/* Close button */}
-                {googleStep !== 'success' && (
-                  <button
-                    onClick={() => setShowGoogleModal(false)}
-                    className="absolute top-4 right-4 text-zinc-500 hover:text-white font-sans text-sm font-bold transition-colors cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                )}
-
-                {/* Google Logo */}
-                <div className="flex justify-center mb-4 mt-2">
-                  <svg className="w-7 h-7" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
-                </div>
-
-                {googleStep === 'waiting' && (
-                  <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in duration-200">
-                    <div className="w-12 h-12 border-2 border-t-transparent border-[#4285F4] rounded-full animate-spin mb-4" />
-                    <span className="font-mono text-[9px] tracking-[0.25em] text-[#4285F4] uppercase animate-pulse">
-                      Waiting for Browser Sign-In
-                    </span>
-                    <p className="font-mono text-[9px] text-zinc-500 mt-2 text-center max-w-[90%] uppercase leading-relaxed min-h-[30px]">
-                      {authProgress}
-                    </p>
-                  </div>
-                )}
-
-                {googleStep === 'success' && (
-                  <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in duration-200">
-                    <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mb-4 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                      <svg
-                        className="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <span className="font-mono text-[10px] tracking-[0.25em] text-emerald-400 uppercase">
-                      Sync Complete
-                    </span>
-                    <p className="font-mono text-[9px] text-zinc-500 mt-2 text-center max-w-[90%] uppercase leading-relaxed">
-                      {authProgress}
-                    </p>
-                  </div>
-                )}
-
-                {googleStep === 'failed' && (
-                  <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in duration-200">
-                    <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mb-4 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-                      <svg
-                        className="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </div>
-                    <span className="font-mono text-[10px] tracking-[0.25em] text-red-400 uppercase">
-                      Sync Failed
-                    </span>
-                    <p className="font-mono text-[9px] text-zinc-400 mt-3 text-center max-w-[95%] uppercase leading-relaxed">
-                      {authProgress}
-                    </p>
-                    <button
-                      onClick={() => setShowGoogleModal(false)}
-                      className="mt-5 px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-white/10 rounded-lg text-[10px] font-mono uppercase tracking-wider text-zinc-300 transition-colors cursor-pointer"
-                    >
-                      Acknowledge
-                    </button>
-                  </div>
-                )}
+          <div className="flex flex-col gap-5 text-left">
+            {/* Section 1: Local Secure Login */}
+            <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+              <h4 className="text-[9.5px] font-mono font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-1.5 text-emerald-400">
+                <Lock size={12} /> Local Offline Uplink
+              </h4>
+              <div className="mb-3">
+                <label className="block text-[9px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5">
+                  Operator Callsign
+                </label>
+                <input
+                  type="text"
+                  value={localNickname}
+                  onChange={(e) => setLocalNickname(e.target.value)}
+                  placeholder="Boss"
+                  className="w-full bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700/80 focus:border-emerald-500/40 px-3.5 py-2.5 rounded-xl font-mono text-sm text-white focus:outline-none transition-all placeholder:text-zinc-600"
+                />
               </div>
+              <button
+                onClick={handleLocalSyncInit}
+                className="group cursor-pointer w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-bold text-xs tracking-widest uppercase rounded-xl transition-all duration-300 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2"
+              >
+                Launch Offline Core
+              </button>
             </div>
-          )}
 
-          <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between font-mono text-[8px] text-zinc-500 uppercase tracking-widest">
-            <span>Uplink: Secure Protocol</span>
-            <span>OS: NOVA-X Quantum</span>
+            {/* Divider */}
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-white/5"></div>
+              <span className="flex-shrink mx-4 text-[9px] font-mono text-zinc-600 uppercase tracking-widest">OR</span>
+              <div className="flex-grow border-t border-white/5"></div>
+            </div>
+
+            {/* Section 2: Google Cloud Login */}
+            <div className="p-4 bg-[#4285f4]/5 border border-[#4285f4]/15 rounded-xl text-center">
+              <h4 className="text-[9.5px] font-mono font-bold text-white uppercase tracking-wider mb-2 flex items-center justify-center gap-1.5 text-[#4285f4]">
+                <LogIn size={12} /> Google Cloud Sync
+              </h4>
+              <p className="text-[10px] text-zinc-500 mb-3 leading-snug">
+                Authorize via Google browser tab to sync profile & preserve workspace settings.
+              </p>
+              <button
+                onClick={triggerGoogleSignIn}
+                className="cursor-pointer w-full py-3 bg-[#4285f4] hover:bg-[#357ae8] text-white font-mono font-bold text-xs tracking-widest uppercase rounded-xl transition-all duration-300 hover:shadow-[0_0_20px_rgba(66,133,244,0.3)] flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24">
+                  <path
+                    fill="currentColor"
+                    d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.578-7.859-8s3.53-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.227-3.11C18.281 1.16 15.47 0 12.24 0 5.58 0 0 5.37 0 12s5.58 12 12.24 12c6.96 0 11.57-4.83 11.57-11.79 0-.79-.085-1.4-.195-1.925H12.24z"
+                  />
+                </svg>
+                Synchronize via Google
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -713,11 +710,16 @@ export default function Dashboard({
           {/* Operator Status Header */}
           <div className="p-3 bg-zinc-950/60 backdrop-blur-xl border border-white/10 rounded-xl flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-2.5">
-              <div className="relative w-8 h-8 rounded-lg border border-[#00f3ff]/20 bg-zinc-900 overflow-hidden flex items-center justify-center">
+              <div className="relative w-8 h-8 rounded-lg border bg-zinc-900 overflow-hidden flex items-center justify-center transition-all duration-300"
+                style={{
+                  borderColor: `${activeIconData.color}30`,
+                  boxShadow: `0 0 10px ${activeIconData.color}20`
+                }}
+              >
                 {authOperator.avatar ? (
                   <img src={authOperator.avatar} className="w-full h-full object-cover" />
                 ) : (
-                  <Database size={14} className="text-emerald-400" />
+                  <ActiveIconComponent size={14} style={{ color: activeIconData.color }} className="animate-pulse" />
                 )}
               </div>
               <div className="flex flex-col">

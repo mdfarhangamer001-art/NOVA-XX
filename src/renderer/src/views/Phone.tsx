@@ -189,6 +189,65 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
     }
   }
 
+  const handleAdbAutoConnect = async () => {
+    setAdbLoading(true)
+    setAdbError(null)
+    setAdbLogs((prev) => [
+      `[${new Date().toLocaleTimeString()}] Scanning USB ports for debugging-enabled devices...`,
+      ...prev
+    ])
+    if (window.electron?.ipcRenderer) {
+      try {
+        const res = await window.electron.ipcRenderer.invoke('adb-auto-connect')
+        if (res.success) {
+          setAdbConnected(true)
+          setAdbIp(res.serial || 'USB Device')
+          setAdbPort('')
+          setAdbLogs((prev) => [
+            `[${new Date().toLocaleTimeString()}] [SUCCESS] Automated USB connection established with ${res.device || 'Android hardware'}. Serial: ${res.serial}`,
+            ...prev
+          ])
+          playDiagnosticChime(880)
+          fetchAdbTelemetry()
+        } else {
+          setAdbConnected(false)
+          setAdbError(res.error || 'Uplink failed')
+          setAdbLogs((prev) => [
+            `[${new Date().toLocaleTimeString()}] [FAILURE] Automated USB scan failed: ${res.error || 'No active device detected'}`,
+            ...prev
+          ])
+          playDiagnosticChime(150)
+        }
+      } catch (e: any) {
+        setAdbConnected(false)
+        setAdbError(e.message || 'Uplink failed')
+        setAdbLogs((prev) => [
+          `[${new Date().toLocaleTimeString()}] [CRITICAL] Core failure during USB auto-handshake: ${e.message}`,
+          ...prev
+        ])
+        playDiagnosticChime(150)
+      }
+    } else {
+      // simulated browser auto-connect
+      setTimeout(() => {
+        setAdbConnected(true)
+        setAdbLogs((prev) => [
+          `[${new Date().toLocaleTimeString()}] [SUCCESS] [SIMULATED] USB connection established with Pixel 8 Pro.`,
+          ...prev
+        ])
+        setAdbTelemetryData({
+          model: 'PIXEL 8 PRO (SIMULATED)',
+          os: 'ANDROID 14 (UPLINKED)',
+          battery: { level: 88, isCharging: true, temp: '31.2' }
+        })
+        playDiagnosticChime(880)
+        setAdbLoading(false)
+      }, 1000)
+      return
+    }
+    setAdbLoading(false)
+  }
+
   const handleAdbConnect = async () => {
     setAdbLoading(true)
     setAdbError(null)
@@ -338,6 +397,7 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
   useEffect(() => {
     if (activeSubTab === 'usb') {
       loadAdbHistory()
+      handleAdbAutoConnect()
     }
   }, [activeSubTab])
 
@@ -722,6 +782,30 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                   "Connect your Android device via high-speed USB debugging. First, ensure USB Debugging or Wireless Debugging is enabled in your phone's Developer Options, and accept the computer's RSA authorization fingerprint key on your device screen."
                 }
               </p>
+
+              <div className="flex flex-col sm:flex-row gap-3 mb-6 p-4 bg-[#00f3ff]/5 border border-[#00f3ff]/10 rounded-2xl items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-[#00f3ff]/10 flex items-center justify-center text-[#00f3ff]">
+                    <Usb size={18} />
+                  </div>
+                  <div className="text-left">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">USB Auto-Connect (Plug-and-Play)</h4>
+                    <p className="text-[10px] text-zinc-500 font-sans">Instantly connect to any USB debugging device plugged in.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleAdbAutoConnect}
+                  disabled={adbLoading}
+                  className="cursor-pointer px-4 py-2 bg-[#00f3ff] text-black font-mono font-bold text-xs tracking-wider uppercase rounded-xl hover:bg-[#00f3ff]/80 transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  {adbLoading ? (
+                    <RefreshCw size={12} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={12} />
+                  )}
+                  <span>Auto Scan & Connect</span>
+                </button>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end mb-4">
                 <div className="sm:col-span-7">

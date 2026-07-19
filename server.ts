@@ -64,7 +64,18 @@ async function startServer() {
   }
 
   // Global Mock States
-  if (!global.mockKeys) global.mockKeys = {};
+  const credentialsPath = path.join(process.cwd(), 'credentials.json');
+  if (!global.mockKeys) {
+    global.mockKeys = {};
+    if (fs.existsSync(credentialsPath)) {
+      try {
+        global.mockKeys = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+        console.log('[Web Preview] Successfully loaded credentials.json for mockKeys');
+      } catch (err) {
+        console.error('[Web Preview] Failed to read credentials.json:', err);
+      }
+    }
+  }
   if (!global.clipboardHistory) {
     global.clipboardHistory = [
       { id: '1', type: 'text', content: 'sk-proj-716492816439281', timestamp: Date.now() - 3600000, pinned: true },
@@ -108,6 +119,12 @@ async function startServer() {
       // Save and Get Keys
       else if (channel === 'secure-save-keys') {
         global.mockKeys = { ...global.mockKeys, ...args[0] };
+        try {
+          fs.writeFileSync(credentialsPath, JSON.stringify(global.mockKeys, null, 2), 'utf8');
+          console.log('[Web Preview] Saved mockKeys to credentials.json successfully');
+        } catch (err) {
+          console.error('[Web Preview] Failed to save mockKeys to credentials.json:', err);
+        }
         result = { success: true };
       } 
       else if (channel === 'secure-get-keys') {
@@ -491,6 +508,12 @@ async function startServer() {
       }
       // Jarvis Cognitive Memories
       else if (channel === 'get-memories') {
+        result = global.memories;
+      }
+      else if (channel === 'set-memories') {
+        if (Array.isArray(args[0])) {
+          global.memories = args[0];
+        }
         result = global.memories;
       }
       else if (channel === 'delete-memory') {
