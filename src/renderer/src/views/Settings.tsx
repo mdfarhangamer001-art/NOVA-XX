@@ -8,6 +8,7 @@ import {
   RiPlugLine,
   RiTerminalWindowLine
 } from 'react-icons/ri'
+import { detectPerformanceTier } from '../utils/detectPerformanceTier'
 
 interface SettingsProps {
   isSystemActive: boolean
@@ -47,8 +48,13 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   const [perfMode, setPerfMode] = useState<'high' | 'medium' | 'low'>(() => {
     const saved = localStorage.getItem('novax_perf_mode') as 'high' | 'medium' | 'low'
     if (saved) return saved
-    // Fallback to legacy lowEndMode if exists
-    return localStorage.getItem('novax_low_end_mode') === 'true' ? 'low' : 'high'
+    // No explicit choice yet — match the same real hardware detection
+    // AICoreSphere uses (cores/RAM/GPU type), not a blind 'high' default.
+    try {
+      return detectPerformanceTier()
+    } catch (e) {
+      return 'medium'
+    }
   })
 
   const handlePerfModeChange = (mode: 'high' | 'medium' | 'low'): void => {
