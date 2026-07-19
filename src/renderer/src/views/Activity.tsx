@@ -1,4 +1,14 @@
-import { BarChart, Radar, Sparkles, Settings, Clock, Cpu, Play, Pause, RefreshCw } from 'lucide-react'
+import {
+  BarChart,
+  Radar,
+  Sparkles,
+  Settings,
+  Clock,
+  Cpu,
+  Play,
+  Pause,
+  RefreshCw
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -12,7 +22,6 @@ import {
   Pie,
   Cell
 } from 'recharts'
-
 
 interface ActivityLog {
   date: string

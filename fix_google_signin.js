@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const file = path.join(__dirname, 'src/main/lib/system.ts');
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const path = require('path')
+const file = path.join(__dirname, 'src/main/lib/system.ts')
+let content = fs.readFileSync(file, 'utf8')
 
 // We'll replace the existing google-sign-in handler.
 const signinReplacement = `ipcMain.removeHandler('google-sign-in')
@@ -50,8 +50,11 @@ const signinReplacement = `ipcMain.removeHandler('google-sign-in')
           }
         }, 180000);
       })
-    })`;
+    })`
 
-content = content.replace(/ipcMain\.removeHandler\('google-sign-in'\)[\s\S]*?(?=ipcMain\.removeHandler\('google-sign-out'\))/m, signinReplacement + '\n\n    ');
+content = content.replace(
+  /ipcMain\.removeHandler\('google-sign-in'\)[\s\S]*?(?=ipcMain\.removeHandler\('google-sign-out'\))/m,
+  signinReplacement + '\n\n    '
+)
 
-fs.writeFileSync(file, content, 'utf8');
+fs.writeFileSync(file, content, 'utf8')

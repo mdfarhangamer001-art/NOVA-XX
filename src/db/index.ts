@@ -45,7 +45,11 @@ export async function createNote(userId: number, title: string, content: string)
 }
 
 export async function getNotes(userId: number) {
-  return await db.select().from(schema.notes).where(eq(schema.notes.userId, userId)).orderBy(desc(schema.notes.createdAt))
+  return await db
+    .select()
+    .from(schema.notes)
+    .where(eq(schema.notes.userId, userId))
+    .orderBy(desc(schema.notes.createdAt))
 }
 
 // User Interactions: Activity Logs
@@ -54,5 +58,10 @@ export async function logActivity(userId: number, text: string, type: string = '
 }
 
 export async function getActivityLogs(userId: number, limit: number = 50) {
-  return await db.select().from(schema.activityLogs).where(eq(schema.activityLogs.userId, userId)).orderBy(desc(schema.activityLogs.timestamp)).limit(limit)
+  return await db
+    .select()
+    .from(schema.activityLogs)
+    .where(eq(schema.activityLogs.userId, userId))
+    .orderBy(desc(schema.activityLogs.timestamp))
+    .limit(limit)
 }

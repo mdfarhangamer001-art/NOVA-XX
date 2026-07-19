@@ -1,7 +1,6 @@
 import { Minus, X, Square, Copy, Cpu, Activity } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
-
 export default function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false)
   const [isMac, setIsMac] = useState(false)
@@ -32,28 +31,19 @@ export default function TitleBar() {
               onClick={close}
               className="w-3 h-3 rounded-full bg-zinc-800 hover:bg-[#ff5f56] border border-black/20 transition-colors flex items-center justify-center shadow-inner"
             >
-              <X
-                size={8}
-                className="opacity-0 group-hover/mac:opacity-100 text-[#4c0002]"
-              />
+              <X size={8} className="opacity-0 group-hover/mac:opacity-100 text-[#4c0002]" />
             </button>
             <button
               onClick={minimize}
               className="w-3 h-3 rounded-full bg-zinc-800 hover:bg-[#ffbd2e] border border-black/20 transition-colors flex items-center justify-center shadow-inner"
             >
-              <Minus
-                size={8}
-                className="opacity-0 group-hover/mac:opacity-100 text-[#5c3e00]"
-              />
+              <Minus size={8} className="opacity-0 group-hover/mac:opacity-100 text-[#5c3e00]" />
             </button>
             <button
               onClick={toggleMaximize}
               className="w-3 h-3 rounded-full bg-zinc-800 hover:bg-[#27c93f] border border-black/20 transition-colors flex items-center justify-center shadow-inner"
             >
-              <Square
-                size={6}
-                className="opacity-0 group-hover/mac:opacity-100 text-[#024d04]"
-              />
+              <Square size={6} className="opacity-0 group-hover/mac:opacity-100 text-[#024d04]" />
             </button>
           </div>
         ) : (
@@ -94,11 +84,7 @@ export default function TitleBar() {
               onClick={toggleMaximize}
               className="w-12 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
             >
-              {isMaximized ? (
-                <Copy size={14} />
-              ) : (
-                <Square size={14} />
-              )}
+              {isMaximized ? <Copy size={14} /> : <Square size={14} />}
             </button>
             <button
               onClick={close}

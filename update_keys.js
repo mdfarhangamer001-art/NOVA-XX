@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const file = path.join(__dirname, 'src/main/lib/system.ts');
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const path = require('path')
+const file = path.join(__dirname, 'src/main/lib/system.ts')
+let content = fs.readFileSync(file, 'utf8')
 
 content = content.replace(
   `        const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
@@ -26,6 +26,6 @@ content = content.replace(
             tavilyKey: process.env.TAVILY_API_KEY || fallback.tavilyKey,
             openrouterKey: process.env.OPENROUTER_API_KEY || fallback.openrouterKey
         }`
-);
+)
 
-fs.writeFileSync(file, content, 'utf8');
+fs.writeFileSync(file, content, 'utf8')

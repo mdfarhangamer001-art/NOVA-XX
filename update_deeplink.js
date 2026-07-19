@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const file = path.join(__dirname, 'src/main/index.ts');
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const path = require('path')
+const file = path.join(__dirname, 'src/main/index.ts')
+let content = fs.readFileSync(file, 'utf8')
 
 // Add deep link handling
 const customProtocol = `
@@ -39,9 +39,9 @@ app.on('open-url', (event, url) => {
     }
   }
 })
-`;
+`
 
 // insert customProtocol before app.whenReady()
-content = content.replace('app.whenReady()', customProtocol + '\napp.whenReady()');
+content = content.replace('app.whenReady()', customProtocol + '\napp.whenReady()')
 
-fs.writeFileSync(file, content, 'utf8');
+fs.writeFileSync(file, content, 'utf8')

@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import ReactFileCode from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-
 interface Note {
   filename: string
   title: string

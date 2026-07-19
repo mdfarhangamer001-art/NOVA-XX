@@ -2,7 +2,6 @@ import { Clipboard, Trash2, Pin, Copy, EyeOff, Eye, Hash, Lock, Image, Shield } 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-
 interface ClipboardEntry {
   id: string
   type: 'text' | 'image'
@@ -236,11 +235,7 @@ export default function ClipboardView(): JSX.Element {
                           }`}
                           title={item.pinned ? 'Unpin item' : 'Pin item'}
                         >
-                          {item.pinned ? (
-                            <Pin className="w-4 h-4" />
-                          ) : (
-                            <Pin className="w-4 h-4" />
-                          )}
+                          {item.pinned ? <Pin className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
                         </button>
 
                         <button

@@ -1,36 +1,36 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require('fs')
+const path = require('path')
 
 const map = {
-  'Database2': 'Database',
-  'Image2': 'Image',
-  'ArrowLeftS': 'ChevronLeft',
-  'CodeBox': 'Code'
-};
+  Database2: 'Database',
+  Image2: 'Image',
+  ArrowLeftS: 'ChevronLeft',
+  CodeBox: 'Code'
+}
 
 function walk(directory) {
-  const files = fs.readdirSync(directory);
+  const files = fs.readdirSync(directory)
   for (const file of files) {
-    const p = path.join(directory, file);
+    const p = path.join(directory, file)
     if (fs.statSync(p).isDirectory()) {
-      walk(p);
+      walk(p)
     } else if (p.endsWith('.tsx') || p.endsWith('.ts')) {
-      let content = fs.readFileSync(p, 'utf8');
-      let changed = false;
+      let content = fs.readFileSync(p, 'utf8')
+      let changed = false
 
       for (const [bad, good] of Object.entries(map)) {
         if (content.includes(bad)) {
           // Use word boundary to avoid matching substring inside another icon
-          content = content.replace(new RegExp('\\b' + bad + '\\b', 'g'), good);
-          changed = true;
+          content = content.replace(new RegExp('\\b' + bad + '\\b', 'g'), good)
+          changed = true
         }
       }
 
       if (changed) {
-        fs.writeFileSync(p, content, 'utf8');
+        fs.writeFileSync(p, content, 'utf8')
       }
     }
   }
 }
 
-walk(path.join(__dirname, 'src/renderer/src'));
+walk(path.join(__dirname, 'src/renderer/src'))

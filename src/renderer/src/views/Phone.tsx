@@ -791,8 +791,12 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                     <Usb size={18} />
                   </div>
                   <div className="text-left">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">USB Auto-Connect (Plug-and-Play)</h4>
-                    <p className="text-[10px] text-zinc-500 font-sans">Instantly connect to any USB debugging device plugged in.</p>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                      USB Auto-Connect (Plug-and-Play)
+                    </h4>
+                    <p className="text-[10px] text-zinc-500 font-sans">
+                      Instantly connect to any USB debugging device plugged in.
+                    </p>
                   </div>
                 </div>
                 <button

@@ -1,6 +1,23 @@
-import { LayoutGrid, FolderOpen, Phone, Settings, Image, Cpu, Heart, Clipboard, BarChart2, Mail, ShieldAlert, Brain, Zap, Orbit, Atom, Flame, Sparkles } from 'lucide-react'
+import {
+  LayoutGrid,
+  FolderOpen,
+  Phone,
+  Settings,
+  Image,
+  Cpu,
+  Heart,
+  Clipboard,
+  BarChart2,
+  Mail,
+  ShieldAlert,
+  Brain,
+  Zap,
+  Orbit,
+  Atom,
+  Flame,
+  Sparkles
+} from 'lucide-react'
 import { useState, Suspense, lazy, useEffect, useRef } from 'react'
-
 
 import DashboardView from '../views/Dashboard'
 import PhoneView from '../views/Phone'
@@ -23,17 +40,60 @@ interface NovaXProps {
   isSpeaking: boolean
   isMuted: boolean
   handleMicToggle: () => void
+  micStatus?: 'idle' | 'listening' | 'transcribing'
 }
 
 const glassPanel = 'bg-zinc-950/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-xl'
 
 const systemIcons = [
-  { id: 'cpu', label: 'Quantum Matrix', component: Cpu, color: '#10b981', glow: 'rgba(16,185,129,0.5)', shadow: 'shadow-[0_0_20px_rgba(16,185,129,0.35)]' },
-  { id: 'brain', label: 'Cognitive Synapse', component: Brain, color: '#00f3ff', glow: 'rgba(0,243,255,0.5)', shadow: 'shadow-[0_0_20px_rgba(0,243,255,0.35)]' },
-  { id: 'zap', label: 'Tesla Core', component: Zap, color: '#fbbf24', glow: 'rgba(251,191,36,0.5)', shadow: 'shadow-[0_0_20px_rgba(251,191,36,0.35)]' },
-  { id: 'orbit', label: 'Cosmic Orbit', component: Orbit, color: '#a78bfa', glow: 'rgba(167,139,250,0.5)', shadow: 'shadow-[0_0_20px_rgba(167,139,250,0.35)]' },
-  { id: 'atom', label: 'Fusion Engine', component: Atom, color: '#ec4899', glow: 'rgba(236,72,153,0.5)', shadow: 'shadow-[0_0_20px_rgba(236,72,153,0.35)]' },
-  { id: 'flame', label: 'Plasma Core', component: Flame, color: '#f97316', glow: 'rgba(249,115,22,0.5)', shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.35)]' }
+  {
+    id: 'cpu',
+    label: 'Quantum Matrix',
+    component: Cpu,
+    color: '#10b981',
+    glow: 'rgba(16,185,129,0.5)',
+    shadow: 'shadow-[0_0_20px_rgba(16,185,129,0.35)]'
+  },
+  {
+    id: 'brain',
+    label: 'Cognitive Synapse',
+    component: Brain,
+    color: '#00f3ff',
+    glow: 'rgba(0,243,255,0.5)',
+    shadow: 'shadow-[0_0_20px_rgba(0,243,255,0.35)]'
+  },
+  {
+    id: 'zap',
+    label: 'Tesla Core',
+    component: Zap,
+    color: '#fbbf24',
+    glow: 'rgba(251,191,36,0.5)',
+    shadow: 'shadow-[0_0_20px_rgba(251,191,36,0.35)]'
+  },
+  {
+    id: 'orbit',
+    label: 'Cosmic Orbit',
+    component: Orbit,
+    color: '#a78bfa',
+    glow: 'rgba(167,139,250,0.5)',
+    shadow: 'shadow-[0_0_20px_rgba(167,139,250,0.35)]'
+  },
+  {
+    id: 'atom',
+    label: 'Fusion Engine',
+    component: Atom,
+    color: '#ec4899',
+    glow: 'rgba(236,72,153,0.5)',
+    shadow: 'shadow-[0_0_20px_rgba(236,72,153,0.35)]'
+  },
+  {
+    id: 'flame',
+    label: 'Plasma Core',
+    component: Flame,
+    color: '#f97316',
+    glow: 'rgba(249,115,22,0.5)',
+    shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.35)]'
+  }
 ]
 
 const NovaX = ({
@@ -41,10 +101,13 @@ const NovaX = ({
   toggleConnection,
   isSpeaking,
   isMuted,
-  handleMicToggle
+  handleMicToggle,
+  micStatus
 }: NovaXProps) => {
   const [activeTab, setActiveTab] = useState('DASHBOARD')
-  const [selectedIconId, setSelectedIconId] = useState(localStorage.getItem('novax_system_icon') || 'cpu')
+  const [selectedIconId, setSelectedIconId] = useState(
+    localStorage.getItem('novax_system_icon') || 'cpu'
+  )
   const [showIconSelector, setShowIconSelector] = useState(false)
 
   const playDiagnosticChime = (freq = 440) => {
@@ -150,7 +213,7 @@ const NovaX = ({
         }
       }
     }
-    
+
     const tabsEl = tabsRef.current
     if (tabsEl) {
       tabsEl.addEventListener('wheel', handleWheel, { passive: false })
@@ -164,7 +227,11 @@ const NovaX = ({
 
   const tabs = [
     { id: 'DASHBOARD', label: 'Command', icon: <LayoutGrid size={16} /> },
-    { id: 'OVERLORD', label: 'Overlord', icon: <ShieldAlert size={16} className="text-emerald-400" /> },
+    {
+      id: 'OVERLORD',
+      label: 'Overlord',
+      icon: <ShieldAlert size={16} className="text-emerald-400" />
+    },
     { id: 'AGENTS', label: 'Agents', icon: <Cpu size={16} /> },
     { id: 'CLIPBOARD', label: 'Clipboard', icon: <Clipboard size={16} /> },
     { id: 'ACTIVITY', label: 'Activity', icon: <BarChart2 size={16} /> },
@@ -180,9 +247,9 @@ const NovaX = ({
     <div className="flex flex-col h-screen w-full bg-black text-zinc-100 font-sans overflow-hidden select-none relative">
       <div className="h-16 w-full flex items-center justify-between px-6 bg-black border-b border-white/5 z-50">
         <div className="flex items-center gap-3 w-72 relative select-none">
-          <img 
-            src={Logo} 
-            className="w-11 h-11 object-contain cursor-pointer hover:scale-105 transition-transform" 
+          <img
+            src={Logo}
+            className="w-11 h-11 object-contain cursor-pointer hover:scale-105 transition-transform"
             onClick={() => {
               setActiveTab('DASHBOARD')
               playDiagnosticChime(440)
@@ -190,7 +257,7 @@ const NovaX = ({
             title="NOVA-X Logo"
           />
 
-          <div 
+          <div
             onClick={() => {
               setShowIconSelector(!showIconSelector)
               playDiagnosticChime(660)
@@ -202,8 +269,8 @@ const NovaX = ({
               backgroundColor: `${activeIconData.color}08`
             }}
           >
-            <ActiveIconComponent 
-              size={22} 
+            <ActiveIconComponent
+              size={22}
               style={{ color: activeIconData.color }}
               className="animate-pulse"
             />
@@ -269,7 +336,10 @@ const NovaX = ({
           )}
         </div>
 
-        <div ref={tabsRef} className="flex-1 mx-4 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent flex items-center gap-1 bg-zinc-950/80 p-1 rounded-xl border border-white/5 backdrop-blur-md shadow-2xl">
+        <div
+          ref={tabsRef}
+          className="flex-1 mx-4 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent flex items-center gap-1 bg-zinc-950/80 p-1 rounded-xl border border-white/5 backdrop-blur-md shadow-2xl"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -291,13 +361,20 @@ const NovaX = ({
         <div className="flex items-center justify-end gap-3 w-48">
           <div className="flex flex-col items-end leading-none">
             <span className="text-[10px] font-mono tracking-widest uppercase text-zinc-400">
-              Network
+              System
             </span>
-            <span
-              className={`text-[9px] font-mono tracking-widest uppercase mt-1 ${isConnected ? 'text-emerald-500' : 'text-red-500'}`}
-            >
-              {isConnected ? 'Connected' : 'Offline'}
-            </span>
+            <div className="flex items-center gap-2 mt-1">
+              {isConnected && micStatus && micStatus !== 'idle' && (
+                <span className="text-[8px] font-mono tracking-widest uppercase text-emerald-400 animate-pulse bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                  {micStatus}
+                </span>
+              )}
+              <span
+                className={`text-[9px] font-mono tracking-widest uppercase ${isConnected ? 'text-emerald-500' : 'text-red-500'}`}
+              >
+                {isConnected ? 'Active' : 'Offline'}
+              </span>
+            </div>
           </div>
           <div
             className={`h-2 w-2 rounded-full shadow-[0_0_8px_currentColor] ${isConnected ? 'bg-emerald-500 text-emerald-500' : 'bg-red-500 text-red-500'}`}

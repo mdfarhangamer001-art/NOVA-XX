@@ -1,4 +1,17 @@
-import { Image, Trash2, FolderOpen, X, Database, FileWarning, ChevronLeft, ChevronRight, Download, Video, PlayCircle, LayoutGrid } from 'lucide-react'
+import {
+  Image,
+  Trash2,
+  FolderOpen,
+  X,
+  Database,
+  FileWarning,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Video,
+  PlayCircle,
+  LayoutGrid
+} from 'lucide-react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 import { motion, AnimatePresence } from 'framer-motion'

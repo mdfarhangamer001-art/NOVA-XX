@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const file = path.join(__dirname, 'server.ts');
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const path = require('path')
+const file = path.join(__dirname, 'server.ts')
+let content = fs.readFileSync(file, 'utf8')
 
 const replacement = `
     } else if (channel === 'agent-run-task') {
@@ -74,8 +74,11 @@ const replacement = `
          result = 'Sorry, there was an error processing your request: ' + err.message;
       }
     }
-`;
+`
 
-content = content.replace(/\} else if \(channel === 'agent-run-task'\) \{[\s\S]*?\} catch \(err\) \{[\s\S]*?result = 'Sorry, there was an error processing your request: ' \+ err\.message;\n      \}\n    \}/, replacement.trim());
+content = content.replace(
+  /\} else if \(channel === 'agent-run-task'\) \{[\s\S]*?\} catch \(err\) \{[\s\S]*?result = 'Sorry, there was an error processing your request: ' \+ err\.message;\n      \}\n    \}/,
+  replacement.trim()
+)
 
-fs.writeFileSync(file, content, 'utf8');
+fs.writeFileSync(file, content, 'utf8')

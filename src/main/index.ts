@@ -311,7 +311,6 @@ function createWindow(): void {
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
-
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
     app.setAsDefaultProtocolClient('novax', process.execPath, [path.resolve(process.argv[1])])

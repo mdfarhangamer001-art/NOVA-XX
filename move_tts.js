@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const file = path.join(__dirname, 'src/renderer/src/NovaXRoot.tsx');
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const path = require('path')
+const file = path.join(__dirname, 'src/renderer/src/NovaXRoot.tsx')
+let content = fs.readFileSync(file, 'utf8')
 
 const ttsCode = `
   useEffect(() => {
@@ -39,8 +39,11 @@ const ttsCode = `
       delete (window as any).speakText;
     };
   }, []);
-`;
+`
 
-content = content.replace('  // Modern VAD-based Voice Recognition Core', ttsCode + '\n  // Modern VAD-based Voice Recognition Core');
+content = content.replace(
+  '  // Modern VAD-based Voice Recognition Core',
+  ttsCode + '\n  // Modern VAD-based Voice Recognition Core'
+)
 
-fs.writeFileSync(file, content, 'utf8');
+fs.writeFileSync(file, content, 'utf8')

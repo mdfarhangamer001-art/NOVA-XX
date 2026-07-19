@@ -11,7 +11,7 @@ const App = () => {
       <AnimatePresence>
         {loading && <Preloader key="preloader" onComplete={() => setLoading(false)} />}
       </AnimatePresence>
-      
+
       {!loading && (
         <div style={{ animation: 'fadeIn 1s ease-in-out' }}>
           <IndexRoot />

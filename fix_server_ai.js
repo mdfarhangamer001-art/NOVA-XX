@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const file = path.join(__dirname, 'server.ts');
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const path = require('path')
+const file = path.join(__dirname, 'server.ts')
+let content = fs.readFileSync(file, 'utf8')
 
 const replacement = `
     } else if (channel === 'secure-get-keys') {
@@ -53,10 +53,16 @@ const replacement = `
          result = 'Sorry, there was an error processing your request: ' + err.message;
       }
     }
-`;
+`
 
-content = content.replace(/} else if \(channel === 'secure-get-keys'\) \{[\s\S]*?\} else if \(channel === 'google-sign-in'\) \{[\s\S]*?\}\n/, replacement + '\n');
+content = content.replace(
+  /} else if \(channel === 'secure-get-keys'\) \{[\s\S]*?\} else if \(channel === 'google-sign-in'\) \{[\s\S]*?\}\n/,
+  replacement + '\n'
+)
 // Since I used async await inside app.post, need to make it async.
-content = content.replace(`app.post('/api/ipc', (req, res) => {`, `app.post('/api/ipc', async (req, res) => {`);
+content = content.replace(
+  `app.post('/api/ipc', (req, res) => {`,
+  `app.post('/api/ipc', async (req, res) => {`
+)
 
-fs.writeFileSync(file, content, 'utf8');
+fs.writeFileSync(file, content, 'utf8')

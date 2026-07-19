@@ -1,12 +1,12 @@
-const fs = require('fs');
-const path = require('path');
-const file = path.join(__dirname, 'server.ts');
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const path = require('path')
+const file = path.join(__dirname, 'server.ts')
+let content = fs.readFileSync(file, 'utf8')
 
 content = content.replace(
   `let result = null;`,
   `let result = null;\n    if (!global.mockKeys) global.mockKeys = {};`
-);
+)
 
 content = content.replace(
   `} else if (channel === 'secure-save-keys') {
@@ -24,6 +24,6 @@ content = content.replace(
         openrouterKey: process.env.OPENROUTER_API_KEY || global.mockKeys.openrouterKey || ''
       };
     }`
-);
+)
 
-fs.writeFileSync(file, content, 'utf8');
+fs.writeFileSync(file, content, 'utf8')

@@ -272,12 +272,54 @@ export default function Dashboard({
 
   // Customizable Neural Core Icon state
   const systemIcons = [
-    { id: 'cpu', label: 'Quantum Matrix', component: Cpu, color: '#10b981', glow: 'rgba(16,185,129,0.5)', shadow: 'shadow-[0_0_20px_rgba(16,185,129,0.35)]' },
-    { id: 'brain', label: 'Cognitive Synapse', component: Brain, color: '#00f3ff', glow: 'rgba(0,243,255,0.5)', shadow: 'shadow-[0_0_20px_rgba(0,243,255,0.35)]' },
-    { id: 'zap', label: 'Tesla Core', component: Zap, color: '#fbbf24', glow: 'rgba(251,191,36,0.5)', shadow: 'shadow-[0_0_20px_rgba(251,191,36,0.35)]' },
-    { id: 'orbit', label: 'Cosmic Orbit', component: Orbit, color: '#a78bfa', glow: 'rgba(167,139,250,0.5)', shadow: 'shadow-[0_0_20px_rgba(167,139,250,0.35)]' },
-    { id: 'atom', label: 'Fusion Engine', component: Atom, color: '#ec4899', glow: 'rgba(236,72,153,0.5)', shadow: 'shadow-[0_0_20px_rgba(236,72,153,0.35)]' },
-    { id: 'flame', label: 'Plasma Core', component: Flame, color: '#f97316', glow: 'rgba(249,115,22,0.5)', shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.35)]' }
+    {
+      id: 'cpu',
+      label: 'Quantum Matrix',
+      component: Cpu,
+      color: '#10b981',
+      glow: 'rgba(16,185,129,0.5)',
+      shadow: 'shadow-[0_0_20px_rgba(16,185,129,0.35)]'
+    },
+    {
+      id: 'brain',
+      label: 'Cognitive Synapse',
+      component: Brain,
+      color: '#00f3ff',
+      glow: 'rgba(0,243,255,0.5)',
+      shadow: 'shadow-[0_0_20px_rgba(0,243,255,0.35)]'
+    },
+    {
+      id: 'zap',
+      label: 'Tesla Core',
+      component: Zap,
+      color: '#fbbf24',
+      glow: 'rgba(251,191,36,0.5)',
+      shadow: 'shadow-[0_0_20px_rgba(251,191,36,0.35)]'
+    },
+    {
+      id: 'orbit',
+      label: 'Cosmic Orbit',
+      component: Orbit,
+      color: '#a78bfa',
+      glow: 'rgba(167,139,250,0.5)',
+      shadow: 'shadow-[0_0_20px_rgba(167,139,250,0.35)]'
+    },
+    {
+      id: 'atom',
+      label: 'Fusion Engine',
+      component: Atom,
+      color: '#ec4899',
+      glow: 'rgba(236,72,153,0.5)',
+      shadow: 'shadow-[0_0_20px_rgba(236,72,153,0.35)]'
+    },
+    {
+      id: 'flame',
+      label: 'Plasma Core',
+      component: Flame,
+      color: '#f97316',
+      glow: 'rgba(249,115,22,0.5)',
+      shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.35)]'
+    }
   ]
 
   const [selectedIconId, setSelectedIconId] = useState(() => {
@@ -646,12 +688,19 @@ export default function Dashboard({
           {/* Loading overlay */}
           {authLoading && (
             <div className="absolute inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center">
-              <div className="relative w-16 h-16 flex items-center justify-center border rounded-xl bg-zinc-900/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] overflow-hidden mb-4"
+              <div
+                className="relative w-16 h-16 flex items-center justify-center border rounded-xl bg-zinc-900/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] overflow-hidden mb-4"
                 style={{ borderColor: `${activeIconData.color}40` }}
               >
-                <ActiveIconComponent size={28} style={{ color: activeIconData.color }} className="animate-spin" />
+                <ActiveIconComponent
+                  size={28}
+                  style={{ color: activeIconData.color }}
+                  className="animate-spin"
+                />
               </div>
-              <h3 className="text-sm font-bold font-mono text-white tracking-widest uppercase mb-2">Establishing Connection...</h3>
+              <h3 className="text-sm font-bold font-mono text-white tracking-widest uppercase mb-2">
+                Establishing Connection...
+              </h3>
               <p className="text-xs font-mono text-emerald-400 max-w-xs">{authProgress}</p>
             </div>
           )}
@@ -666,14 +715,22 @@ export default function Dashboard({
               <div className="text-zinc-700 font-mono text-sm">⚡</div>
 
               {/* NEURAL CORE ICON */}
-              <div className="relative w-16 h-16 flex items-center justify-center border rounded-xl bg-zinc-900/60 transition-all duration-300 overflow-hidden"
+              <div
+                className="relative w-16 h-16 flex items-center justify-center border rounded-xl bg-zinc-900/60 transition-all duration-300 overflow-hidden"
                 style={{
                   borderColor: `${activeIconData.color}40`,
                   boxShadow: `0 0 20px ${activeIconData.color}25`
                 }}
               >
-                <div className="absolute inset-0 rounded-lg animate-ping scale-105" style={{ border: `1px solid ${activeIconData.color}20` }} />
-                <ActiveIconComponent size={28} style={{ color: activeIconData.color }} className="animate-pulse" />
+                <div
+                  className="absolute inset-0 rounded-lg animate-ping scale-105"
+                  style={{ border: `1px solid ${activeIconData.color}20` }}
+                />
+                <ActiveIconComponent
+                  size={28}
+                  style={{ color: activeIconData.color }}
+                  className="animate-pulse"
+                />
               </div>
             </div>
             <div>
@@ -685,7 +742,8 @@ export default function Dashboard({
           </div>
 
           <p className="text-[11px] text-zinc-400 font-sans tracking-wide leading-relaxed mb-6 px-2">
-            Establish your identity. All memories and chat logs are stored inside your local app cache, with optional secure cloud sync.
+            Establish your identity. All memories and chat logs are stored inside your local app
+            cache, with optional secure cloud sync.
           </p>
 
           <div className="flex flex-col gap-5 text-left">
@@ -717,7 +775,9 @@ export default function Dashboard({
             {/* Divider */}
             <div className="relative flex py-1 items-center">
               <div className="flex-grow border-t border-white/5"></div>
-              <span className="flex-shrink mx-4 text-[9px] font-mono text-zinc-600 uppercase tracking-widest">OR</span>
+              <span className="flex-shrink mx-4 text-[9px] font-mono text-zinc-600 uppercase tracking-widest">
+                OR
+              </span>
               <div className="flex-grow border-t border-white/5"></div>
             </div>
 
@@ -761,7 +821,8 @@ export default function Dashboard({
           {/* Operator Status Header */}
           <div className="p-3 bg-zinc-950/60 backdrop-blur-xl border border-white/10 rounded-xl flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-2.5">
-              <div className="relative w-8 h-8 rounded-lg border bg-zinc-900 overflow-hidden flex items-center justify-center transition-all duration-300"
+              <div
+                className="relative w-8 h-8 rounded-lg border bg-zinc-900 overflow-hidden flex items-center justify-center transition-all duration-300"
                 style={{
                   borderColor: `${activeIconData.color}30`,
                   boxShadow: `0 0 10px ${activeIconData.color}20`
@@ -770,7 +831,11 @@ export default function Dashboard({
                 {authOperator.avatar ? (
                   <img src={authOperator.avatar} className="w-full h-full object-cover" />
                 ) : (
-                  <ActiveIconComponent size={14} style={{ color: activeIconData.color }} className="animate-pulse" />
+                  <ActiveIconComponent
+                    size={14}
+                    style={{ color: activeIconData.color }}
+                    className="animate-pulse"
+                  />
                 )}
               </div>
               <div className="flex flex-col">
@@ -814,7 +879,7 @@ export default function Dashboard({
 
             <div className="relative aspect-video w-full rounded-lg border border-white/5 bg-[#030303] flex items-center justify-center overflow-hidden">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,243,255,0.04)_0%,transparent_80%)] pointer-events-none" />
-              
+
               {visionMode !== 'off' ? (
                 <video
                   ref={videoRef}
@@ -834,7 +899,11 @@ export default function Dashboard({
               <div className="absolute bottom-1 right-1 border-b border-r border-[#00f3ff]/30 h-2 w-2 z-20" />
 
               <span className="font-mono text-[7px] text-zinc-500 uppercase tracking-widest absolute bottom-2 z-20">
-                {visionMode === 'camera' ? 'Camera Live Lens Active' : visionMode === 'screen' ? 'Real Screen Sharing Active' : 'Lens Link Ready'}
+                {visionMode === 'camera'
+                  ? 'Camera Live Lens Active'
+                  : visionMode === 'screen'
+                    ? 'Real Screen Sharing Active'
+                    : 'Lens Link Ready'}
               </span>
             </div>
           </div>

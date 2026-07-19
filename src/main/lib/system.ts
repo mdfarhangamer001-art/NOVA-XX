@@ -642,22 +642,32 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
           }
         })
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add any commentary, explanations, or quotes.'
-                },
-                { inlineData: { mimeType, data: base64Audio } }
-              ]
-            }
-          ]
-        })
+        try {
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add any commentary, explanations, or quotes.'
+                  },
+                  { inlineData: { mimeType, data: base64Audio } }
+                ]
+              }
+            ]
+          })
 
-        return response.text?.trim() || ''
+          return response.text?.trim() || ''
+        } catch (err: any) {
+          if (err.message?.includes('429') || err.message?.includes('Quota exceeded')) {
+            return '[API_RATE_LIMIT]'
+          } else if (err.message?.includes('required')) {
+            return '[API_KEY_REQUIRED]'
+          }
+          console.error('[Web Preview] Transcribe Error:', err)
+          throw err
+        }
       }
     )
 
@@ -691,6 +701,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     ipcMain.removeHandler('secure-save-keys')
     ipcMain.handle('secure-save-keys', (_event, keys: any) => {
       try {
+        if (keys.primaryEngine) {
+          store.set('primary_engine', keys.primaryEngine)
+        }
         if (safeStorage && safeStorage.isEncryptionAvailable()) {
           const encrypted = safeStorage.encryptString(JSON.stringify(keys))
           store.set('secure_api_keys_encrypted', encrypted.toString('base64'))
@@ -714,7 +727,10 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       } catch (e) {
         // ignore safeStorage decryption error and fallback
       }
-      return store.get('secure_api_keys') || {}
+      return {
+        ...(store.get('secure_api_keys') as any),
+        primaryEngine: store.get('primary_engine') || 'gemini'
+      }
     })
 
     // Dynamic Versioning Handlers
@@ -940,7 +956,8 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
           isSimulatedAdb = false
           return {
             success: false,
-            error: 'ADB not detected — please install Android Platform Tools and connect your device'
+            error:
+              'ADB not detected — please install Android Platform Tools and connect your device'
           }
         }
 
@@ -967,7 +984,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
           // Try to get model name for history log
           let model = 'USB Android Device'
           try {
-            const modelOutput = await runCommand(`adb -s ${detectedSerial} shell getprop ro.product.model`)
+            const modelOutput = await runCommand(
+              `adb -s ${detectedSerial} shell getprop ro.product.model`
+            )
             if (modelOutput) {
               model = modelOutput.trim().toUpperCase()
             }
@@ -986,7 +1005,8 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
           isSimulatedAdb = false
           return {
             success: false,
-            error: 'No active USB-debugging Android device detected. Make sure your phone is connected and USB debugging is enabled.'
+            error:
+              'No active USB-debugging Android device detected. Make sure your phone is connected and USB debugging is enabled.'
           }
         }
       } catch (err: any) {
@@ -1019,18 +1039,14 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         }
       }
       try {
-        const modelOutput = await runCommand(
-          `adb ${getAdbTarget()} shell getprop ro.product.model`
-        )
+        const modelOutput = await runCommand(`adb ${getAdbTarget()} shell getprop ro.product.model`)
         if (!modelOutput) {
           throw new Error('Device unreachable or offline')
         }
         const osOutput = await runCommand(
           `adb ${getAdbTarget()} shell getprop ro.build.version.release`
         )
-        const batteryOutput = await runCommand(
-          `adb ${getAdbTarget()} shell dumpsys battery`
-        )
+        const batteryOutput = await runCommand(`adb ${getAdbTarget()} shell dumpsys battery`)
 
         let level = 100
         let isCharging = false
@@ -1070,9 +1086,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         }
       }
       try {
-        const output = await runCommand(
-          `adb ${getAdbTarget()} shell dumpsys notification`
-        )
+        const output = await runCommand(`adb ${getAdbTarget()} shell dumpsys notification`)
         // Try to parse real notifications if possible, or return empty list
         return { success: true, data: [] }
       } catch (e) {
@@ -1089,9 +1103,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         }
       }
       try {
-        const capture = await runCommand(
-          `adb ${getAdbTarget()} exec-out screencap -p | base64`
-        )
+        const capture = await runCommand(`adb ${getAdbTarget()} exec-out screencap -p | base64`)
         if (capture && capture.trim()) {
           return {
             success: true,
@@ -1147,49 +1159,59 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     // Google Auth IPC Handlers
     ipcMain.removeHandler('google-sign-in')
     ipcMain.handle('google-sign-in', async () => {
-      const signinUrl = process.env.GOOGLE_SIGNIN_URL;
+      const signinUrl = process.env.GOOGLE_SIGNIN_URL
       if (!signinUrl || signinUrl.trim() === '' || signinUrl.includes('placeholder')) {
         console.error('[NOVA-X OAuth] GOOGLE_SIGNIN_URL is not configured in the environment.')
         return {
           success: false,
-          error: 'Google Sign In URL is not configured. Please set GOOGLE_SIGNIN_URL in the .env file.'
+          error:
+            'Google Sign In URL is not configured. Please set GOOGLE_SIGNIN_URL in the .env file.'
         }
       }
 
       return new Promise((resolve) => {
-        let isResolved = false;
-        
+        let isResolved = false
+
         const onCallback = (event, url) => {
-           if (isResolved) return;
-           isResolved = true;
-           ipcMain.removeListener('oauth-callback', onCallback);
-           
-           // parse token/code from URL
-           try {
-             const parsedUrl = new URL(url);
-             const code = parsedUrl.searchParams.get('code') || parsedUrl.hash.match(/access_token=([^&]*)/)?.[1];
-             if (code) {
-               // save profile or token
-               resolve({ success: true, name: 'Tehzeeb', email: 'xtehzeeb.x7@gmail.com', token: code, syncTime: new Date().toLocaleTimeString(), avatar: '' });
-             } else {
-               resolve({ success: false, error: 'Authentication failed.' });
-             }
-           } catch(e) {
-             resolve({ success: false, error: 'Authentication failed.' });
-           }
-        };
-        
-        ipcMain.on('oauth-callback', onCallback);
-        shell.openExternal(signinUrl);
-        
+          if (isResolved) return
+          isResolved = true
+          ipcMain.removeListener('oauth-callback', onCallback)
+
+          // parse token/code from URL
+          try {
+            const parsedUrl = new URL(url)
+            const code =
+              parsedUrl.searchParams.get('code') ||
+              parsedUrl.hash.match(/access_token=([^&]*)/)?.[1]
+            if (code) {
+              // save profile or token
+              resolve({
+                success: true,
+                name: 'Tehzeeb',
+                email: 'xtehzeeb.x7@gmail.com',
+                token: code,
+                syncTime: new Date().toLocaleTimeString(),
+                avatar: ''
+              })
+            } else {
+              resolve({ success: false, error: 'Authentication failed.' })
+            }
+          } catch (e) {
+            resolve({ success: false, error: 'Authentication failed.' })
+          }
+        }
+
+        ipcMain.on('oauth-callback', onCallback)
+        shell.openExternal(signinUrl)
+
         // Timeout after 3 minutes
         setTimeout(() => {
           if (!isResolved) {
-            isResolved = true;
-            ipcMain.removeListener('oauth-callback', onCallback);
-            resolve({ success: false, error: 'Authentication timed out.' });
+            isResolved = true
+            ipcMain.removeListener('oauth-callback', onCallback)
+            resolve({ success: false, error: 'Authentication timed out.' })
           }
-        }, 180000);
+        }, 180000)
       })
     })
 
@@ -1389,11 +1411,16 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       try {
         const rootDir = app.getAppPath()
         const srcDir = path.join(rootDir, 'src')
-        
+
         let fileCount = 0
         let totalSize = 0
-        const filesToScan: Array<{ path: string; size: number; status: 'HEALTHY' | 'WARNING' | 'CRITICAL'; desc: string }> = []
-        
+        const filesToScan: Array<{
+          path: string
+          size: number
+          status: 'HEALTHY' | 'WARNING' | 'CRITICAL'
+          desc: string
+        }> = []
+
         const scanDir = (dir: string) => {
           if (!fs.existsSync(dir)) return
           const list = fs.readdirSync(dir)
@@ -1410,14 +1437,19 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
                 scanDir(fullPath)
               }
             } else {
-              if (item.endsWith('.ts') || item.endsWith('.tsx') || item.endsWith('.json') || item.endsWith('.js')) {
+              if (
+                item.endsWith('.ts') ||
+                item.endsWith('.tsx') ||
+                item.endsWith('.json') ||
+                item.endsWith('.js')
+              ) {
                 fileCount++
                 totalSize += stat.size
-                
+
                 const relativePath = path.relative(rootDir, fullPath)
                 let status: 'HEALTHY' | 'WARNING' | 'CRITICAL' = 'HEALTHY'
                 let desc = 'Operational bounds fully nominal.'
-                
+
                 // Read a tiny snippet or analyze name for status
                 try {
                   const content = fs.readFileSync(fullPath, 'utf8')
@@ -1430,7 +1462,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
                     desc = 'Active error logging channels identified. Nominal debug load.'
                   }
                 } catch (err) {}
-                
+
                 if (filesToScan.length < 50) {
                   filesToScan.push({
                     path: relativePath,
@@ -1443,14 +1475,14 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             }
           }
         }
-        
+
         scanDir(srcDir)
-        
+
         // Dynamic RAM & System Stats
         const freeMem = os.freemem()
         const totalMem = os.totalmem()
         const memPercentage = ((totalMem - freeMem) / totalMem) * 100
-        
+
         return {
           totalFiles: fileCount,
           totalBytes: totalSize,
@@ -1486,12 +1518,28 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       try {
         const steps = [
           { step: 'Neural Core Initialization', msg: 'Syncing system files...', duration: 600 },
-          { step: 'Workspace Alignment Scanner', msg: 'Scanning for redundant .yml build config residuals...', duration: 800 },
-          { step: 'TypeScript Static Proofing', msg: 'Analyzing loose types and strict interfaces...', duration: 1000 },
-          { step: 'Telemetry Pipeline Tuning', msg: 'Clearing memory heap buffers and purging garbage collection...', duration: 700 },
-          { step: 'Cognitive Link Recalibration', msg: 'Re-indexing local files & synchronizing audio visual feedback...', duration: 500 }
+          {
+            step: 'Workspace Alignment Scanner',
+            msg: 'Scanning for redundant .yml build config residuals...',
+            duration: 800
+          },
+          {
+            step: 'TypeScript Static Proofing',
+            msg: 'Analyzing loose types and strict interfaces...',
+            duration: 1000
+          },
+          {
+            step: 'Telemetry Pipeline Tuning',
+            msg: 'Clearing memory heap buffers and purging garbage collection...',
+            duration: 700
+          },
+          {
+            step: 'Cognitive Link Recalibration',
+            msg: 'Re-indexing local files & synchronizing audio visual feedback...',
+            duration: 500
+          }
         ]
-        
+
         return {
           success: true,
           completedAt: new Date().toISOString(),

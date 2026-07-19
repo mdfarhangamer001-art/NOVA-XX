@@ -1,8 +1,20 @@
-import { Brain, Key, Save, Shield, Plug, Terminal, Check, Database, Download, Upload, AlertTriangle } from 'lucide-react'
+import {
+  Brain,
+  Key,
+  Save,
+  Shield,
+  Plug,
+  Terminal,
+  Check,
+  Database,
+  Download,
+  Upload,
+  AlertTriangle,
+  Trash2,
+  RefreshCcw
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-
-
 
 interface SettingsProps {
   isSystemActive: boolean
@@ -37,6 +49,12 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   const [openrouterKey, setOpenrouterKey] = useState(
     () => localStorage.getItem('novax_openrouter_key') || ''
   )
+  const [customKey, setCustomKey] = useState(
+    () => localStorage.getItem('novax_custom_key') || ''
+  )
+  const [primaryEngine, setPrimaryEngine] = useState<'gemini' | 'groq'>(
+    () => (localStorage.getItem('novax_primary_engine') as 'gemini' | 'groq') || 'gemini'
+  )
   const [systemTone, setSystemTone] = useState(
     () => localStorage.getItem('novax_system_tone') || 'authoritative'
   )
@@ -66,10 +84,54 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
             if (keys.hfKey) setHfKey(keys.hfKey)
             if (keys.tavilyKey) settavilyKey(keys.tavilyKey)
             if (keys.openrouterKey) setOpenrouterKey(keys.openrouterKey)
+            if (keys.customKey) setCustomKey(keys.customKey)
+            if (keys.primaryEngine) setPrimaryEngine(keys.primaryEngine)
           }
         })
     }
   }, [])
+
+  const saveSingleKey = async (
+    keyType: 'geminiKey' | 'groqKey' | 'hfKey' | 'tavilyKey' | 'openrouterKey' | 'customKey',
+    value: string
+  ): Promise<void> => {
+    if (window.electron?.ipcRenderer) {
+      try {
+        const currentKeys = await window.electron.ipcRenderer.invoke('secure-get-keys')
+        const updatedKeys = { ...currentKeys, [keyType]: value }
+        await window.electron.ipcRenderer.invoke('secure-save-keys', updatedKeys)
+        setSaveStatus('saved')
+        setTimeout(() => setSaveStatus('idle'), 2000)
+      } catch (err) {
+        console.error(`Failed to save ${keyType}:`, err)
+      }
+    }
+  }
+
+  const removeSingleKey = async (
+    keyType: 'geminiKey' | 'groqKey' | 'hfKey' | 'tavilyKey' | 'openrouterKey' | 'customKey'
+  ): Promise<void> => {
+    if (window.confirm(`Are you sure you want to remove this API key?`)) {
+      if (keyType === 'geminiKey') setGeminiKey('')
+      if (keyType === 'groqKey') setGroqKey('')
+      if (keyType === 'hfKey') setHfKey('')
+      if (keyType === 'tavilyKey') settavilyKey('')
+      if (keyType === 'openrouterKey') setOpenrouterKey('')
+      if (keyType === 'customKey') setCustomKey('')
+
+      if (window.electron?.ipcRenderer) {
+        try {
+          const currentKeys = await window.electron.ipcRenderer.invoke('secure-get-keys')
+          const updatedKeys = { ...currentKeys, [keyType]: '' }
+          await window.electron.ipcRenderer.invoke('secure-save-keys', updatedKeys)
+          setSaveStatus('saved')
+          setTimeout(() => setSaveStatus('idle'), 2000)
+        } catch (err) {
+          console.error(`Failed to remove ${keyType}:`, err)
+        }
+      }
+    }
+  }
 
   const saveApiKeys = async (): Promise<void> => {
     setSaveStatus('saving')
@@ -88,8 +150,11 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
           geminiKey,
           hfKey,
           tavilyKey,
-          openrouterKey
+          openrouterKey,
+          customKey,
+          primaryEngine
         })
+        localStorage.setItem('novax_primary_engine', primaryEngine)
         console.log('API Keys securely encrypted and saved to NOVA-X Vault.')
         setSaveStatus('saved')
         setTimeout(() => setSaveStatus('idle'), 3000)
@@ -110,7 +175,9 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
     }
   }
 
-  const [backupStatus, setBackupStatus] = useState<'idle' | 'exporting' | 'importing' | 'success' | 'error'>('idle')
+  const [backupStatus, setBackupStatus] = useState<
+    'idle' | 'exporting' | 'importing' | 'success' | 'error'
+  >('idle')
   const [backupError, setBackupError] = useState('')
 
   const exportBackup = async () => {
@@ -157,10 +224,14 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
       }
 
       // Serialize and download
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2))
+      const dataStr =
+        'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupData, null, 2))
       const downloadAnchor = document.createElement('a')
-      downloadAnchor.setAttribute("href", dataStr)
-      downloadAnchor.setAttribute("download", `novax_memory_synapse_${new Date().toISOString().slice(0, 10)}.json`)
+      downloadAnchor.setAttribute('href', dataStr)
+      downloadAnchor.setAttribute(
+        'download',
+        `novax_memory_synapse_${new Date().toISOString().slice(0, 10)}.json`
+      )
       document.body.appendChild(downloadAnchor)
       downloadAnchor.click()
       downloadAnchor.remove()
@@ -196,7 +267,13 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
 
         // Restore API Keys
         if (data.apiKeys) {
-          const { groqKey: kGroq, geminiKey: kGem, hfKey: kHf, tavilyKey: kTay, openrouterKey: kOp } = data.apiKeys
+          const {
+            groqKey: kGroq,
+            geminiKey: kGem,
+            hfKey: kHf,
+            tavilyKey: kTay,
+            openrouterKey: kOp
+          } = data.apiKeys
           if (kGroq) setGroqKey(kGroq)
           if (kGem) setGeminiKey(kGem)
           if (kHf) setHfKey(kHf)
@@ -364,64 +441,216 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
+                    <div className="flex flex-col gap-2">
                       <label className={labelClass}>Google Gemini API</label>
-                      <div className={inputContainerClass}>
-                        <input
-                          type="password"
-                          value={geminiKey}
-                          onChange={(e) => setGeminiKey(e.target.value)}
-                          placeholder="AIzaSy..."
-                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
-                        />
+                      <div className="flex gap-2">
+                        <div className={inputContainerClass}>
+                          <input
+                            type="password"
+                            value={geminiKey}
+                            onChange={(e) => setGeminiKey(e.target.value)}
+                            placeholder="AIzaSy..."
+                            className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => saveSingleKey('geminiKey', geminiKey)}
+                            className="p-3 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all cursor-pointer"
+                            title="Save Gemini Key"
+                          >
+                            <Save size={16} />
+                          </button>
+                          <button
+                            onClick={() => removeSingleKey('geminiKey')}
+                            className="p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all cursor-pointer"
+                            title="Remove Gemini Key"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div>
+
+                    <div className="flex flex-col gap-2">
                       <label className={labelClass}>Groq Cloud API</label>
-                      <div className={inputContainerClass}>
-                        <input
-                          type="password"
-                          value={groqKey}
-                          onChange={(e) => setGroqKey(e.target.value)}
-                          placeholder="gsk_..."
-                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
-                        />
+                      <div className="flex gap-2">
+                        <div className={inputContainerClass}>
+                          <input
+                            type="password"
+                            value={groqKey}
+                            onChange={(e) => setGroqKey(e.target.value)}
+                            placeholder="gsk_..."
+                            className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => saveSingleKey('groqKey', groqKey)}
+                            className="p-3 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all cursor-pointer"
+                            title="Save Groq Key"
+                          >
+                            <Save size={16} />
+                          </button>
+                          <button
+                            onClick={() => removeSingleKey('groqKey')}
+                            className="p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all cursor-pointer"
+                            title="Remove Groq Key"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div>
+
+                    <div className="flex flex-col gap-2">
                       <label className={labelClass}>Hugging Face Token</label>
-                      <div className={inputContainerClass}>
-                        <input
-                          type="password"
-                          value={hfKey}
-                          onChange={(e) => setHfKey(e.target.value)}
-                          placeholder="hf_..."
-                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
-                        />
+                      <div className="flex gap-2">
+                        <div className={inputContainerClass}>
+                          <input
+                            type="password"
+                            value={hfKey}
+                            onChange={(e) => setHfKey(e.target.value)}
+                            placeholder="hf_..."
+                            className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => saveSingleKey('hfKey', hfKey)}
+                            className="p-3 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all cursor-pointer"
+                            title="Save HF Token"
+                          >
+                            <Save size={16} />
+                          </button>
+                          <button
+                            onClick={() => removeSingleKey('hfKey')}
+                            className="p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all cursor-pointer"
+                            title="Remove HF Token"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div>
+
+                    <div className="flex flex-col gap-2">
                       <label className={labelClass}>Tavily Search API</label>
-                      <div className={inputContainerClass}>
-                        <input
-                          type="password"
-                          value={tavilyKey}
-                          onChange={(e) => settavilyKey(e.target.value)}
-                          placeholder="tvly-..."
-                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
-                        />
+                      <div className="flex gap-2">
+                        <div className={inputContainerClass}>
+                          <input
+                            type="password"
+                            value={tavilyKey}
+                            onChange={(e) => settavilyKey(e.target.value)}
+                            placeholder="tvly-..."
+                            className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => saveSingleKey('tavilyKey', tavilyKey)}
+                            className="p-3 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all cursor-pointer"
+                            title="Save Tavily Key"
+                          >
+                            <Save size={16} />
+                          </button>
+                          <button
+                            onClick={() => removeSingleKey('tavilyKey')}
+                            className="p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all cursor-pointer"
+                            title="Remove Tavily Key"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div>
+
+                    <div className="flex flex-col gap-2">
                       <label className={labelClass}>OpenRouter API Key</label>
-                      <div className={inputContainerClass}>
-                        <input
-                          type="password"
-                          value={openrouterKey}
-                          onChange={(e) => setOpenrouterKey(e.target.value)}
-                          placeholder="sk-or-v1-..."
-                          className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
-                        />
+                      <div className="flex gap-2">
+                        <div className={inputContainerClass}>
+                          <input
+                            type="password"
+                            value={openrouterKey}
+                            onChange={(e) => setOpenrouterKey(e.target.value)}
+                            placeholder="sk-or-v1-..."
+                            className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => saveSingleKey('openrouterKey', openrouterKey)}
+                            className="p-3 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all cursor-pointer"
+                            title="Save OpenRouter Key"
+                          >
+                            <Save size={16} />
+                          </button>
+                          <button
+                            onClick={() => removeSingleKey('openrouterKey')}
+                            className="p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all cursor-pointer"
+                            title="Remove OpenRouter Key"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className={labelClass}>Custom API Key</label>
+                      <div className="flex gap-2">
+                        <div className={inputContainerClass}>
+                          <input
+                            type="password"
+                            value={customKey}
+                            onChange={(e) => setCustomKey(e.target.value)}
+                            placeholder="Enter custom key..."
+                            className="bg-transparent border-none outline-none text-base text-white w-full placeholder:text-zinc-600"
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => saveSingleKey('customKey', customKey)}
+                            className="p-3 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all cursor-pointer"
+                            title="Save Custom Key"
+                          >
+                            <Save size={16} />
+                          </button>
+                          <button
+                            onClick={() => removeSingleKey('customKey')}
+                            className="p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all cursor-pointer"
+                            title="Remove Custom Key"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2 mt-4 pt-6 border-t border-white/5">
+                      <label className={labelClass}>Primary Processing Engine</label>
+                      <div className="flex gap-3 mt-3">
+                        {[
+                          { id: 'gemini', label: 'Gemini (Flash)', desc: 'Multimodal / High Quality' },
+                          { id: 'groq', label: 'Groq (Llama 3)', desc: 'Fastest Voice / Low Latency' }
+                        ].map((engine) => (
+                          <button
+                            key={engine.id}
+                            onClick={() => setPrimaryEngine(engine.id as 'gemini' | 'groq')}
+                            className={`flex-1 px-4 py-3 rounded-xl text-left transition-all border ${
+                              primaryEngine === engine.id
+                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                : 'bg-white/5 text-zinc-500 border-transparent hover:bg-white/10'
+                            }`}
+                          >
+                            <div className="text-xs font-bold uppercase tracking-widest">
+                              {engine.label}
+                            </div>
+                            <div className="text-[10px] lowercase normal-case tracking-normal opacity-60">
+                              {engine.desc}
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     </div>
 
@@ -472,8 +701,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                 <GlassPanel className="p-8 flex flex-col gap-8">
                   <div className="flex justify-between items-center pb-2">
                     <span className={titleClass}>
-                      <Terminal className="text-emerald-400" size={24} /> Performance &
-                      Graphics
+                      <Terminal className="text-emerald-400" size={24} /> Performance & Graphics
                     </span>
                   </div>
 
@@ -499,8 +727,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                         >
                           <div className="text-xs mb-1">High End</div>
                           <div className="text-[9px] text-zinc-500 lowercase normal-case tracking-normal">
-                             Full 3D WebGL Core, HD rendering, dynamic particles. Recommended for
-                             dedicated GPUs.
+                            Full 3D WebGL Core, HD rendering, dynamic particles. Recommended for
+                            dedicated GPUs.
                           </div>
                         </button>
                         <button
@@ -513,8 +741,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                         >
                           <div className="text-xs mb-1">Medium</div>
                           <div className="text-[9px] text-zinc-500 lowercase normal-case tracking-normal">
-                             Optimized 3D WebGL, capped resolution, low power mode. Good for modern
-                             laptops.
+                            Optimized 3D WebGL, capped resolution, low power mode. Good for modern
+                            laptops.
                           </div>
                         </button>
                         <button
@@ -527,8 +755,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                         >
                           <div className="text-xs mb-1">Low End</div>
                           <div className="text-[9px] text-zinc-500 lowercase normal-case tracking-normal">
-                             Lightweight 2D HUD vector core, 0% GPU usage. Perfect for older or
-                             low-spec devices.
+                            Lightweight 2D HUD vector core, 0% GPU usage. Perfect for older or
+                            low-spec devices.
                           </div>
                         </button>
                       </div>
@@ -541,7 +769,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                           Graphics Diagnostics
                         </strong>
                         <p className="text-[11px] text-zinc-300 leading-relaxed font-mono">
-                           - Active Core Engine:{' '}
+                          - Active Core Engine:{' '}
                           {perfMode === 'low'
                             ? 'Lightweight 2D HUD vector core (0% GPU)'
                             : perfMode === 'medium'
@@ -574,13 +802,17 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                 <GlassPanel className="p-8 flex flex-col gap-8">
                   <div className="flex justify-between items-center pb-2">
                     <span className={titleClass}>
-                      <Database className="text-emerald-400" size={24} /> Backup & Restore (Synapse Storage)
+                      <Database className="text-emerald-400" size={24} /> Backup & Restore (Synapse
+                      Storage)
                     </span>
                   </div>
 
                   <div className="flex flex-col gap-6 text-left">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                      Download your entire cognitive workspace profile, complete API configuration credentials, active notes directory, long-term memory synapses, and secure chat history in a unified, portable <strong>Synapse Memory file (.json)</strong>.
+                      Download your entire cognitive workspace profile, complete API configuration
+                      credentials, active notes directory, long-term memory synapses, and secure
+                      chat history in a unified, portable{' '}
+                      <strong>Synapse Memory file (.json)</strong>.
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -590,8 +822,12 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                             <Download size={20} />
                           </div>
                           <div>
-                            <h4 className="text-sm font-semibold text-white">Export Synapse File</h4>
-                            <p className="text-[11px] text-zinc-500">Create a secure local clone of all data</p>
+                            <h4 className="text-sm font-semibold text-white">
+                              Export Synapse File
+                            </h4>
+                            <p className="text-[11px] text-zinc-500">
+                              Create a secure local clone of all data
+                            </p>
                           </div>
                         </div>
                         <button
@@ -609,8 +845,12 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                             <Upload size={20} />
                           </div>
                           <div>
-                            <h4 className="text-sm font-semibold text-white">Import Synapse File</h4>
-                            <p className="text-[11px] text-zinc-500">Restore or load workspace memory</p>
+                            <h4 className="text-sm font-semibold text-white">
+                              Import Synapse File
+                            </h4>
+                            <p className="text-[11px] text-zinc-500">
+                              Restore or load workspace memory
+                            </p>
                           </div>
                         </div>
                         <label className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-200 font-mono font-bold text-xs tracking-widest uppercase rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2">
@@ -627,13 +867,15 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
 
                     {backupStatus === 'success' && (
                       <div className="p-4 bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 text-xs font-mono rounded-xl flex items-center gap-2 animate-pulse">
-                        <Check size={16} /> DATA CODES RESTORED SUCCESSFULLY! REBOOTING SYSTEM BUFFERS...
+                        <Check size={16} /> DATA CODES RESTORED SUCCESSFULLY! REBOOTING SYSTEM
+                        BUFFERS...
                       </div>
                     )}
 
                     {backupStatus === 'error' && (
                       <div className="p-4 bg-red-500/15 border border-red-500/20 text-red-400 text-xs font-mono rounded-xl flex items-center gap-2">
-                        <AlertTriangle size={16} /> RESTORATION HANDSHAKE CRITICAL ERROR: {backupError}
+                        <AlertTriangle size={16} /> RESTORATION HANDSHAKE CRITICAL ERROR:{' '}
+                        {backupError}
                       </div>
                     )}
 
@@ -644,7 +886,9 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                           Safety Protocol Notice
                         </strong>
                         <p className="text-[11px] text-zinc-400 leading-relaxed">
-                          Importing a synapse memory file will completely replace your current system configuration, chats, and memories. Ensure your backup file is from a trusted workspace clone before initiating uplink synchronization.
+                          Importing a synapse memory file will completely replace your current
+                          system configuration, chats, and memories. Ensure your backup file is from
+                          a trusted workspace clone before initiating uplink synchronization.
                         </p>
                       </div>
                     </div>
