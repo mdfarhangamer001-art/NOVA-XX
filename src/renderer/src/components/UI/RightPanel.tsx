@@ -538,10 +538,15 @@ export default function RightPanel(): JSX.Element {
           window.electron.ipcRenderer.off('gemini-stream-chunk', streamHandler)
         }
 
-        const modelReply =
+        let modelReply =
+          result?.error ||
           result?.candidates?.[0]?.content?.parts?.[0]?.text ||
           fullReplyText ||
           'System under heavy load, Boss. Please check your credentials.'
+
+        if (modelReply.includes('Quota exceeded') || modelReply.includes('429') || modelReply.includes('quota metric')) {
+          modelReply = 'API Rate limit exceeded, Boss. The Gemini free tier allows 15 requests per minute. Please wait a moment or upgrade your API key in Settings.'
+        }
 
         // Complete step 3, start step 4 in Orchestration HUD
         setOrchestrationSteps([

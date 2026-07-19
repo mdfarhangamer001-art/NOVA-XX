@@ -1,5 +1,5 @@
 import { LayoutGrid, FolderOpen, Phone, Settings, Image, Cpu, Heart, Clipboard, BarChart2, Mail, ShieldAlert, Brain, Zap, Orbit, Atom, Flame, Sparkles } from 'lucide-react'
-import { useState, Suspense, lazy, useEffect } from 'react'
+import { useState, Suspense, lazy, useEffect, useRef } from 'react'
 
 
 import DashboardView from '../views/Dashboard'
@@ -139,6 +139,29 @@ const NovaX = ({
     }
   }, [])
 
+  const tabsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (tabsRef.current) {
+        if (e.deltaY !== 0) {
+          e.preventDefault()
+          tabsRef.current.scrollLeft += e.deltaY
+        }
+      }
+    }
+    
+    const tabsEl = tabsRef.current
+    if (tabsEl) {
+      tabsEl.addEventListener('wheel', handleWheel, { passive: false })
+    }
+    return () => {
+      if (tabsEl) {
+        tabsEl.removeEventListener('wheel', handleWheel)
+      }
+    }
+  }, [])
+
   const tabs = [
     { id: 'DASHBOARD', label: 'Command', icon: <LayoutGrid size={16} /> },
     { id: 'OVERLORD', label: 'Overlord', icon: <ShieldAlert size={16} className="text-emerald-400" /> },
@@ -246,7 +269,7 @@ const NovaX = ({
           )}
         </div>
 
-        <div className="flex-1 mx-4 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent flex items-center gap-1 bg-zinc-950/80 p-1 rounded-xl border border-white/5 backdrop-blur-md shadow-2xl">
+        <div ref={tabsRef} className="flex-1 mx-4 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent flex items-center gap-1 bg-zinc-950/80 p-1 rounded-xl border border-white/5 backdrop-blur-md shadow-2xl">
           {tabs.map((tab) => (
             <button
               key={tab.id}
