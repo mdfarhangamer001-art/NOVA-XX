@@ -677,12 +677,22 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
   // were actually encrypted so the UI can warn the user if not).
   ipcMain.removeHandler('secure-save-keys')
   ipcMain.handle('secure-save-keys', (_event, keys: any) => {
-    return saveApiKeys(keys)
+    try {
+      return saveApiKeys(keys)
+    } catch (e: any) {
+      console.error('[NOVA-X] secure-save-keys handler failed:', e)
+      return { success: false, secure: false, error: e?.message || String(e) }
+    }
   })
 
   ipcMain.removeHandler('secure-get-keys')
   ipcMain.handle('secure-get-keys', () => {
-    return getApiKeys()
+    try {
+      return getApiKeys()
+    } catch (e) {
+      console.error('[NOVA-X] secure-get-keys handler failed:', e)
+      return {}
+    }
   })
 
   // Lets the renderer (Settings UI) show a real warning banner if the

@@ -52,33 +52,44 @@ export function isKeyStorageSecure(): boolean {
 }
 
 /** Persist the full key map. Encrypts when possible, warns when not. */
-export function saveApiKeys(keys: ApiKeyMap): { success: boolean; secure: boolean } {
-  // Never persist obviously-empty/whitespace-only values.
-  const cleaned: ApiKeyMap = {}
-  for (const [k, v] of Object.entries(keys || {})) {
-    if (typeof v === 'string' && v.trim().length > 0) cleaned[k] = v.trim()
-  }
-
-  if (isKeyStorageSecure()) {
-    try {
-      const encrypted = safeStorage.encryptString(JSON.stringify(cleaned))
-      store.set(ENCRYPTED_STORE_KEY, encrypted.toString('base64'))
-      // Make sure we don't leave a stale plaintext copy lying around from
-      // before encryption became available.
-      store.delete(PLAINTEXT_STORE_KEY)
-      return { success: true, secure: true }
-    } catch (e) {
-      console.error('[NOVA-X SecureKeys] safeStorage.encryptString failed, falling back to plaintext:', e)
+export function saveApiKeys(keys: ApiKeyMap): { success: boolean; secure: boolean; error?: string } {
+  try {
+    // Never persist obviously-empty/whitespace-only values.
+    const cleaned: ApiKeyMap = {}
+    for (const [k, v] of Object.entries(keys || {})) {
+      if (typeof v === 'string' && v.trim().length > 0) cleaned[k] = v.trim()
     }
-  }
 
-  console.warn(
-    '[NOVA-X SecureKeys] WARNING: OS-level key encryption is unavailable on this machine. ' +
-    'API keys will be stored in PLAINTEXT on disk. This is not secure — consider enabling ' +
-    'a system keyring (Linux) or running on Windows/macOS where DPAPI/Keychain is available.'
-  )
-  store.set(PLAINTEXT_STORE_KEY, cleaned)
-  return { success: true, secure: false }
+    if (isKeyStorageSecure()) {
+      try {
+        const encrypted = safeStorage.encryptString(JSON.stringify(cleaned))
+        store.set(ENCRYPTED_STORE_KEY, encrypted.toString('base64'))
+        // Make sure we don't leave a stale plaintext copy lying around from
+        // before encryption became available.
+        store.delete(PLAINTEXT_STORE_KEY)
+        return { success: true, secure: true }
+      } catch (e) {
+        console.error('[NOVA-X SecureKeys] safeStorage.encryptString failed, falling back to plaintext:', e)
+      }
+    }
+
+    console.warn(
+      '[NOVA-X SecureKeys] WARNING: OS-level key encryption is unavailable on this machine. ' +
+      'API keys will be stored in PLAINTEXT on disk. This is not secure — consider enabling ' +
+      'a system keyring (Linux) or running on Windows/macOS where DPAPI/Keychain is available.'
+    )
+    store.set(PLAINTEXT_STORE_KEY, cleaned)
+    return { success: true, secure: false }
+  } catch (e: any) {
+    // Previously an error here (e.g. disk write permission issue, a
+    // corrupted store file, safeStorage misbehaving) would throw all the
+    // way up through the IPC handler as an unhandled rejection, which the
+    // renderer just showed as a generic "Failed to save keys" with no
+    // real information. Now we always return a structured result so the
+    // actual cause is visible.
+    console.error('[NOVA-X SecureKeys] saveApiKeys failed entirely:', e)
+    return { success: false, secure: false, error: e?.message || String(e) }
+  }
 }
 
 /** Retrieve the full key map, decrypting if needed. */
@@ -86,8 +97,18 @@ export function getApiKeys(): ApiKeyMap {
   try {
     const encryptedBase64 = store.get(ENCRYPTED_STORE_KEY) as string | undefined
     if (encryptedBase64 && isKeyStorageSecure()) {
-      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
-      return JSON.parse(decrypted)
+      try {
+        const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
+        return JSON.parse(decrypted)
+      } catch (decryptErr) {
+        // A corrupted/undecryptable blob (e.g. saved under a different
+        // Windows user account, or the DPAPI key rotated) would otherwise
+        // make EVERY future save/load fail silently forever, since we'd
+        // keep trying to decrypt the same bad data. Clear it so the next
+        // save starts fresh instead of being permanently stuck.
+        console.error('[NOVA-X SecureKeys] Stored key blob is corrupted/undecryptable, clearing it:', decryptErr)
+        store.delete(ENCRYPTED_STORE_KEY)
+      }
     }
   } catch (e) {
     console.error('[NOVA-X SecureKeys] Failed to decrypt stored keys:', e)
