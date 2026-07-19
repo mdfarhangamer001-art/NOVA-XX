@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { LANGUAGES } from '../data/languages'
 import Logo from '../assets/Logo.png'
 import { auth as firebaseAuth, googleAuthProvider } from '../services/firebase'
@@ -131,6 +131,47 @@ export default function Dashboard({
   handleMicToggle: () => void
 }): JSX.Element {
   const [visionMode, setVisionMode] = useState<'off' | 'camera' | 'screen'>('off')
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
+  useEffect(() => {
+    const stopStream = () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null
+      }
+    }
+
+    const startStream = async () => {
+      stopStream()
+      if (visionMode === 'off') return
+
+      try {
+        let stream: MediaStream
+        if (visionMode === 'camera') {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        } else {
+          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+        }
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+        }
+      } catch (err) {
+        console.error('Failed to acquire media stream:', err)
+        setVisionMode('off')
+      }
+    }
+
+    startStream()
+
+    return () => {
+      stopStream()
+    }
+  }, [visionMode])
 
   // Mic state & real-time input level tracking
   const [micStatus, setMicStatus] = useState<'idle' | 'listening' | 'transcribing'>('idle')
@@ -615,20 +656,30 @@ export default function Dashboard({
             </div>
           )}
 
-          <div className="mb-6 flex flex-col items-center gap-3">
-            <div className="relative w-16 h-16 flex items-center justify-center border rounded-xl bg-zinc-900/60 transition-all duration-300 overflow-hidden"
-              style={{
-                borderColor: `${activeIconData.color}40`,
-                boxShadow: `0 0 20px ${activeIconData.color}25`
-              }}
-            >
-              <div className="absolute inset-0 rounded-lg animate-ping scale-105" style={{ border: `1px solid ${activeIconData.color}20` }} />
-              <ActiveIconComponent size={28} style={{ color: activeIconData.color }} className="animate-pulse" />
+          <div className="mb-6 flex flex-col items-center gap-4">
+            <div className="flex items-center gap-4 justify-center">
+              {/* BRAND LOGO */}
+              <div className="relative w-16 h-16 flex items-center justify-center border border-zinc-800 rounded-xl bg-zinc-900/60 overflow-hidden">
+                <img src={Logo} className="w-12 h-12 object-contain" />
+              </div>
+
+              <div className="text-zinc-700 font-mono text-sm">⚡</div>
+
+              {/* NEURAL CORE ICON */}
+              <div className="relative w-16 h-16 flex items-center justify-center border rounded-xl bg-zinc-900/60 transition-all duration-300 overflow-hidden"
+                style={{
+                  borderColor: `${activeIconData.color}40`,
+                  boxShadow: `0 0 20px ${activeIconData.color}25`
+                }}
+              >
+                <div className="absolute inset-0 rounded-lg animate-ping scale-105" style={{ border: `1px solid ${activeIconData.color}20` }} />
+                <ActiveIconComponent size={28} style={{ color: activeIconData.color }} className="animate-pulse" />
+              </div>
             </div>
             <div>
               <h2 className="text-2xl font-black tracking-[0.35em] text-white font-mono">NOVA-X</h2>
               <p className="text-[10px] font-mono tracking-widest text-emerald-400/70 uppercase mt-1">
-                Cognitive Operating System
+                Cognitive Operating System // Core: {activeIconData.label}
               </p>
             </div>
           </div>
@@ -763,16 +814,27 @@ export default function Dashboard({
 
             <div className="relative aspect-video w-full rounded-lg border border-white/5 bg-[#030303] flex items-center justify-center overflow-hidden">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,243,255,0.04)_0%,transparent_80%)] pointer-events-none" />
-              <Camera size={18} className="text-zinc-700 absolute" />
+              
+              {visionMode !== 'off' ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover z-10"
+                />
+              ) : (
+                <Camera size={18} className="text-zinc-700 absolute" />
+              )}
 
               {/* Corner Sci-Fi Brackets */}
-              <div className="absolute top-1 left-1 border-t border-l border-[#00f3ff]/30 h-2 w-2" />
-              <div className="absolute top-1 right-1 border-t border-r border-[#00f3ff]/30 h-2 w-2" />
-              <div className="absolute bottom-1 left-1 border-b border-l border-[#00f3ff]/30 h-2 w-2" />
-              <div className="absolute bottom-1 right-1 border-b border-r border-[#00f3ff]/30 h-2 w-2" />
+              <div className="absolute top-1 left-1 border-t border-l border-[#00f3ff]/30 h-2 w-2 z-20" />
+              <div className="absolute top-1 right-1 border-t border-r border-[#00f3ff]/30 h-2 w-2 z-20" />
+              <div className="absolute bottom-1 left-1 border-b border-l border-[#00f3ff]/30 h-2 w-2 z-20" />
+              <div className="absolute bottom-1 right-1 border-b border-r border-[#00f3ff]/30 h-2 w-2 z-20" />
 
-              <span className="font-mono text-[7px] text-zinc-500 uppercase tracking-widest absolute bottom-2">
-                Camera Link Ready
+              <span className="font-mono text-[7px] text-zinc-500 uppercase tracking-widest absolute bottom-2 z-20">
+                {visionMode === 'camera' ? 'Camera Live Lens Active' : visionMode === 'screen' ? 'Real Screen Sharing Active' : 'Lens Link Ready'}
               </span>
             </div>
           </div>

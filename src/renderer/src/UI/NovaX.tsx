@@ -156,7 +156,17 @@ const NovaX = ({
   return (
     <div className="flex flex-col h-screen w-full bg-black text-zinc-100 font-sans overflow-hidden select-none relative">
       <div className="h-16 w-full flex items-center justify-between px-6 bg-black border-b border-white/5 z-50">
-        <div className="flex items-center gap-3 w-56 relative select-none">
+        <div className="flex items-center gap-3 w-72 relative select-none">
+          <img 
+            src={Logo} 
+            className="w-11 h-11 object-contain cursor-pointer hover:scale-105 transition-transform" 
+            onClick={() => {
+              setActiveTab('DASHBOARD')
+              playDiagnosticChime(440)
+            }}
+            title="NOVA-X Logo"
+          />
+
           <div 
             onClick={() => {
               setShowIconSelector(!showIconSelector)
@@ -236,12 +246,12 @@ const NovaX = ({
           )}
         </div>
 
-        <div className="flex items-center gap-1 bg-zinc-950/80 p-1 rounded-xl border border-white/5 backdrop-blur-md shadow-2xl">
+        <div className="flex-1 mx-4 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent flex items-center gap-1 bg-zinc-950/80 p-1 rounded-xl border border-white/5 backdrop-blur-md shadow-2xl">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`cursor-pointer px-4 py-1.5 text-[11px] font-bold tracking-widest uppercase rounded-lg transition-all duration-200 flex items-center gap-2 ${
+              className={`cursor-pointer px-4 py-1.5 text-[11px] font-bold tracking-widest uppercase rounded-lg transition-all duration-200 flex items-center gap-2 flex-shrink-0 ${
                 activeTab === tab.id
                   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
                   : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5 border border-transparent'
