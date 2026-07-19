@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import NovaX from './UI/NovaX'
 import TitleBar from './components/Titlebar'
-import { installGlobalTts, setTtsLang, ensureVoicesLoaded, speak, stopSpeaking } from './utils/ttsEngine'
-import { onMoodChange, setMood, type Mood } from './lib/cognitiveCore'
 
 export type VisionMode = 'camera' | 'screen' | 'none'
 
@@ -10,47 +8,19 @@ const IndexRoot = (): JSX.Element => {
   const [isConnected, setIsConnected] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
-  const [mood, setMoodState] = useState<Mood>('idle')
 
-  // Install robust TTS engine + link speaking state to 3D core animation
+  // Expose speaking state setter globally to link speech engine with Three.js rendering
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      installGlobalTts()
-
-      // Expose speaking state setter globally to link speech engine with Three.js rendering
+      // @ts-ignore - Expose global setter for speaking animation state linkage
       window.setIsSpeaking = (val: boolean): void => {
         setIsSpeaking(val)
       }
-
-      // Override speakText to also drive the isSpeaking state for the 3D orb
-      ;(window as any).speakText = (text: string) => {
-        setIsSpeaking(true)
-        speak(text, {
-          onEnd: () => setIsSpeaking(false),
-          onStart: () => setIsSpeaking(true)
-        }).catch(() => {
-          setIsSpeaking(false)
-        })
-      }
-
-      ;(window as any).stopTts = () => {
-        stopSpeaking()
-        setIsSpeaking(false)
-      }
-
-      // Pre-warm voices immediately on mount
-      ensureVoicesLoaded().then((ready) => {
-        console.log(`[NOVA-X TTS] Voice engine ready: ${ready}`)
-      })
-
-      // Subscribe to cognitive mood changes to drive the 3D sphere
-      const unsub = onMoodChange((s) => setMoodState(s.mood))
-      return () => {
-        unsub()
-        if (typeof window !== 'undefined') {
-          /* eslint-disable-next-line @typescript-eslint/no-dynamic-delete */
-          delete (window as any).setIsSpeaking
-        }
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        /* eslint-disable-next-line @typescript-eslint/no-dynamic-delete */
+        delete (window as any).setIsSpeaking
       }
     }
   }, [])
@@ -59,11 +29,9 @@ const IndexRoot = (): JSX.Element => {
     if (isConnected) {
       setIsConnected(false)
       setIsMuted(false)
-      setMood('idle', 0)
     } else {
       setIsConnected(true)
       setIsSpeaking(false) // Wait for user speech first
-      setMood('idle', 0.2)
     }
   }
 
@@ -86,6 +54,43 @@ const IndexRoot = (): JSX.Element => {
     }
   }, [])
 
+
+  useEffect(() => {
+    ;(window as any).speakText = (text: string) => {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.05;
+      utterance.pitch = 0.95;
+      const voices = window.speechSynthesis.getVoices();
+      // Try to find a good female English voice like Google UK English Female or Microsoft Zira
+      const voice = voices.find((v) => v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Samantha') || (v.lang === 'en-US' && v.name.includes('Google'))) || voices[0];
+      if (voice) utterance.voice = voice;
+      
+      utterance.onstart = () => {
+        if (typeof (window as any).setIsSpeaking === 'function') {
+          ;(window as any).setIsSpeaking(true);
+        }
+      };
+      utterance.onend = () => {
+        if (typeof (window as any).setIsSpeaking === 'function') {
+          ;(window as any).setIsSpeaking(false);
+        }
+      };
+      utterance.onerror = () => {
+        if (typeof (window as any).setIsSpeaking === 'function') {
+          ;(window as any).setIsSpeaking(false);
+        }
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    };
+
+    return () => {
+      delete (window as any).speakText;
+    };
+  }, []);
+
   // Modern VAD-based Voice Recognition Core
   useEffect(() => {
     let audioContext: AudioContext | null = null
@@ -97,7 +102,7 @@ const IndexRoot = (): JSX.Element => {
     let isRecordingInternal = false
     let animationFrame: number | null = null
 
-    const threshold = 0.005 // High-sensitivity RMS speech threshold
+    const threshold = 0.015 // Adjusted RMS speech threshold for better noise rejection
     const silenceDelay = 1500 // 1.5 seconds of silence to trigger transcription
 
     const startVAD = async () => {
@@ -114,7 +119,7 @@ const IndexRoot = (): JSX.Element => {
         const checkVolume = () => {
           if (!analyser) return
           analyser.getByteTimeDomainData(dataArray)
-          
+
           let sumSquares = 0
           for (let i = 0; i < dataArray.length; i++) {
             const normalized = (dataArray[i] - 128) / 128
@@ -132,20 +137,26 @@ const IndexRoot = (): JSX.Element => {
               console.log('[NOVA-X VAD] Speech detected. Starting recording...')
               isRecordingInternal = true
               audioChunks = []
-              
-              window.dispatchEvent(new CustomEvent('novax_mic_state', { detail: { status: 'listening' } }))
+
+              window.dispatchEvent(
+                new CustomEvent('novax_mic_state', { detail: { status: 'listening' } })
+              )
 
               // Determine best mimeType
               let mimeType = 'audio/webm'
-              if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus'
-              else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) mimeType = 'audio/ogg;codecs=opus'
+              if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus'))
+                mimeType = 'audio/webm;codecs=opus'
+              else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus'))
+                mimeType = 'audio/ogg;codecs=opus'
 
               mediaRecorder = new MediaRecorder(stream, { mimeType })
               mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) audioChunks.push(e.data)
               }
               mediaRecorder.onstop = async () => {
-                window.dispatchEvent(new CustomEvent('novax_mic_state', { detail: { status: 'transcribing' } }))
+                window.dispatchEvent(
+                  new CustomEvent('novax_mic_state', { detail: { status: 'transcribing' } })
+                )
                 const audioBlob = new Blob(audioChunks, { type: mimeType })
                 const reader = new FileReader()
                 reader.readAsDataURL(audioBlob)
@@ -156,7 +167,10 @@ const IndexRoot = (): JSX.Element => {
                     // @ts-ignore
                     if (window.iris?.transcribeAudio) {
                       // @ts-ignore
-                      const transcript = await window.iris.transcribeAudio(base64data, audioBlob.type)
+                      const transcript = await window.iris.transcribeAudio(
+                        base64data,
+                        audioBlob.type
+                      )
                       console.log('[NOVA-X VAD] Transcript:', transcript)
                       if (transcript && transcript.trim().length > 0) {
                         // @ts-ignore
@@ -169,13 +183,15 @@ const IndexRoot = (): JSX.Element => {
                   } catch (err) {
                     console.error('[NOVA-X VAD] Transcription error:', err)
                   } finally {
-                    window.dispatchEvent(new CustomEvent('novax_mic_state', { detail: { status: 'idle' } }))
+                    window.dispatchEvent(
+                      new CustomEvent('novax_mic_state', { detail: { status: 'idle' } })
+                    )
                   }
                 }
               }
               mediaRecorder.start()
             }
-            
+
             if (silenceTimeout) {
               clearTimeout(silenceTimeout)
               silenceTimeout = null
@@ -215,7 +231,7 @@ const IndexRoot = (): JSX.Element => {
         mediaRecorder.stop()
       }
       if (microphone) {
-        microphone.mediaStream.getTracks().forEach(t => t.stop())
+        microphone.mediaStream.getTracks().forEach((t) => t.stop())
       }
     }
   }, [isConnected, isMuted, isSpeaking, activeLang])
@@ -230,7 +246,6 @@ const IndexRoot = (): JSX.Element => {
           isSpeaking={isSpeaking}
           isMuted={isMuted}
           handleMicToggle={handleMicToggle}
-          mood={mood}
         />
       </div>
     </div>

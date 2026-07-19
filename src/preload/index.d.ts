@@ -13,9 +13,6 @@ declare global {
     api: unknown
     iris: {
       sendVisionFrame(base64Frame: string): Promise<any>
-      saveChatHistory(history: any[]): Promise<{ success: boolean; count?: number; error?: string }>
-      loadChatHistory(): Promise<any[]>
-      clearChatHistory(): Promise<{ success: boolean }>
       transcribeAudio(base64Audio: string, mimeType: string): Promise<any>
       getMemories(): Promise<any>
       deleteMemory(index: number): Promise<any>

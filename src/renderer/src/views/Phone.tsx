@@ -32,16 +32,16 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
       const ctx = new AudioCtx()
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
-      
+
       osc.type = 'sine'
       osc.frequency.setValueAtTime(freq, ctx.currentTime)
-      
+
       gain.gain.setValueAtTime(0.08, ctx.currentTime)
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4)
-      
+
       osc.connect(gain)
       gain.connect(ctx.destination)
-      
+
       osc.start()
       osc.stop(ctx.currentTime + 0.4)
     } catch (e) {}
@@ -89,28 +89,32 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
 
     const handleStatus = (_event: any, status: any) => {
       setCompanionStatus((prev) =>
-        prev
-          ? { ...prev, connected: status.connected, connectedIp: status.ip || '' }
-          : null
+        prev ? { ...prev, connected: status.connected, connectedIp: status.ip || '' } : null
       )
       if (status.connected) {
-        setCommandLogs((prev) => [
-          `[${new Date().toLocaleTimeString()}] [SYSTEM] Neural Uplink secured with device at ${status.ip}`,
-          ...prev
-        ].slice(0, 50))
+        setCommandLogs((prev) =>
+          [
+            `[${new Date().toLocaleTimeString()}] [SYSTEM] Neural Uplink secured with device at ${status.ip}`,
+            ...prev
+          ].slice(0, 50)
+        )
       } else {
-        setCommandLogs((prev) => [
-          `[${new Date().toLocaleTimeString()}] [SYSTEM] Uplink severed by remote client.`,
-          ...prev
-        ].slice(0, 50))
+        setCommandLogs((prev) =>
+          [
+            `[${new Date().toLocaleTimeString()}] [SYSTEM] Uplink severed by remote client.`,
+            ...prev
+          ].slice(0, 50)
+        )
       }
     }
 
     const handleCommand = (_event: any, command: string) => {
-      setCommandLogs((prev) => [
-        `[${new Date().toLocaleTimeString()}] [INCOMING] Speech: "${command}"`,
-        ...prev
-      ].slice(0, 50))
+      setCommandLogs((prev) =>
+        [`[${new Date().toLocaleTimeString()}] [INCOMING] Speech: "${command}"`, ...prev].slice(
+          0,
+          50
+        )
+      )
     }
 
     if (window.electron?.ipcRenderer) {
@@ -147,10 +151,12 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
       const res = await window.electron.ipcRenderer.invoke('forget-companion-device')
       setCompanionStatus(res)
       playDiagnosticChime(150)
-      setCommandLogs((prev) => [
-        `[${new Date().toLocaleTimeString()}] [SYSTEM] All paired devices forgotten. PIN regenerated.`,
-        ...prev
-      ].slice(0, 50))
+      setCommandLogs((prev) =>
+        [
+          `[${new Date().toLocaleTimeString()}] [SYSTEM] All paired devices forgotten. PIN regenerated.`,
+          ...prev
+        ].slice(0, 50)
+      )
     }
   }
 
@@ -186,25 +192,40 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
   const handleAdbConnect = async () => {
     setAdbLoading(true)
     setAdbError(null)
-    setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] Initiating physical ADB bridge on ${adbIp}:${adbPort}...`, ...prev])
+    setAdbLogs((prev) => [
+      `[${new Date().toLocaleTimeString()}] Initiating physical ADB bridge on ${adbIp}:${adbPort}...`,
+      ...prev
+    ])
     if (window.electron?.ipcRenderer) {
       try {
-        const res = await window.electron.ipcRenderer.invoke('adb-connect', { ip: adbIp, port: adbPort })
+        const res = await window.electron.ipcRenderer.invoke('adb-connect', {
+          ip: adbIp,
+          port: adbPort
+        })
         if (res.success) {
           setAdbConnected(true)
-          setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] [SUCCESS] Physical ADB bridge secured with Android hardware.`, ...prev])
+          setAdbLogs((prev) => [
+            `[${new Date().toLocaleTimeString()}] [SUCCESS] Physical ADB bridge secured with Android hardware.`,
+            ...prev
+          ])
           playDiagnosticChime(880)
           fetchAdbTelemetry()
         } else {
           setAdbConnected(false)
           setAdbError(res.error || 'Uplink failed')
-          setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] [FAILURE] ADB uplink refused: ${res.error || 'Connection timed out'}`, ...prev])
+          setAdbLogs((prev) => [
+            `[${new Date().toLocaleTimeString()}] [FAILURE] ADB uplink refused: ${res.error || 'Connection timed out'}`,
+            ...prev
+          ])
           playDiagnosticChime(150)
         }
       } catch (e: any) {
         setAdbConnected(false)
         setAdbError(e.message || 'Uplink failed')
-        setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] [CRITICAL] Core failure during USB handshake: ${e.message}`, ...prev])
+        setAdbLogs((prev) => [
+          `[${new Date().toLocaleTimeString()}] [CRITICAL] Core failure during USB handshake: ${e.message}`,
+          ...prev
+        ])
         playDiagnosticChime(150)
       }
     }
@@ -212,14 +233,20 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
   }
 
   const handleAdbDisconnect = async () => {
-    setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] Releasing ADB bridge handlers...`, ...prev])
+    setAdbLogs((prev) => [
+      `[${new Date().toLocaleTimeString()}] Releasing ADB bridge handlers...`,
+      ...prev
+    ])
     if (window.electron?.ipcRenderer) {
       try {
         await window.electron.ipcRenderer.invoke('adb-disconnect')
         setAdbConnected(false)
         setAdbTelemetryData(null)
         setScreenshotData(null)
-        setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] ADB bridge released. Device offline.`, ...prev])
+        setAdbLogs((prev) => [
+          `[${new Date().toLocaleTimeString()}] ADB bridge released. Device offline.`,
+          ...prev
+        ])
         playDiagnosticChime(150)
       } catch (e) {}
     }
@@ -245,20 +272,32 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
 
   const handleCaptureScreenshot = async () => {
     setScreenshotLoading(true)
-    setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] Requesting video framebuffer extract...`, ...prev])
+    setAdbLogs((prev) => [
+      `[${new Date().toLocaleTimeString()}] Requesting video framebuffer extract...`,
+      ...prev
+    ])
     if (window.electron?.ipcRenderer) {
       try {
         const res = await window.electron.ipcRenderer.invoke('adb-screenshot')
         if (res.success && res.image) {
           setScreenshotData(res.image)
-          setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] Framebuffer payload synchronized successfully.`, ...prev])
+          setAdbLogs((prev) => [
+            `[${new Date().toLocaleTimeString()}] Framebuffer payload synchronized successfully.`,
+            ...prev
+          ])
           playDiagnosticChime(660)
         } else {
-          setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] [ERROR] Framebuffer empty: ${res.error || 'Access denied'}`, ...prev])
+          setAdbLogs((prev) => [
+            `[${new Date().toLocaleTimeString()}] [ERROR] Framebuffer empty: ${res.error || 'Access denied'}`,
+            ...prev
+          ])
           playDiagnosticChime(150)
         }
       } catch (e: any) {
-        setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] [CRITICAL] Screenshot capture faulted: ${e.message}`, ...prev])
+        setAdbLogs((prev) => [
+          `[${new Date().toLocaleTimeString()}] [CRITICAL] Screenshot capture faulted: ${e.message}`,
+          ...prev
+        ])
         playDiagnosticChime(150)
       }
     }
@@ -266,19 +305,31 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
   }
 
   const handleQuickAction = async (action: string) => {
-    setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] Transmitting shell dispatch: ${action.toUpperCase()}`, ...prev])
+    setAdbLogs((prev) => [
+      `[${new Date().toLocaleTimeString()}] Transmitting shell dispatch: ${action.toUpperCase()}`,
+      ...prev
+    ])
     if (window.electron?.ipcRenderer) {
       try {
         const res = await window.electron.ipcRenderer.invoke('adb-quick-action', { action })
         if (res.success) {
-          setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] Shell dispatch processed.`, ...prev])
+          setAdbLogs((prev) => [
+            `[${new Date().toLocaleTimeString()}] Shell dispatch processed.`,
+            ...prev
+          ])
           playDiagnosticChime(440)
         } else {
-          setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] [ERROR] Dispatch failed: ${res.error}`, ...prev])
+          setAdbLogs((prev) => [
+            `[${new Date().toLocaleTimeString()}] [ERROR] Dispatch failed: ${res.error}`,
+            ...prev
+          ])
           playDiagnosticChime(150)
         }
       } catch (e: any) {
-        setAdbLogs((prev) => [`[${new Date().toLocaleTimeString()}] [CRITICAL] Shell dispatcher faulted: ${e.message}`, ...prev])
+        setAdbLogs((prev) => [
+          `[${new Date().toLocaleTimeString()}] [CRITICAL] Shell dispatcher faulted: ${e.message}`,
+          ...prev
+        ])
         playDiagnosticChime(150)
       }
     }
@@ -292,7 +343,7 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
 
   useEffect(() => {
     if (activeSubTab !== 'usb' || !adbConnected) return undefined
-    
+
     fetchAdbTelemetry()
     const interval = setInterval(fetchAdbTelemetry, 6000)
     return () => clearInterval(interval)
@@ -300,8 +351,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
 
   // --- RENDERING ---
   return (
-    <div className={`h-full w-full flex flex-col p-6 overflow-y-auto bg-[#030303] text-zinc-100 ${glassPanel}`}>
-      
+    <div
+      className={`h-full w-full flex flex-col p-6 overflow-y-auto bg-[#030303] text-zinc-100 ${glassPanel}`}
+    >
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-zinc-800/60 pb-6 mb-6 gap-4 shrink-0">
         <div>
@@ -318,7 +370,8 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
             Mobile Core Uplink
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Synchronize your smartphone via high-speed USB debugging tunnel or wireless local network server.
+            Synchronize your smartphone via high-speed USB debugging tunnel or wireless local
+            network server.
           </p>
         </div>
 
@@ -333,7 +386,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
             </button>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950 border border-zinc-800/80 rounded-lg">
               <Network size={13} className="text-zinc-500" />
-              <span className="text-[10px] font-mono text-zinc-400 font-medium">IP: {companionStatus?.ip || 'Detecting...'}</span>
+              <span className="text-[10px] font-mono text-zinc-400 font-medium">
+                IP: {companionStatus?.ip || 'Detecting...'}
+              </span>
             </div>
           </div>
         )}
@@ -402,7 +457,8 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                   <div>
                     <h3 className="text-xs font-bold text-zinc-200">Local Network Alignment</h3>
                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                      Ensure your mobile device and PC are active on the same Wi-Fi access point or local network.
+                      Ensure your mobile device and PC are active on the same Wi-Fi access point or
+                      local network.
                     </p>
                   </div>
                 </div>
@@ -414,7 +470,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                   <div>
                     <h3 className="text-xs font-bold text-zinc-200">Establish Portal Link</h3>
                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                      {"Scan the QR code displayed on the right or enter the companion server URL into your smartphone's web browser."}
+                      {
+                        "Scan the QR code displayed on the right or enter the companion server URL into your smartphone's web browser."
+                      }
                     </p>
                   </div>
                 </div>
@@ -426,7 +484,8 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                   <div>
                     <h3 className="text-xs font-bold text-zinc-200">Verify Credentials</h3>
                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                      Input the 6-digit Security Pin into the phone. The WebSocket connection registers instantly.
+                      Input the 6-digit Security Pin into the phone. The WebSocket connection
+                      registers instantly.
                     </p>
                   </div>
                 </div>
@@ -436,7 +495,10 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                 <div className="flex gap-2">
                   <CheckCircle size={14} className="text-emerald-400 shrink-0 mt-0.5" />
                   <p className="text-[10px] text-emerald-400/90 font-mono leading-relaxed">
-                    <strong>PRO-TIP:</strong> {"The URL on your phone stores the pairing credentials in its browser's LocalStorage. It will automatically re-connect to your workstation in the background!"}
+                    <strong>PRO-TIP:</strong>{' '}
+                    {
+                      "The URL on your phone stores the pairing credentials in its browser's LocalStorage. It will automatically re-connect to your workstation in the background!"
+                    }
                   </p>
                 </div>
               </div>
@@ -462,7 +524,8 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
               <div className="flex-1 p-4 overflow-y-auto font-mono text-[10px] text-zinc-400 space-y-2 select-text selection:bg-emerald-500/20">
                 {commandLogs.length === 0 ? (
                   <div className="text-zinc-600 italic h-full flex items-center justify-center">
-                    [Overwatch system silent. Connect your phone and say a voice command or send a manual input to stream telemetry logs...]
+                    [Overwatch system silent. Connect your phone and say a voice command or send a
+                    manual input to stream telemetry logs...]
                   </div>
                 ) : (
                   commandLogs.map((log, index) => {
@@ -471,7 +534,10 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                     if (log.includes('[INCOMING]')) color = 'text-white font-medium'
                     if (log.includes('Speech')) color = 'text-[#00f3ff]'
                     return (
-                      <div key={index} className={`${color} leading-relaxed border-l border-zinc-800/60 pl-2`}>
+                      <div
+                        key={index}
+                        className={`${color} leading-relaxed border-l border-zinc-800/60 pl-2`}
+                      >
                         {log}
                       </div>
                     )
@@ -508,7 +574,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                   <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
                     UPLINK TUNNEL STATE
                   </span>
-                  <h3 className={`text-base font-bold uppercase tracking-wider mt-1 ${companionStatus?.connected ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                  <h3
+                    className={`text-base font-bold uppercase tracking-wider mt-1 ${companionStatus?.connected ? 'text-emerald-400' : 'text-zinc-400'}`}
+                  >
                     {companionStatus?.connected ? 'CONNECTED' : 'DISCONNECTED / IDLE'}
                   </h3>
                   <p className="text-[11px] text-zinc-400 mt-1 max-w-xs leading-relaxed">
@@ -554,19 +622,31 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                 <div className="flex-1 flex flex-col justify-center py-6 border-t border-b border-zinc-800/40 my-6 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3.5 bg-zinc-950 border border-zinc-800/80 rounded-xl">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase">IP ADDRESS</span>
-                      <p className="text-xs font-mono font-bold text-zinc-300 mt-0.5 truncate">{companionStatus?.connectedIp || 'Wireless client'}</p>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase">
+                        IP ADDRESS
+                      </span>
+                      <p className="text-xs font-mono font-bold text-zinc-300 mt-0.5 truncate">
+                        {companionStatus?.connectedIp || 'Wireless client'}
+                      </p>
                     </div>
                     <div className="p-3.5 bg-zinc-950 border border-zinc-800/80 rounded-xl">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase">LINK TYPE</span>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase">
+                        LINK TYPE
+                      </span>
                       <p className="text-xs font-mono font-bold text-zinc-300 mt-0.5">WEBSOCKET</p>
                     </div>
                     <div className="p-3.5 bg-zinc-950 border border-zinc-800/80 rounded-xl">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase">BRIDGE STATUS</span>
-                      <p className="text-xs font-mono font-bold text-emerald-400 mt-0.5">SECURE / ACTIVE</p>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase">
+                        BRIDGE STATUS
+                      </span>
+                      <p className="text-xs font-mono font-bold text-emerald-400 mt-0.5">
+                        SECURE / ACTIVE
+                      </p>
                     </div>
                     <div className="p-3.5 bg-zinc-950 border border-zinc-800/80 rounded-xl">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase">PORT ROUTER</span>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase">
+                        PORT ROUTER
+                      </span>
                       <p className="text-xs font-mono font-bold text-zinc-300 mt-0.5">3021 (TCP)</p>
                     </div>
                   </div>
@@ -574,7 +654,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                   <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl flex items-start gap-3">
                     <CheckCircle size={16} className="text-emerald-400 shrink-0 mt-0.5" />
                     <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
-                      The voice control matrix is listening from your mobile microphone. Simply hold down the record trigger on your phone, say your command, and release to execute in real-time.
+                      The voice control matrix is listening from your mobile microphone. Simply hold
+                      down the record trigger on your phone, say your command, and release to
+                      execute in real-time.
                     </p>
                   </div>
                 </div>
@@ -582,7 +664,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
 
               <div className="space-y-3 shrink-0">
                 <div className="flex flex-col gap-1 px-4 py-3 bg-zinc-950 border border-zinc-800/80 rounded-xl">
-                  <span className="text-[9.5px] font-mono text-zinc-500 uppercase">COMPANION DIRECT PORTAL ADDRESS</span>
+                  <span className="text-[9.5px] font-mono text-zinc-500 uppercase">
+                    COMPANION DIRECT PORTAL ADDRESS
+                  </span>
                   <div className="flex items-center justify-between gap-2 mt-1">
                     <span className="text-[10.5px] font-mono text-zinc-400 truncate select-all">
                       {companionStatus?.url || 'Detecting local network address...'}
@@ -592,7 +676,11 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                       disabled={!companionStatus?.url}
                       className="cursor-pointer p-1 text-zinc-400 hover:text-white hover:bg-zinc-800/60 rounded transition-all shrink-0"
                     >
-                      {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                      {copied ? (
+                        <Check size={14} className="text-emerald-400" />
+                      ) : (
+                        <Copy size={14} />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -619,7 +707,6 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           {/* Left Side: ADB Device Connection & Shell Logs */}
           <div className="lg:col-span-7 flex flex-col gap-6">
-            
             {/* Connection Form */}
             <div className="border border-zinc-800/80 bg-zinc-950/40 rounded-2xl p-5 relative overflow-hidden">
               <div className="absolute top-2 right-2 font-mono text-[7px] text-[#00f3ff]/30 uppercase tracking-widest">
@@ -631,7 +718,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
               </h2>
 
               <p className="text-xs text-zinc-400 mb-5 leading-relaxed">
-                {"Connect your Android device via high-speed USB debugging. First, ensure USB Debugging or Wireless Debugging is enabled in your phone's Developer Options, and accept the computer's RSA authorization fingerprint key on your device screen."}
+                {
+                  "Connect your Android device via high-speed USB debugging. First, ensure USB Debugging or Wireless Debugging is enabled in your phone's Developer Options, and accept the computer's RSA authorization fingerprint key on your device screen."
+                }
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end mb-4">
@@ -668,7 +757,11 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                       disabled={adbLoading || !adbIp || !adbPort}
                       className="cursor-pointer w-full py-2.5 bg-[#00f3ff]/10 border border-[#00f3ff]/30 text-[#00f3ff] hover:bg-[#00f3ff] hover:text-black font-mono font-bold text-xs tracking-wider uppercase rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 disabled:opacity-40"
                     >
-                      {adbLoading ? <RefreshCw size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                      {adbLoading ? (
+                        <RefreshCw size={13} className="animate-spin" />
+                      ) : (
+                        <ArrowRight size={13} />
+                      )}
                       <span>Link</span>
                     </button>
                   ) : (
@@ -708,7 +801,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                         className="cursor-pointer px-3 py-1.5 bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-800/60 rounded-xl text-[10.5px] font-mono text-zinc-400 hover:text-white transition-all flex items-center gap-1.5"
                       >
                         <Smartphone size={11} className="text-zinc-600" />
-                        <span>{item.model || 'Android Phone'} ({item.ip}:{item.port})</span>
+                        <span>
+                          {item.model || 'Android Phone'} ({item.ip}:{item.port})
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -736,7 +831,8 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
               <div className="flex-1 p-4 overflow-y-auto font-mono text-[10px] text-zinc-400 space-y-2 select-text selection:bg-[#00f3ff]/20">
                 {adbLogs.length === 0 ? (
                   <div className="text-zinc-600 italic h-full flex items-center justify-center">
-                    [USB Uplink overwatch stream idle. Connect device and execute an action to begin system overwatch diagnostics...]
+                    [USB Uplink overwatch stream idle. Connect device and execute an action to begin
+                    system overwatch diagnostics...]
                   </div>
                 ) : (
                   adbLogs.map((log, index) => {
@@ -745,7 +841,10 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                     if (log.includes('[FAILURE]') || log.includes('[ERROR]')) color = 'text-red-400'
                     if (log.includes('[CRITICAL]')) color = 'text-red-500 font-bold'
                     return (
-                      <div key={index} className={`${color} leading-relaxed border-l border-zinc-800/60 pl-2`}>
+                      <div
+                        key={index}
+                        className={`${color} leading-relaxed border-l border-zinc-800/60 pl-2`}
+                      >
                         {log}
                       </div>
                     )
@@ -757,7 +856,6 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
 
           {/* Right Side: ADB Device Telemetry & Screenshot Framebuffer */}
           <div className="lg:col-span-5 flex flex-col gap-6">
-            
             {/* Telemetry diagnostics */}
             <div className="border border-zinc-800/80 bg-zinc-950/40 rounded-2xl p-5 relative overflow-hidden">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[#00f3ff] mb-4 font-mono flex items-center gap-2">
@@ -772,15 +870,25 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-xl">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase block">DEVICE MODEL</span>
-                      <p className="text-xs font-mono font-bold text-white mt-0.5 truncate">{adbTelemetryData.model || 'DETECTED PHONE'}</p>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase block">
+                        DEVICE MODEL
+                      </span>
+                      <p className="text-xs font-mono font-bold text-white mt-0.5 truncate">
+                        {adbTelemetryData.model || 'DETECTED PHONE'}
+                      </p>
                     </div>
                     <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-xl">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase block">FIRMWARE OS</span>
-                      <p className="text-xs font-mono font-bold text-white mt-0.5">{adbTelemetryData.os || 'ANDROID OS'}</p>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase block">
+                        FIRMWARE OS
+                      </span>
+                      <p className="text-xs font-mono font-bold text-white mt-0.5">
+                        {adbTelemetryData.os || 'ANDROID OS'}
+                      </p>
                     </div>
                     <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-xl">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase block">BATTERY CHARGE</span>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase block">
+                        BATTERY CHARGE
+                      </span>
                       <p className="text-xs font-mono font-bold text-[#00f3ff] mt-0.5 flex items-center gap-1">
                         <span>{adbTelemetryData.battery?.level}%</span>
                         {adbTelemetryData.battery?.isCharging && (
@@ -791,8 +899,12 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                       </p>
                     </div>
                     <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-xl">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase block">BATTERY TEMP</span>
-                      <p className="text-xs font-mono font-bold text-emerald-400 mt-0.5">{adbTelemetryData.battery?.temp || '28.5'}°C</p>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase block">
+                        BATTERY TEMP
+                      </span>
+                      <p className="text-xs font-mono font-bold text-emerald-400 mt-0.5">
+                        {adbTelemetryData.battery?.temp || '28.5'}°C
+                      </p>
                     </div>
                   </div>
 
@@ -840,7 +952,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
               ) : (
                 <div className="py-8 flex flex-col items-center justify-center gap-2 border border-zinc-900 rounded-xl">
                   <RefreshCw className="animate-spin text-zinc-600" size={18} />
-                  <span className="text-[10px] font-mono text-zinc-500">Querying phone telemetry stream...</span>
+                  <span className="text-[10px] font-mono text-zinc-500">
+                    Querying phone telemetry stream...
+                  </span>
                 </div>
               )}
             </div>
@@ -866,7 +980,8 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
               <div className="flex-1 bg-black border border-zinc-900 rounded-2xl flex items-center justify-center relative overflow-hidden p-4 min-h-[220px]">
                 {!adbConnected ? (
                   <div className="text-center font-mono text-[10px] text-zinc-600 max-w-xs leading-relaxed">
-                    [Mirror feed offline. Connect phone via ADB debug tunnel above to stream visual frames...]
+                    [Mirror feed offline. Connect phone via ADB debug tunnel above to stream visual
+                    frames...]
                   </div>
                 ) : screenshotLoading ? (
                   <div className="text-center font-mono text-[10px] text-[#00f3ff] animate-pulse flex flex-col items-center gap-2">
@@ -884,7 +999,11 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                   </div>
                 ) : (
                   <div className="text-center font-mono text-[10px] text-zinc-500 max-w-xs leading-relaxed flex flex-col items-center gap-3">
-                    <p>{"[Frame sync queue idle. Click 'Sync Frame' to mirror your active Android physical display.]"}</p>
+                    <p>
+                      {
+                        "[Frame sync queue idle. Click 'Sync Frame' to mirror your active Android physical display.]"
+                      }
+                    </p>
                     <button
                       onClick={handleCaptureScreenshot}
                       className="cursor-pointer px-4 py-2 bg-[#00f3ff]/10 hover:bg-[#00f3ff] hover:text-black border border-[#00f3ff]/30 text-[#00f3ff] text-[10px] tracking-wider uppercase font-bold rounded-xl transition-all"
@@ -895,11 +1014,9 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
                 )}
               </div>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   )
 }

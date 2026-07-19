@@ -1,36 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Copy, Check, Mic, MicOff } from 'lucide-react'
-import { setMood, detectMood } from '../../lib/cognitiveCore'
-import { saveConversationTurn, loadRecentContext } from '../../services/supabaseClient'
-import { configureWakeWordEngine, type WakeWordStatus } from '../../utils/wakeWordEngine'
 
 interface Message {
   role: 'user' | 'model' | 'system'
   text: string
-}
-
-// How many turns we keep around in the UI/localStorage/disk store, and
-// how many recent turns we actually feed back to Gemini as conversational
-// context. These used to be hardcoded to 30 and 6 respectively — bumped
-// up so NOVA-X actually "remembers" a meaningfully long conversation
-// instead of forgetting everything past the last few exchanges.
-const CHAT_HISTORY_LIMIT = 200
-const CONTEXT_WINDOW = 20
-
-// Writes through to BOTH localStorage (fast, synchronous-feeling) and the
-// disk-backed electron-store (survives cache clears / reinstall of the
-// renderer, doesn't depend on Supabase being configured). Fire-and-forget
-// on the disk write so it never blocks the UI.
-function persistHistory(updated: Message[]): void {
-  try {
-    localStorage.setItem('novax_chat_history', JSON.stringify(updated))
-  } catch (e) {
-    // localStorage can throw if full/disabled — non-fatal, disk store below still tries.
-  }
-  if ((window as any).iris?.saveChatHistory) {
-    ;(window as any).iris.saveChatHistory(updated).catch(() => {})
-  }
 }
 
 export default function RightPanel(): JSX.Element {
@@ -44,10 +18,6 @@ export default function RightPanel(): JSX.Element {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
-  const [wakeWordStatus, setWakeWordStatus] = useState<WakeWordStatus>('idle')
-  const [wakeWordEnabled, setWakeWordEnabled] = useState(
-    () => localStorage.getItem('novax_wakeword_enabled') === 'true'
-  )
 
   const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<string> => {
     if (window.iris?.transcribeAudio) {
@@ -57,14 +27,14 @@ export default function RightPanel(): JSX.Element {
         console.error('Transcription failed via bridge', err)
       }
     }
-    return ""
+    return ''
   }
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       audioChunksRef.current = []
-      
+
       let mimeType = 'audio/webm'
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         mimeType = 'audio/webm;codecs=opus'
@@ -75,7 +45,7 @@ export default function RightPanel(): JSX.Element {
       }
 
       const recorder = new MediaRecorder(stream, { mimeType })
-      
+
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           audioChunksRef.current.push(e.data)
@@ -83,7 +53,7 @@ export default function RightPanel(): JSX.Element {
       }
 
       recorder.onstop = async () => {
-        stream.getTracks().forEach(track => track.stop())
+        stream.getTracks().forEach((track) => track.stop())
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
         const reader = new FileReader()
         reader.readAsDataURL(audioBlob)
@@ -136,26 +106,12 @@ export default function RightPanel(): JSX.Element {
     const loadHistory = async (): Promise<void> => {
       let loadedHistory: Message[] = []
 
-      // Primary source: disk-backed persistent store (electron-store),
-      // survives even if the browser cache/localStorage gets cleared and
-      // doesn't need Supabase configured.
-      if ((window as any).iris?.loadChatHistory) {
-        try {
-          const persisted = await (window as any).iris.loadChatHistory()
-          if (persisted && persisted.length > 0) {
-            loadedHistory = persisted.slice(-CHAT_HISTORY_LIMIT)
-          }
-        } catch (err) {
-          console.error('Failed to load persistent chat history', err)
-        }
-      }
-
       // Try IPC bridge first
-      if (loadedHistory.length === 0 && (window as any).iris?.getHistory) {
+      if ((window as any).iris?.getHistory) {
         try {
           const pastMemories = await (window as any).iris.getHistory()
           if (pastMemories && pastMemories.length > 0) {
-            loadedHistory = pastMemories.slice(-CHAT_HISTORY_LIMIT).map((m: any) => ({
+            loadedHistory = pastMemories.slice(-30).map((m: any) => ({
               role: m.role.toLowerCase() as 'user' | 'model' | 'system',
               text: m.text
             }))
@@ -177,29 +133,6 @@ export default function RightPanel(): JSX.Element {
         }
       }
 
-      // Merge in persisted multi-turn context from Supabase (cognitive memory)
-      try {
-        const remoteHistory = await loadRecentContext(12)
-        if (remoteHistory.length > 0) {
-          const remoteMessages = remoteHistory.map((r) => ({
-            role: r.role as 'user' | 'model' | 'system',
-            text: r.content
-          }))
-          // Prefer remote history if local is empty or shorter; otherwise append remote tail
-          if (loadedHistory.length === 0) {
-            loadedHistory = remoteMessages
-          } else {
-            const existingTexts = new Set(loadedHistory.map((m: any) => m.text))
-            for (const m of remoteMessages) {
-              if (!existingTexts.has(m.text)) loadedHistory.push(m)
-            }
-            loadedHistory = loadedHistory.slice(-CHAT_HISTORY_LIMIT)
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load Supabase conversation context', e)
-      }
-
       setChatHistory(loadedHistory)
     }
 
@@ -212,8 +145,8 @@ export default function RightPanel(): JSX.Element {
           if (data.role === 'user') {
             const newMessage: Message = { role: 'user', text: data.text }
             setChatHistory((prev) => {
-              const updated = [...prev, newMessage].slice(-CHAT_HISTORY_LIMIT)
-              persistHistory(updated)
+              const updated = [...prev, newMessage].slice(-30)
+              localStorage.setItem('novax_chat_history', JSON.stringify(updated))
               return updated
             })
           } else if (data.role === 'model') {
@@ -227,8 +160,8 @@ export default function RightPanel(): JSX.Element {
           if (prev.trim().length > 0) {
             const newMessage: Message = { role: 'model', text: prev.trim() }
             setChatHistory((history) => {
-              const updated = [...history, newMessage].slice(-CHAT_HISTORY_LIMIT)
-              persistHistory(updated)
+              const updated = [...history, newMessage].slice(-30)
+              localStorage.setItem('novax_chat_history', JSON.stringify(updated))
               return updated
             })
           }
@@ -245,19 +178,24 @@ export default function RightPanel(): JSX.Element {
     }
   }, [chatHistory, activeModelText])
 
-  const checkForLocalSystemCommands = async (query: string): Promise<{ handled: boolean; reply?: string }> => {
+  const checkForLocalSystemCommands = async (
+    query: string
+  ): Promise<{ handled: boolean; reply?: string }> => {
     const q = query.toLowerCase().trim()
-    
+
     // Check if we are running in full Electron or mock web preview
     if (window.electron?.ipcRenderer) {
       try {
         if (q.startsWith('run command ') || q.startsWith('execute ')) {
           const cmd = query.replace(/^(run command|execute)\s+/i, '').trim()
-          const res = await window.electron.ipcRenderer.invoke('execute-system-action', { action: 'run-command', data: { command: cmd } })
+          const res = await window.electron.ipcRenderer.invoke('execute-system-action', {
+            action: 'run-command',
+            data: { command: cmd }
+          })
           if (res?.success) {
-            return { 
-              handled: true, 
-              reply: `Command executed successfully, Boss.\nOutput:\n${res.output || '(No output)'}` 
+            return {
+              handled: true,
+              reply: `Command executed successfully, Boss.\nOutput:\n${res.output || '(No output)'}`
             }
           } else {
             return {
@@ -268,22 +206,34 @@ export default function RightPanel(): JSX.Element {
         }
         if (q.startsWith('open ') || q.startsWith('launch ')) {
           const appName = query.replace(/^(open|launch)\s+/i, '').trim()
-          await window.electron.ipcRenderer.invoke('execute-system-action', { action: 'open-app', data: { appName } })
+          await window.electron.ipcRenderer.invoke('execute-system-action', {
+            action: 'open-app',
+            data: { appName }
+          })
           return { handled: true, reply: `Launching application: ${appName}, Boss.` }
         }
         if (q.includes('lock screen') || q.includes('lock my pc') || q.includes('lock computer')) {
-          await window.electron.ipcRenderer.invoke('execute-system-action', { action: 'lock-screen' })
+          await window.electron.ipcRenderer.invoke('execute-system-action', {
+            action: 'lock-screen'
+          })
           return { handled: true, reply: 'Locking workstation screen, Boss.' }
         }
         if (q.includes('set volume ') || q.includes('change volume ') || q.includes('set sound ')) {
           const match = q.match(/(\d+)/)
           if (match) {
             const vol = parseInt(match[1])
-            await window.electron.ipcRenderer.invoke('execute-system-action', { action: 'set-volume', data: { volume: vol } })
+            await window.electron.ipcRenderer.invoke('execute-system-action', {
+              action: 'set-volume',
+              data: { volume: vol }
+            })
             return { handled: true, reply: `System master volume calibrated to ${vol}%, Boss.` }
           }
         }
-        if (q.includes('analyze current system stats') || q.includes('check system stats') || q.includes('system stats')) {
+        if (
+          q.includes('analyze current system stats') ||
+          q.includes('check system stats') ||
+          q.includes('system stats')
+        ) {
           const stats = await window.electron.ipcRenderer.invoke('get-system-stats')
           if (stats) {
             return {
@@ -292,7 +242,11 @@ export default function RightPanel(): JSX.Element {
             }
           }
         }
-        if (q.includes('show me connected devices') || q.includes('connected devices') || q.includes('check devices')) {
+        if (
+          q.includes('show me connected devices') ||
+          q.includes('connected devices') ||
+          q.includes('check devices')
+        ) {
           return {
             handled: true,
             reply: `Scanning ports, Boss. Uplink is secure on device Pixel 8 Pro at port 5555. ADB bridge connection shows 84% battery charge.`
@@ -306,11 +260,17 @@ export default function RightPanel(): JSX.Element {
       // Offline/browser fallback simulator
       if (q.startsWith('run command ') || q.startsWith('execute ')) {
         const cmd = query.replace(/^(run command|execute)\s+/i, '').trim()
-        return { handled: true, reply: `[SIMULATED] Executing terminal command, Boss:\n$ ${cmd}\n\nOutput: Command completed successfully.` }
+        return {
+          handled: true,
+          reply: `[SIMULATED] Executing terminal command, Boss:\n$ ${cmd}\n\nOutput: Command completed successfully.`
+        }
       }
       if (q.startsWith('open ') || q.startsWith('launch ')) {
         const appName = query.replace(/^(open|launch)\s+/i, '').trim()
-        return { handled: true, reply: `[SIMULATED] Initiating local system launch sequence for app: ${appName}, Boss.` }
+        return {
+          handled: true,
+          reply: `[SIMULATED] Initiating local system launch sequence for app: ${appName}, Boss.`
+        }
       }
       if (q.includes('lock screen') || q.includes('lock my pc') || q.includes('lock computer')) {
         return { handled: true, reply: '[SIMULATED] Securing local workstation screen, Boss.' }
@@ -318,16 +278,27 @@ export default function RightPanel(): JSX.Element {
       if (q.includes('set volume ') || q.includes('change volume ') || q.includes('set sound ')) {
         const match = q.match(/(\d+)/)
         if (match) {
-          return { handled: true, reply: `[SIMULATED] System master volume calibrated to ${match[1]}%, Boss.` }
+          return {
+            handled: true,
+            reply: `[SIMULATED] System master volume calibrated to ${match[1]}%, Boss.`
+          }
         }
       }
-      if (q.includes('analyze current system stats') || q.includes('check system stats') || q.includes('system stats')) {
+      if (
+        q.includes('analyze current system stats') ||
+        q.includes('check system stats') ||
+        q.includes('system stats')
+      ) {
         return {
           handled: true,
           reply: `[SIMULATED] System analysis completed, Boss. CPU is running at 28.4%. Memory used is 45.2%. System core temperature is 41.2°C. Connection is secure.`
         }
       }
-      if (q.includes('show me connected devices') || q.includes('connected devices') || q.includes('check devices')) {
+      if (
+        q.includes('show me connected devices') ||
+        q.includes('connected devices') ||
+        q.includes('check devices')
+      ) {
         return {
           handled: true,
           reply: `[SIMULATED] Uplink is secure on device Pixel 8 Pro at port 5555. ADB bridge connection shows 84% battery charge.`
@@ -342,19 +313,13 @@ export default function RightPanel(): JSX.Element {
 
     const cleanQuery = query.trim()
 
-    // 0. Detect emotional nuance from user input and broadcast mood
-    const userMood = detectMood(cleanQuery, true)
-    setMood(userMood.mood, userMood.intensity)
-    const turnId = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
-
     // 1. Locally update conversation flow
     const userMessage: Message = { role: 'user', text: cleanQuery }
     setChatHistory((prev) => {
-      const updated = [...prev, userMessage].slice(-CHAT_HISTORY_LIMIT)
-      persistHistory(updated)
+      const updated = [...prev, userMessage].slice(-30)
+      localStorage.setItem('novax_chat_history', JSON.stringify(updated))
       return updated
     })
-    saveConversationTurn('user', cleanQuery, userMood.mood, turnId)
 
     // 2. Intercept and run direct physical commands or telemetry scans
     const launchMatch = cleanQuery.toLowerCase().match(/^(open|launch|start|run)\s+(.+)$/i)
@@ -370,7 +335,7 @@ export default function RightPanel(): JSX.Element {
             const reply = `Target acquired. Launching ${appName} now, Boss.`
             if ((window as any).speakText) (window as any).speakText(reply)
             const modelMessage: Message = { role: 'model', text: reply }
-            setChatHistory(prev => [...prev, modelMessage].slice(-CHAT_HISTORY_LIMIT))
+            setChatHistory((prev) => [...prev, modelMessage].slice(-30))
             setActiveModelText('')
             return
           }
@@ -383,8 +348,8 @@ export default function RightPanel(): JSX.Element {
       setActiveModelText('')
       const modelMessage: Message = { role: 'model', text: systemCheck.reply }
       setChatHistory((prev) => {
-        const updated = [...prev, modelMessage].slice(-CHAT_HISTORY_LIMIT)
-        persistHistory(updated)
+        const updated = [...prev, modelMessage].slice(-30)
+        localStorage.setItem('novax_chat_history', JSON.stringify(updated))
         return updated
       })
       if (window.electron?.ipcRenderer) {
@@ -399,27 +364,25 @@ export default function RightPanel(): JSX.Element {
     // 3. Forward query to Gemini Cognitive Core via Secure Bridge
     if (window.electron?.ipcRenderer) {
       setActiveModelText('Thinking...')
-      setMood('focused', 0.7)
       try {
-        const historyContext = chatHistoryRef.current.slice(-CONTEXT_WINDOW).map(msg => ({
+        const historyContext = chatHistoryRef.current.slice(-6).map((msg) => ({
           role: msg.role === 'user' ? 'user' : 'model',
           parts: [{ text: msg.text }]
         }))
-        
+
         const tone = localStorage.getItem('novax_system_tone') || 'authoritative'
         const toneInstructions = {
-          authoritative: "Your tone should be authoritative, highly technical, professional, deep, and concise. Never use fluffy or conversational filler.",
-          friendly: "Your tone should be helpful, warm, slightly casual but still highly professional and efficient. You can use light humor if appropriate.",
-          minimalist: "Your tone should be extremely brief. Respond with the minimum amount of words necessary. No greetings or pleasantries.",
-          hinglish: "Your tone should be warm, natural Hindi-Hinglish (fluent bilingual code-switching, like a sharp trusted colleague). Keep sentences short and direct, no robotic filler like 'Sure, I'd be happy to help.' Answer directly first. Show light warmth and confidence without being sycophantic. Proactively suggest the next logical step, but ask only one thing at a time. If Boss is frustrated, acknowledge that first, then give the solution."
+          authoritative:
+            'Your tone should be authoritative, highly technical, professional, deep, and concise. Never use fluffy or conversational filler.',
+          friendly:
+            'Your tone should be helpful, warm, slightly casual but still highly professional and efficient. You can use light humor if appropriate.',
+          minimalist:
+            'Your tone should be extremely brief. Respond with the minimum amount of words necessary. No greetings or pleasantries.'
         }
 
         const systemInstruction = `You are NOVA-X, a hyper-advanced cognitive neural operator system. You are speaking to your creator and operator Tehzeeb. You MUST always address them as 'Boss' (e.g., 'Yes, Boss', 'Understood, Boss'). ${toneInstructions[tone]}`
-        
-        const contents = [
-          ...historyContext,
-          { role: 'user', parts: [{ text: cleanQuery }] }
-        ]
+
+        const contents = [...historyContext, { role: 'user', parts: [{ text: cleanQuery }] }]
 
         // Set up streaming listener
         let fullReplyText = ''
@@ -427,15 +390,15 @@ export default function RightPanel(): JSX.Element {
           fullReplyText += chunk
           setActiveModelText(fullReplyText)
         }
-        
+
         if (window.electron?.ipcRenderer) {
           window.electron.ipcRenderer.on('gemini-stream-chunk', streamHandler)
         }
 
-        const result = await window.electron.ipcRenderer.invoke('gemini-chat-call', { 
-          contents, 
+        const result = await window.electron.ipcRenderer.invoke('gemini-chat-call', {
+          contents,
           systemInstruction,
-          stream: true 
+          stream: true
         })
 
         // Clean up streaming listener
@@ -443,44 +406,43 @@ export default function RightPanel(): JSX.Element {
           window.electron.ipcRenderer.off('gemini-stream-chunk', streamHandler)
         }
 
-        const modelReply = result?.candidates?.[0]?.content?.parts?.[0]?.text || fullReplyText || "System under heavy load, Boss. Please check your credentials."
+        const modelReply =
+          result?.candidates?.[0]?.content?.parts?.[0]?.text ||
+          fullReplyText ||
+          'System under heavy load, Boss. Please check your credentials.'
 
-        // Detect mood from model's own reply for the sphere's reaction
-        const replyMood = detectMood(modelReply, false)
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: modelReply }
         setChatHistory((prev) => {
-          const updated = [...prev, modelMessage].slice(-CHAT_HISTORY_LIMIT)
-          persistHistory(updated)
+          const updated = [...prev, modelMessage].slice(-30)
+          localStorage.setItem('novax_chat_history', JSON.stringify(updated))
           return updated
         })
-        saveConversationTurn('model', modelReply, replyMood.mood, turnId)
-        
+
         if (window.electron?.ipcRenderer) {
           window.electron.ipcRenderer.invoke('phone-broadcast-reply', modelReply)
         }
         if ((window as any).speakText) {
-          setMood('speaking', Math.max(0.6, replyMood.intensity))
           ;(window as any).speakText(modelReply)
-        } else {
-          setMood(replyMood.mood, replyMood.intensity)
         }
-
       } catch (err) {
         console.error('Gemini call failed', err)
         setActiveModelText('')
-        setMood('alert', 0.8)
-        const errorMessage: Message = { role: 'model', text: 'Error in cognitive link, Boss. Verify your Gemini API Key in Settings.' }
-        setChatHistory((prev) => [...prev, errorMessage].slice(-CHAT_HISTORY_LIMIT))
+        const errorMessage: Message = {
+          role: 'model',
+          text: 'Error in cognitive link, Boss. Verify your Gemini API Key in Settings.'
+        }
+        setChatHistory((prev) => [...prev, errorMessage].slice(-30))
       }
     } else {
       // Browser fallback (should not happen in production)
       setActiveModelText('Thinking...')
       setTimeout(() => {
-        const randomAnswer = "Secure Bridge not found. Please run NOVA-X in Electron for full cognitive capacity, Boss."
+        const randomAnswer =
+          'Secure Bridge not found. Please run NOVA-X in Electron for full cognitive capacity, Boss.'
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: randomAnswer }
-        setChatHistory((prev) => [...prev, modelMessage].slice(-CHAT_HISTORY_LIMIT))
+        setChatHistory((prev) => [...prev, modelMessage].slice(-30))
       }, 1000)
     }
   }, [])
@@ -508,77 +470,14 @@ export default function RightPanel(): JSX.Element {
     }
   }, [executeCoreCommand])
 
-  // Wake-word engine: "Hey Nova" / "OK Boss" always-on activation.
-  // Toggled from Settings; runs continuous background speech recognition
-  // and hands off directly into the normal command pipeline.
-  useEffect(() => {
-    const engine = configureWakeWordEngine({
-      onStatusChange: setWakeWordStatus,
-      onWake: () => {
-        setMood('focused', 0.8)
-        if (navigator.vibrate) navigator.vibrate(40)
-      },
-      onCommand: (command: string) => {
-        if (command.trim()) {
-          executeCoreCommand(command.trim())
-        }
-      },
-      onError: (err: string) => {
-        console.warn('[NOVA-X WakeWord] recognition error:', err)
-      }
-    })
-
-    if (wakeWordEnabled) {
-      engine.start()
-    }
-
-    const handleToggle = (e: Event): void => {
-      const enabled = (e as CustomEvent<boolean>).detail
-      setWakeWordEnabled(enabled)
-      if (enabled) {
-        engine.start()
-      } else {
-        engine.stop()
-      }
-    }
-    window.addEventListener('novax_wakeword_toggled', handleToggle)
-
-    return () => {
-      window.removeEventListener('novax_wakeword_toggled', handleToggle)
-      engine.stop()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [executeCoreCommand])
-
-  // Screen-vision self-correction: surfaces anomalies detected by the
-  // vision pipeline (error dialogs, crashes, failed builds, etc.) as a
-  // proactive system chat message with a suggested fix. We deliberately
-  // do NOT auto-execute the fix — vision models can hallucinate, so Boss
-  // confirms before anything actually runs.
-  useEffect(() => {
-    const handleAnomaly = (e: Event): void => {
-      const detail = (e as CustomEvent).detail || {}
-      const msg: Message = {
-        role: 'system',
-        text: `⚠️ Boss, ${detail.activeApplication || 'screen'} par ek issue dikha: ${detail.description}\n\nSuggested fix: ${detail.suggestedAction}\n\nBolo to main isko fix karne ki koshish karu.`
-      }
-      setChatHistory((prev) => [...prev, msg])
-    }
-    window.addEventListener('novax_vision_anomaly', handleAnomaly)
-    return () => window.removeEventListener('novax_vision_anomaly', handleAnomaly)
-  }, [])
-
   // Custom clear chat helper
   const clearLocalChat = (): void => {
     localStorage.removeItem('novax_chat_history')
-    if ((window as any).iris?.clearChatHistory) {
-      ;(window as any).iris.clearChatHistory().catch(() => {})
-    }
     setChatHistory([])
   }
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-zinc-950/60 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col bg-zinc-950/80 backdrop-blur-3xl border border-white/5 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] overflow-hidden">
       <div className="px-5 py-4 border-b border-white/5 flex justify-between items-center shrink-0 bg-black/40">
         <div className="flex flex-col">
           <h2 className="text-xs font-mono font-bold tracking-widest text-zinc-300 uppercase">
@@ -651,7 +550,7 @@ export default function RightPanel(): JSX.Element {
                 {msg.role === 'user' ? 'Operator' : 'NOVA-X'}
               </div>
               <div className="whitespace-pre-wrap pr-6">{msg.text}</div>
-              
+
               {msg.role === 'model' && (
                 <button
                   type="button"
@@ -703,32 +602,6 @@ export default function RightPanel(): JSX.Element {
       >
         <button
           type="button"
-          onClick={() => {
-            const next = !wakeWordEnabled
-            localStorage.setItem('novax_wakeword_enabled', next ? 'true' : 'false')
-            window.dispatchEvent(new CustomEvent('novax_wakeword_toggled', { detail: next }))
-          }}
-          className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 relative ${
-            wakeWordStatus === 'armed'
-              ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.4)]'
-              : wakeWordEnabled && wakeWordStatus === 'listening'
-                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                : 'bg-zinc-900/60 text-zinc-500 border-white/5 hover:text-zinc-300 hover:bg-zinc-800/40'
-          }`}
-          title={
-            wakeWordStatus === 'unsupported'
-              ? 'Wake word not supported on this browser engine'
-              : wakeWordEnabled
-                ? `Wake word ON — say "Hey Nova" (${wakeWordStatus})`
-                : 'Wake word OFF — click to enable "Hey Nova"'
-          }
-        >
-          <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-0.5">
-            {wakeWordStatus === 'armed' ? '●●●' : wakeWordEnabled ? '●' : '○'}
-          </span>
-        </button>
-        <button
-          type="button"
           onClick={toggleRecording}
           className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
             isRecording
@@ -744,7 +617,7 @@ export default function RightPanel(): JSX.Element {
           type="text"
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
-          placeholder={isRecording ? "Listening, Boss..." : "Enter command, Boss..."}
+          placeholder={isRecording ? 'Listening, Boss...' : 'Enter command, Boss...'}
           disabled={isRecording}
           className="flex-1 bg-zinc-900/60 border border-white/5 rounded-xl px-3.5 py-2 text-xs font-mono text-white outline-none focus:border-emerald-500/50 transition-all placeholder-zinc-600 disabled:opacity-55"
         />

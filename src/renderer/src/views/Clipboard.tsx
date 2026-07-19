@@ -1,18 +1,7 @@
+import { Clipboard, Trash2, Pin, Copy, EyeOff, Eye, Hash, Lock, Image, Shield } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  RiClipboardLine, 
-  RiDeleteBin6Line, 
-  RiPushpinLine, 
-  RiPushpinFill, 
-  RiFileCopyLine,
-  RiEyeOffLine,
-  RiEyeLine,
-  RiHashtag,
-  RiLockPasswordLine,
-  RiImageLine,
-  RiShieldLine
-} from 'react-icons/ri'
+
 
 interface ClipboardEntry {
   id: string
@@ -82,11 +71,16 @@ export default function ClipboardView(): JSX.Element {
     const ccRegex = /\b(?:\d[ -]*?){13,16}\b/
     const ssnRegex = /\b\d{3}-\d{2}-\d{4}\b/
     const apiKeyRegex = /\b[A-Za-z0-9\-_]{20,}\b/
-    return passwordRegex.test(text) || ccRegex.test(text) || ssnRegex.test(text) || (text.length > 25 && apiKeyRegex.test(text))
+    return (
+      passwordRegex.test(text) ||
+      ccRegex.test(text) ||
+      ssnRegex.test(text) ||
+      (text.length > 25 && apiKeyRegex.test(text))
+    )
   }
 
   const toggleReveal = (id: string) => {
-    setRevealedIds(prev => ({ ...prev, [id]: !prev[id] }))
+    setRevealedIds((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
   return (
@@ -96,14 +90,14 @@ export default function ClipboardView(): JSX.Element {
           <div>
             <div className="flex items-center gap-4 mb-2">
               <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
-                <RiClipboardLine className="w-6 h-6 text-indigo-400" />
+                <Clipboard className="w-6 h-6 text-indigo-400" />
               </div>
               <h1 className="text-3xl font-black tracking-tight text-white font-mono uppercase">
                 Secure Clipboard <span className="text-indigo-500">Vault</span>
               </h1>
             </div>
             <p className="text-zinc-400 text-sm font-medium flex items-center gap-2 font-mono">
-              <RiShieldLine className="w-4 h-4 text-emerald-400" />
+              <Shield className="w-4 h-4 text-emerald-400" />
               Automatically archives and encrypts local clipboard items. 100% offline.
             </p>
           </div>
@@ -117,7 +111,7 @@ export default function ClipboardView(): JSX.Element {
                   : 'bg-white/5 text-zinc-500 border-transparent hover:bg-white/10 hover:text-zinc-300'
               }`}
             >
-              {filterSensitive ? <RiLockPasswordLine size={14} /> : <RiHashtag size={14} />}
+              {filterSensitive ? <Lock size={14} /> : <Hash size={14} />}
               {filterSensitive ? 'Privacy Guard ON' : 'Privacy Guard OFF'}
             </button>
 
@@ -125,7 +119,7 @@ export default function ClipboardView(): JSX.Element {
               onClick={handleClearAll}
               className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 rounded-xl font-mono text-xs uppercase tracking-wider transition-all"
             >
-              <RiDeleteBin6Line size={14} />
+              <Trash2 size={14} />
               Clear Unpinned
             </button>
           </div>
@@ -135,13 +129,17 @@ export default function ClipboardView(): JSX.Element {
           {loading ? (
             <div className="p-20 flex flex-col items-center justify-center gap-4">
               <div className="w-12 h-12 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-              <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Scanning Clip Sync Nodes...</p>
+              <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">
+                Scanning Clip Sync Nodes...
+              </p>
             </div>
           ) : entries.length === 0 ? (
             <div className="p-16 border border-white/5 bg-zinc-900/40 rounded-3xl text-center backdrop-blur-md">
-              <RiClipboardLine className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
+              <Clipboard className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
               <h3 className="text-white font-bold mb-1 font-mono">Clipboard History Empty</h3>
-              <p className="text-zinc-500 text-sm">Copy text or images to start caching clips in the vault automatically.</p>
+              <p className="text-zinc-500 text-sm">
+                Copy text or images to start caching clips in the vault automatically.
+              </p>
             </div>
           ) : (
             <AnimatePresence mode="popLayout">
@@ -164,9 +162,13 @@ export default function ClipboardView(): JSX.Element {
                       <div className="flex-1 min-w-0">
                         {item.type === 'text' ? (
                           <div className={`relative ${isBlurred ? 'select-none' : ''}`}>
-                            <p className={`text-zinc-100 text-sm font-medium leading-relaxed break-words font-mono ${
-                              isBlurred ? 'blur-[6px] opacity-40 select-none pointer-events-none' : ''
-                            }`}>
+                            <p
+                              className={`text-zinc-100 text-sm font-medium leading-relaxed break-words font-mono ${
+                                isBlurred
+                                  ? 'blur-[6px] opacity-40 select-none pointer-events-none'
+                                  : ''
+                              }`}
+                            >
                               {item.content}
                             </p>
                             {sensitive && (
@@ -178,7 +180,7 @@ export default function ClipboardView(): JSX.Element {
                                   onClick={() => toggleReveal(item.id)}
                                   className="text-xs text-indigo-400 hover:text-indigo-300 font-mono underline flex items-center gap-1 cursor-pointer"
                                 >
-                                  {isBlurred ? <RiEyeLine size={12} /> : <RiEyeOffLine size={12} />}
+                                  {isBlurred ? <Eye size={12} /> : <EyeOff size={12} />}
                                   {isBlurred ? 'Reveal Context' : 'Mask Context'}
                                 </button>
                               </div>
@@ -186,14 +188,14 @@ export default function ClipboardView(): JSX.Element {
                           </div>
                         ) : (
                           <div className="relative rounded-lg overflow-hidden border border-white/5 max-w-md bg-black/40 p-1.5 group-hover:border-indigo-500/20 transition-all">
-                            <img 
-                              src={item.content} 
-                              alt="Clipboard visual cache" 
+                            <img
+                              src={item.content}
+                              alt="Clipboard visual cache"
                               className="max-h-48 object-contain rounded"
                               referrerPolicy="no-referrer"
                             />
                             <div className="absolute top-3 left-3 bg-zinc-950/80 border border-white/10 px-2 py-1 rounded-md flex items-center gap-1 text-[9px] font-mono uppercase tracking-widest text-indigo-400">
-                              <RiImageLine size={10} /> Image File
+                              <Image size={10} /> Image File
                             </div>
                           </div>
                         )}
@@ -216,7 +218,7 @@ export default function ClipboardView(): JSX.Element {
                           }`}
                           title="Copy back to clipboard"
                         >
-                          <RiFileCopyLine className="w-4 h-4" />
+                          <Copy className="w-4 h-4" />
                         </button>
 
                         <button
@@ -228,7 +230,11 @@ export default function ClipboardView(): JSX.Element {
                           }`}
                           title={item.pinned ? 'Unpin item' : 'Pin item'}
                         >
-                          {item.pinned ? <RiPushpinFill className="w-4 h-4" /> : <RiPushpinLine className="w-4 h-4" />}
+                          {item.pinned ? (
+                            <Pin className="w-4 h-4" />
+                          ) : (
+                            <Pin className="w-4 h-4" />
+                          )}
                         </button>
 
                         <button
@@ -236,7 +242,7 @@ export default function ClipboardView(): JSX.Element {
                           className="p-2.5 bg-zinc-800/50 text-zinc-500 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-all border border-transparent hover:border-red-500/20"
                           title="Delete clip"
                         >
-                          <RiDeleteBin6Line className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>

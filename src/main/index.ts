@@ -1,6 +1,17 @@
+import dotenv from 'dotenv'
+dotenv.config()
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-import { app, shell, BrowserWindow, ipcMain, desktopCapturer, session, protocol, net, dialog } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  desktopCapturer,
+  session,
+  protocol,
+  net
+} from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -20,18 +31,6 @@ if (disableGpuFlag || gpuCrashCount >= 2) {
   console.warn('[NOVA-X Main] Disabling hardware acceleration due to previous crashes or settings.')
   app.disableHardwareAcceleration()
 }
-
-// Safety net: previously an unhandled error/rejection anywhere in the
-// main process would silently kill the whole app (Node's default
-// behavior), which looked to the user like "the app just fails/closes
-// randomly". We now log these instead of dying, so a single bad promise
-// or async IPC handler can't take the whole assistant down.
-process.on('uncaughtException', (error) => {
-  console.error('[NOVA-X Main] Uncaught exception (recovered, app kept running):', error)
-})
-process.on('unhandledRejection', (reason) => {
-  console.error('[NOVA-X Main] Unhandled promise rejection (recovered, app kept running):', reason)
-})
 
 let splashWindow: BrowserWindow | null = null
 
@@ -249,50 +248,17 @@ function createWindow(): void {
   })
 
   // Listen for render process or GPU crashes to toggle hardware acceleration dynamically
-  let crashRecoveryAttempts = 0
-  const MAX_CRASH_RECOVERY_ATTEMPTS = 3
-
-  const handleFatalCrash = (source: string, details: any): void => {
-    console.error(`[NOVA-X Main] ${source} crashed/gone:`, details)
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[NOVA-X Main] Render process crashed/gone:', details)
     const currentCount = (store.get('gpu_crash_count') as number) || 0
     store.set('gpu_crash_count', currentCount + 1)
-
-    if (mainWindow.isDestroyed()) return
-
-    crashRecoveryAttempts++
-    if (crashRecoveryAttempts <= MAX_CRASH_RECOVERY_ATTEMPTS) {
-      // Previously the app just logged the crash and left the window
-      // blank/frozen — user had to force-quit. Now we actually try to
-      // recover by reloading the renderer.
-      console.warn(
-        `[NOVA-X Main] Attempting automatic recovery (attempt ${crashRecoveryAttempts}/${MAX_CRASH_RECOVERY_ATTEMPTS})...`
-      )
-      setTimeout(() => {
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.reload()
-        }
-      }, 500)
-    } else {
-      // Repeated crashes in the same session — reloading isn't helping,
-      // most likely a GPU/driver issue with the 3D UI. Tell the user
-      // instead of leaving them staring at a dead window, and make sure
-      // the NEXT launch starts with hardware acceleration disabled.
-      store.set('disable_gpu', true)
-      dialog.showErrorBox(
-        'NOVA-X — Display Crashed',
-        'The app kept crashing repeatedly, likely due to a graphics driver issue. ' +
-        'Hardware acceleration has been disabled for the next launch. Please restart NOVA-X.'
-      )
-    }
-  }
-
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    handleFatalCrash('Render process', details)
   })
 
   mainWindow.webContents.on('child-process-gone', (_event, details) => {
     if (details.type === 'GPU-process') {
-      handleFatalCrash('GPU process', details)
+      console.error('[NOVA-X Main] GPU process crashed/gone:', details)
+      const currentCount = (store.get('gpu_crash_count') as number) || 0
+      store.set('gpu_crash_count', currentCount + 1)
     }
   })
 
@@ -311,7 +277,9 @@ function createWindow(): void {
 
   // Hard timeout fallback: force close splash after 5 seconds to prevent getting stuck
   const hardTimeout = setTimeout(() => {
-    console.warn('[NOVA-X Splash] Hard timeout fallback reached. Closing splash and activating main window.')
+    console.warn(
+      '[NOVA-X Splash] Hard timeout fallback reached. Closing splash and activating main window.'
+    )
     closeSplash()
     if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.maximize()
@@ -344,6 +312,42 @@ function createWindow(): void {
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
+
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('novax', process.execPath, [path.resolve(process.argv[1])])
+  }
+} else {
+  app.setAsDefaultProtocolClient('novax')
+}
+
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    const mainWindow = BrowserWindow.getAllWindows()[0]
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+      const url = commandLine.pop()
+      if (url && url.startsWith('novax://')) {
+        ipcMain.emit('oauth-callback', null, url)
+      }
+    }
+  })
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  if (url && url.startsWith('novax://')) {
+    const mainWindow = BrowserWindow.getAllWindows()[0]
+    if (mainWindow) {
+      ipcMain.emit('oauth-callback', null, url)
+    }
+  }
+})
+
 app.whenReady().then(() => {
   createSplashWindow()
 
@@ -359,28 +363,32 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL()
     const devUrl = process.env['ELECTRON_RENDERER_URL'] || ''
-    const isTrusted = url.startsWith('file://') || 
-                      url.startsWith('http://localhost') || 
-                      url.startsWith('media://') || 
-                      url.includes('127.0.0.1') ||
-                      (devUrl && url.startsWith(devUrl))
-    
+    const isTrusted =
+      url.startsWith('file://') ||
+      url.startsWith('http://localhost') ||
+      url.startsWith('media://') ||
+      url.includes('127.0.0.1') ||
+      (devUrl && url.startsWith(devUrl))
+
     if (isTrusted) {
       callback(true)
     } else {
-      console.warn(`[NOVA-X Security] Blocked permission request '${permission}' for untrusted external origin: ${url}`)
+      console.warn(
+        `[NOVA-X Security] Blocked permission request '${permission}' for untrusted external origin: ${url}`
+      )
       callback(false)
     }
   })
 
   session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
     const devUrl = process.env['ELECTRON_RENDERER_URL'] || ''
-    const isTrusted = requestingOrigin.startsWith('file://') || 
-                      requestingOrigin.startsWith('http://localhost') || 
-                      requestingOrigin.startsWith('media://') || 
-                      requestingOrigin.includes('127.0.0.1') ||
-                      requestingOrigin === 'null' || // Electron file protocol sometimes reports null origin
-                      (devUrl && requestingOrigin.startsWith(devUrl))
+    const isTrusted =
+      requestingOrigin.startsWith('file://') ||
+      requestingOrigin.startsWith('http://localhost') ||
+      requestingOrigin.startsWith('media://') ||
+      requestingOrigin.includes('127.0.0.1') ||
+      requestingOrigin === 'null' || // Electron file protocol sometimes reports null origin
+      (devUrl && requestingOrigin.startsWith(devUrl))
     return isTrusted
   })
 

@@ -289,26 +289,7 @@ export default function LeftPanelsPremium({ status, visionMode }: any) {
               ctx.drawImage(videoRef.current, 0, 0, 640, 480)
               const base64Full = canvasRef.current.toDataURL('image/jpeg', 0.8)
               const cleanBase64 = base64Full.replace(/^data:image\/jpeg;base64,/, '')
-              ;(window as any).iris.sendVisionFrame(cleanBase64).then((res: any) => {
-                // Self-correction hand-off: the main process already
-                // dedupes/cools down repeat alerts (see vision.ts
-                // `shouldAlert`), so anything that reaches here is worth
-                // surfacing. We don't auto-execute fixes — vision models
-                // can hallucinate — we just proactively notify Boss with
-                // a concrete suggestion and let them confirm.
-                if (res?.success && res.shouldAlert && res.anomalyDetected) {
-                  window.dispatchEvent(
-                    new CustomEvent('novax_vision_anomaly', {
-                      detail: {
-                        description: res.anomalyDescription,
-                        suggestedAction: res.suggestedAction,
-                        severity: res.severity,
-                        activeApplication: res.activeApplication
-                      }
-                    })
-                  )
-                }
-              }).catch(() => {})
+              ;(window as any).iris.sendVisionFrame(cleanBase64)
             }
           }
         }, 1000)

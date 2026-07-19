@@ -2,8 +2,6 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { useMemo, useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { ErrorBoundary } from './ErrorBoundary'
-import { MOOD_COLORS, type Mood } from '../../lib/cognitiveCore'
-import { detectPerformanceTier } from '../../utils/detectPerformanceTier'
 
 // Premium futuristic color palette for NOVA-X Fusion Core
 const IDLE_COLOR = new THREE.Color('#00f3ff') // Electric Cyan
@@ -18,21 +16,16 @@ const _ringColor = new THREE.Color()
 const _scaleVec = new THREE.Vector3()
 
 // Model 1: Central Quantum Crystal Core (Default)
-function CoreCrystal({ isConnected, isSpeaking, mood }: { isConnected: boolean; isSpeaking: boolean; mood: Mood }) {
+function CoreCrystal({ isConnected, isSpeaking }: { isConnected: boolean; isSpeaking: boolean }) {
   const meshRef = useRef<THREE.Mesh>(null)
   const wireRef = useRef<THREE.Mesh>(null)
   const volRef = useRef(0)
-
-  const moodColors = MOOD_COLORS[mood]
-  const idleColor = useMemo(() => new THREE.Color(moodColors.primary), [moodColors.primary])
-  const activeColor = useMemo(() => new THREE.Color(moodColors.secondary), [moodColors.secondary])
-  const coreColor = useMemo(() => new THREE.Color(moodColors.accent), [moodColors.accent])
 
   useFrame((state, delta) => {
     if (!meshRef.current || !wireRef.current) return
 
     const t = state.clock.getElapsedTime()
-    
+
     let targetVol = 0
     if (isSpeaking) {
       targetVol = Math.abs(Math.sin(t * 11) * 0.5 + Math.sin(t * 4.7) * 0.5)
@@ -45,7 +38,7 @@ function CoreCrystal({ isConnected, isSpeaking, mood }: { isConnected: boolean; 
     const speed = isSpeaking ? 1.4 : isConnected ? 0.45 : 0.1
     meshRef.current.rotation.y += delta * speed
     meshRef.current.rotation.x += delta * speed * 0.6
-    
+
     wireRef.current.rotation.y -= delta * speed * 1.2
     wireRef.current.rotation.z += delta * speed * 0.8
 
@@ -55,14 +48,14 @@ function CoreCrystal({ isConnected, isSpeaking, mood }: { isConnected: boolean; 
     meshRef.current.scale.copy(_scaleVec)
     wireRef.current.scale.copy(_scaleVec).multiplyScalar(1.22)
 
-    _coreColor.lerpColors(idleColor, activeColor, Math.min(vol * 2.2, 1))
-    
+    _coreColor.lerpColors(IDLE_COLOR, ACTIVE_COLOR, Math.min(vol * 2.2, 1))
+
     const mat = meshRef.current.material as THREE.MeshBasicMaterial
     const wireMat = wireRef.current.material as THREE.MeshBasicMaterial
-    
+
     mat.color.copy(_coreColor)
-    wireMat.color.lerpColors(coreColor, activeColor, Math.min(vol * 1.5, 1))
-    
+    wireMat.color.lerpColors(CORE_COLOR, ACTIVE_COLOR, Math.min(vol * 1.5, 1))
+
     mat.opacity = isConnected ? 0.18 + vol * 0.4 : 0.08
     wireMat.opacity = isConnected ? 0.65 + vol * 0.35 : 0.25
   })
@@ -72,7 +65,7 @@ function CoreCrystal({ isConnected, isSpeaking, mood }: { isConnected: boolean; 
       <mesh ref={meshRef}>
         <icosahedronGeometry args={[0.55, 1]} />
         <meshBasicMaterial
-          color={idleColor}
+          color={IDLE_COLOR}
           transparent
           opacity={0.15}
           wireframe={false}
@@ -84,7 +77,7 @@ function CoreCrystal({ isConnected, isSpeaking, mood }: { isConnected: boolean; 
       <mesh ref={wireRef}>
         <icosahedronGeometry args={[0.56, 1]} />
         <meshBasicMaterial
-          color={coreColor}
+          color={CORE_COLOR}
           transparent
           opacity={0.5}
           wireframe
@@ -270,8 +263,12 @@ function HypercubeCore({ isConnected, isSpeaking }: { isConnected: boolean; isSp
   useFrame((state, delta) => {
     if (!cubeRef.current || !innerRef.current) return
     const t = state.clock.getElapsedTime()
-    
-    let targetVol = isSpeaking ? Math.abs(Math.sin(t * 11) * 0.42) : isConnected ? Math.abs(Math.sin(t * 2)) * 0.08 : 0
+
+    let targetVol = isSpeaking
+      ? Math.abs(Math.sin(t * 11) * 0.42)
+      : isConnected
+        ? Math.abs(Math.sin(t * 2)) * 0.08
+        : 0
     volRef.current += (targetVol - volRef.current) * 0.15
     const vol = volRef.current
 
@@ -296,11 +293,22 @@ function HypercubeCore({ isConnected, isSpeaking }: { isConnected: boolean; isSp
     <group>
       <mesh ref={cubeRef}>
         <boxGeometry args={[1.1, 1.1, 1.1]} />
-        <meshBasicMaterial color={IDLE_COLOR} wireframe transparent opacity={0.65} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color={IDLE_COLOR}
+          wireframe
+          transparent
+          opacity={0.65}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
       <mesh ref={innerRef}>
         <octahedronGeometry args={[0.5, 0]} />
-        <meshBasicMaterial color={CORE_COLOR} transparent opacity={0.4} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color={CORE_COLOR}
+          transparent
+          opacity={0.4}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
     </group>
   )
@@ -317,8 +325,12 @@ function CyberRingCore({ isConnected, isSpeaking }: { isConnected: boolean; isSp
   useFrame((state, delta) => {
     if (!r1Ref.current || !r2Ref.current || !r3Ref.current || !coreRef.current) return
     const t = state.clock.getElapsedTime()
-    
-    let targetVol = isSpeaking ? Math.abs(Math.sin(t * 11) * 0.45) : isConnected ? Math.abs(Math.sin(t * 2)) * 0.08 : 0
+
+    let targetVol = isSpeaking
+      ? Math.abs(Math.sin(t * 11) * 0.45)
+      : isConnected
+        ? Math.abs(Math.sin(t * 2)) * 0.08
+        : 0
     volRef.current += (targetVol - volRef.current) * 0.15
     const vol = volRef.current
 
@@ -351,26 +363,52 @@ function CyberRingCore({ isConnected, isSpeaking }: { isConnected: boolean; isSp
     <group>
       <mesh ref={r1Ref}>
         <torusGeometry args={[1.15, 0.015, 8, 48]} />
-        <meshBasicMaterial color={IDLE_COLOR} transparent opacity={0.7} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color={IDLE_COLOR}
+          transparent
+          opacity={0.7}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
       <mesh ref={r2Ref}>
         <torusGeometry args={[0.85, 0.012, 8, 48]} />
-        <meshBasicMaterial color={CORE_COLOR} transparent opacity={0.6} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color={CORE_COLOR}
+          transparent
+          opacity={0.6}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
       <mesh ref={r3Ref}>
         <torusGeometry args={[0.55, 0.008, 8, 48]} />
-        <meshBasicMaterial color={RING_GLOW} transparent opacity={0.5} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color={RING_GLOW}
+          transparent
+          opacity={0.5}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
       <mesh ref={coreRef}>
         <sphereGeometry args={[0.55, 16, 16]} />
-        <meshBasicMaterial color={IDLE_COLOR} transparent opacity={0.3} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color={IDLE_COLOR}
+          transparent
+          opacity={0.3}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
     </group>
   )
 }
 
 // Model 4: Nebula Swarm Nodes
-function NebulaSwarmCore({ isConnected, isSpeaking }: { isConnected: boolean; isSpeaking: boolean }) {
+function NebulaSwarmCore({
+  isConnected,
+  isSpeaking
+}: {
+  isConnected: boolean
+  isSpeaking: boolean
+}) {
   const ref = useRef<THREE.Points>(null)
   const volRef = useRef(0)
   const COUNT = 1500
@@ -414,7 +452,11 @@ function NebulaSwarmCore({ isConnected, isSpeaking }: { isConnected: boolean; is
     pts.rotation.y += delta * 0.15
     pts.rotation.x += delta * 0.05
 
-    let targetVol = isSpeaking ? Math.abs(Math.sin(t * 11) * 0.45) : isConnected ? Math.abs(Math.sin(t * 1.5)) * 0.05 : 0
+    let targetVol = isSpeaking
+      ? Math.abs(Math.sin(t * 11) * 0.45)
+      : isConnected
+        ? Math.abs(Math.sin(t * 1.5)) * 0.05
+        : 0
     volRef.current += (targetVol - volRef.current) * 0.1
     const vol = volRef.current
 
@@ -461,7 +503,13 @@ function NebulaSwarmCore({ isConnected, isSpeaking }: { isConnected: boolean; is
 }
 
 // Model 5: EVA Holographic Core (Vertical energy strands with pink/blue particles)
-function EvaHologramCore({ isConnected, isSpeaking }: { isConnected: boolean; isSpeaking: boolean }) {
+function EvaHologramCore({
+  isConnected,
+  isSpeaking
+}: {
+  isConnected: boolean
+  isSpeaking: boolean
+}) {
   const ref = useRef<THREE.Points>(null)
   const volRef = useRef(0)
   const COUNT = 900
@@ -509,7 +557,11 @@ function EvaHologramCore({ isConnected, isSpeaking }: { isConnected: boolean; is
 
     pts.rotation.y += delta * 1.4 // fast, elegant rotate
 
-    let targetVol = isSpeaking ? Math.abs(Math.sin(t * 11) * 0.45) : isConnected ? Math.abs(Math.sin(t * 2)) * 0.08 : 0
+    let targetVol = isSpeaking
+      ? Math.abs(Math.sin(t * 11) * 0.45)
+      : isConnected
+        ? Math.abs(Math.sin(t * 2)) * 0.08
+        : 0
     volRef.current += (targetVol - volRef.current) * 0.15
     const vol = volRef.current
 
@@ -518,7 +570,7 @@ function EvaHologramCore({ isConnected, isSpeaking }: { isConnected: boolean; is
       const ix = i * 3
       const ratio = i / COUNT
       const phase = ratio * Math.PI * 4
-      const r = (0.52 + Math.sin(t * 2.5 + phase) * (0.05 + vol * 0.42))
+      const r = 0.52 + Math.sin(t * 2.5 + phase) * (0.05 + vol * 0.42)
       const helixId = i % 2 === 0 ? 1 : -1
       const angle = ratio * Math.PI * 8 + t * 0.75
 
@@ -548,7 +600,13 @@ function EvaHologramCore({ isConnected, isSpeaking }: { isConnected: boolean; is
 }
 
 // Model 6: Jarvis Tactical Core (Amber/Orange military radar HUD theme)
-function JarvisTacticalCore({ isConnected, isSpeaking }: { isConnected: boolean; isSpeaking: boolean }) {
+function JarvisTacticalCore({
+  isConnected,
+  isSpeaking
+}: {
+  isConnected: boolean
+  isSpeaking: boolean
+}) {
   const ringRef = useRef<THREE.Mesh>(null)
   const ringInnerRef = useRef<THREE.Mesh>(null)
   const pointsRef = useRef<THREE.Points>(null)
@@ -574,7 +632,11 @@ function JarvisTacticalCore({ isConnected, isSpeaking }: { isConnected: boolean;
     if (!ringRef.current || !ringInnerRef.current || !pointsRef.current) return
     const t = state.clock.getElapsedTime()
 
-    let targetVol = isSpeaking ? Math.abs(Math.sin(t * 11) * 0.45) : isConnected ? Math.abs(Math.sin(t * 2)) * 0.08 : 0
+    let targetVol = isSpeaking
+      ? Math.abs(Math.sin(t * 11) * 0.45)
+      : isConnected
+        ? Math.abs(Math.sin(t * 2)) * 0.08
+        : 0
     volRef.current += (targetVol - volRef.current) * 0.15
     const vol = volRef.current
 
@@ -622,248 +684,13 @@ function JarvisTacticalCore({ isConnected, isSpeaking }: { isConnected: boolean;
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[positions, 3]} />
         </bufferGeometry>
-        <pointsMaterial size={0.024} transparent opacity={0.65} color={AMBER} blending={THREE.AdditiveBlending} />
-      </points>
-    </group>
-  )
-}
-
-// Model 7: Plasma Torus Knot Core - Energy arcs wrapping a complex knot
-function PlasmaCore({ isConnected, isSpeaking }: { isConnected: boolean; isSpeaking: boolean }) {
-  const knotRef = useRef<THREE.Mesh>(null)
-  const arcRef = useRef<THREE.Points>(null)
-  const volRef = useRef(0)
-  const COUNT = 600
-
-  const PLASMA_BLUE = new THREE.Color('#00aaff')
-  const PLASMA_WHITE = new THREE.Color('#ffffff')
-  const PLASMA_HOT = new THREE.Color('#ff4400')
-
-  const { positions, seeds } = useMemo(() => {
-    const pos = new Float32Array(COUNT * 3)
-    const s = new Float32Array(COUNT * 2)
-    for (let i = 0; i < COUNT; i++) {
-      const t = (i / COUNT) * Math.PI * 2
-      const p = 2, q = 3
-      const r = 0.9 + 0.25 * Math.cos(q * t)
-      pos[i * 3] = r * Math.cos(p * t)
-      pos[i * 3 + 1] = r * Math.sin(p * t)
-      pos[i * 3 + 2] = 0.25 * Math.sin(q * t)
-      s[i * 2] = Math.random() * Math.PI * 2
-      s[i * 2 + 1] = 0.5 + Math.random()
-    }
-    return { positions: pos, seeds: s }
-  }, [])
-
-  useFrame((state, delta) => {
-    if (!knotRef.current || !arcRef.current) return
-    const t = state.clock.getElapsedTime()
-
-    let targetVol = isSpeaking ? Math.abs(Math.sin(t * 11) * 0.5) : isConnected ? Math.abs(Math.sin(t * 2)) * 0.1 : 0
-    volRef.current += (targetVol - volRef.current) * 0.15
-    const vol = volRef.current
-
-    const speed = isSpeaking ? 1.2 : isConnected ? 0.4 : 0.1
-    knotRef.current.rotation.y += delta * speed
-    knotRef.current.rotation.z += delta * speed * 0.5
-    arcRef.current.rotation.y -= delta * speed * 1.3
-
-    const s = 0.85 + vol * 0.7
-    knotRef.current.scale.set(s, s, s)
-    arcRef.current.scale.set(s * 1.1, s * 1.1, s * 1.1)
-
-    const mat = knotRef.current.material as THREE.MeshBasicMaterial
-    const ptsMat = arcRef.current.material as THREE.PointsMaterial
-
-    _coreColor.lerpColors(PLASMA_BLUE, PLASMA_HOT, Math.min(vol * 2, 1))
-    mat.color.copy(_coreColor)
-    ptsMat.color.lerpColors(PLASMA_WHITE, PLASMA_HOT, Math.min(vol * 1.5, 1))
-
-    mat.opacity = isConnected ? 0.5 + vol * 0.4 : 0.15
-    ptsMat.opacity = isConnected ? 0.7 + vol * 0.3 : 0.2
-  })
-
-  return (
-    <group>
-      <mesh ref={knotRef}>
-        <torusKnotGeometry args={[0.7, 0.018, 128, 16, 2, 3]} />
-        <meshBasicMaterial color={PLASMA_BLUE} transparent opacity={0.5} blending={THREE.AdditiveBlending} depthWrite={false} />
-      </mesh>
-      <points ref={arcRef}>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        </bufferGeometry>
-        <pointsMaterial size={0.03} transparent opacity={0.7} sizeAttenuation blending={THREE.AdditiveBlending} depthWrite={false} color={PLASMA_WHITE} />
-      </points>
-    </group>
-  )
-}
-
-// Model 8: Vortex Galaxy Core - Spiral arms of particles swirling like a galaxy
-function VortexCore({ isConnected, isSpeaking }: { isConnected: boolean; isSpeaking: boolean }) {
-  const ref = useRef<THREE.Points>(null)
-  const volRef = useRef(0)
-  const COUNT = 1400
-
-  const VORTEX_CORE = new THREE.Color('#ffdd00')
-  const VORTEX_ARM = new THREE.Color('#ff6600')
-  const VORTEX_EDGE = new THREE.Color('#0066ff')
-
-  const { positions, original, colors, seeds } = useMemo(() => {
-    const pos = new Float32Array(COUNT * 3)
-    const orig = new Float32Array(COUNT * 3)
-    const cols = new Float32Array(COUNT * 3)
-    const s = new Float32Array(COUNT * 2)
-    const ARMS = 4
-    for (let i = 0; i < COUNT; i++) {
-      const arm = i % ARMS
-      const armOffset = (arm / ARMS) * Math.PI * 2
-      const t = (i / COUNT) * 4 + 0.1
-      const r = t * 0.35
-      const angle = armOffset + t * 2.5
-      const jitter = (Math.random() - 0.5) * 0.08
-      pos[i * 3] = r * Math.cos(angle) + jitter
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 0.06 * (1 + r)
-      pos[i * 3 + 2] = r * Math.sin(angle) + jitter
-      orig[i * 3] = pos[i * 3]
-      orig[i * 3 + 1] = pos[i * 3 + 1]
-      orig[i * 3 + 2] = pos[i * 3 + 2]
-      const ratio = Math.min(1, r / 1.4)
-      const c = new THREE.Color()
-      c.lerpColors(VORTEX_CORE, VORTEX_EDGE, ratio)
-      cols[i * 3] = c.r
-      cols[i * 3 + 1] = c.g
-      cols[i * 3 + 2] = c.b
-      s[i * 2] = Math.random() * Math.PI * 2
-      s[i * 2 + 1] = 0.3 + Math.random()
-    }
-    return { positions: pos, original: orig, colors: cols, seeds: s }
-  }, [])
-
-  useFrame((state, delta) => {
-    if (!ref.current) return
-    const pts = ref.current
-    const geo = pts.geometry
-    const mat = pts.material as THREE.PointsMaterial
-    const t = state.clock.getElapsedTime()
-
-    pts.rotation.y += delta * (isSpeaking ? 1.0 : isConnected ? 0.3 : 0.08)
-
-    let targetVol = isSpeaking ? Math.abs(Math.sin(t * 9) * 0.5) : isConnected ? Math.abs(Math.sin(t * 1.5)) * 0.08 : 0
-    volRef.current += (targetVol - volRef.current) * 0.12
-    const vol = volRef.current
-
-    mat.opacity = isConnected ? 0.75 + vol * 0.25 : 0.25
-
-    if (vol > 0.002) {
-      const posArr = geo.attributes.position.array as Float32Array
-      for (let i = 0; i < COUNT; i++) {
-        const ix = i * 3
-        const phase = seeds[i * 2]
-        const weight = seeds[i * 2 + 1]
-        const wave = Math.sin(t * 6 + phase) * vol * weight * 0.05
-        posArr[ix] = original[ix] + original[ix] * wave
-        posArr[ix + 1] = original[ix + 1] + wave * 0.5
-        posArr[ix + 2] = original[ix + 2] + original[ix + 2] * wave
-      }
-      geo.attributes.position.needsUpdate = true
-    }
-  })
-
-  return (
-    <points ref={ref} rotation={[Math.PI * 0.1, 0, 0]}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} usage={THREE.DynamicDrawUsage} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.025} transparent opacity={0.75} sizeAttenuation blending={THREE.AdditiveBlending} depthWrite={false} vertexColors />
-    </points>
-  )
-}
-
-// Model 9: Phoenix Flame Core - Fiery rising particles with a glowing ember center
-function PhoenixCore({ isConnected, isSpeaking }: { isConnected: boolean; isSpeaking: boolean }) {
-  const ref = useRef<THREE.Points>(null)
-  const coreRef = useRef<THREE.Mesh>(null)
-  const volRef = useRef(0)
-  const COUNT = 1000
-
-  const EMBER = new THREE.Color('#ff6600')
-  const FLAME = new THREE.Color('#ffcc00')
-  const ASH = new THREE.Color('#ff2200')
-
-  const { positions, original, seeds } = useMemo(() => {
-    const pos = new Float32Array(COUNT * 3)
-    const orig = new Float32Array(COUNT * 3)
-    const s = new Float32Array(COUNT * 3)
-    for (let i = 0; i < COUNT; i++) {
-      const angle = Math.random() * Math.PI * 2
-      const r = 0.3 + Math.random() * 0.9
-      const y = Math.random() * 1.6 - 0.8
-      pos[i * 3] = r * Math.cos(angle) * (1 - Math.abs(y) * 0.3)
-      pos[i * 3 + 1] = y
-      pos[i * 3 + 2] = r * Math.sin(angle) * (1 - Math.abs(y) * 0.3)
-      orig[i * 3] = pos[i * 3]
-      orig[i * 3 + 1] = pos[i * 3 + 1]
-      orig[i * 3 + 2] = pos[i * 3 + 2]
-      s[i * 3] = Math.random() * Math.PI * 2
-      s[i * 3 + 1] = 0.3 + Math.random() * 0.7
-      s[i * 3 + 2] = Math.random() * 0.5 + 0.5
-    }
-    return { positions: pos, original: orig, seeds: s }
-  }, [])
-
-  useFrame((state, delta) => {
-    if (!ref.current || !coreRef.current) return
-    const pts = ref.current
-    const geo = pts.geometry
-    const mat = pts.material as THREE.PointsMaterial
-    const coreMat = coreRef.current.material as THREE.MeshBasicMaterial
-    const t = state.clock.getElapsedTime()
-
-    let targetVol = isSpeaking ? Math.abs(Math.sin(t * 12) * 0.55) : isConnected ? Math.abs(Math.sin(t * 2)) * 0.1 : 0
-    volRef.current += (targetVol - volRef.current) * 0.15
-    const vol = volRef.current
-
-    const speed = isSpeaking ? 1.8 : isConnected ? 0.6 : 0.15
-    pts.rotation.y += delta * speed * 0.3
-
-    const posArr = geo.attributes.position.array as Float32Array
-    for (let i = 0; i < COUNT; i++) {
-      const ix = i * 3
-      const phase = seeds[i * 3]
-      const weight = seeds[i * 3 + 1]
-      const rise = seeds[i * 3 + 2]
-      const flicker = Math.sin(t * 7 + phase) * vol * weight * 0.15
-      const lift = (t * speed * rise) % 1.6
-      posArr[ix] = original[ix] + flicker
-      posArr[ix + 1] = ((original[ix + 1] + lift) % 1.6) - 0.8
-      posArr[ix + 2] = original[ix + 2] + flicker
-    }
-    geo.attributes.position.needsUpdate = true
-
-    _coreColor.lerpColors(EMBER, ASH, Math.min(vol * 2, 1))
-    mat.color.copy(_coreColor)
-    coreMat.color.lerpColors(FLAME, ASH, Math.min(vol * 2.5, 1))
-
-    mat.opacity = isConnected ? 0.7 + vol * 0.3 : 0.2
-    coreMat.opacity = isConnected ? 0.5 + vol * 0.4 : 0.15
-
-    const s = 0.85 + vol * 0.6
-    coreRef.current.scale.set(s * 0.5, s * 0.5, s * 0.5)
-  })
-
-  return (
-    <group>
-      <mesh ref={coreRef}>
-        <sphereGeometry args={[0.5, 16, 16]} />
-        <meshBasicMaterial color={FLAME} transparent opacity={0.5} blending={THREE.AdditiveBlending} depthWrite={false} />
-      </mesh>
-      <points ref={ref}>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[positions, 3]} usage={THREE.DynamicDrawUsage} />
-        </bufferGeometry>
-        <pointsMaterial size={0.03} transparent opacity={0.7} sizeAttenuation blending={THREE.AdditiveBlending} depthWrite={false} color={EMBER} />
+        <pointsMaterial
+          size={0.024}
+          transparent
+          opacity={0.65}
+          color={AMBER}
+          blending={THREE.AdditiveBlending}
+        />
       </points>
     </group>
   )
@@ -872,13 +699,11 @@ function PhoenixCore({ isConnected, isSpeaking }: { isConnected: boolean; isSpea
 function AIOrb({
   isConnected,
   isSpeaking,
-  coreType = 'quantum',
-  mood = 'idle'
+  coreType = 'quantum'
 }: {
   isConnected: boolean
   isSpeaking: boolean
-  coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix'
-  mood?: Mood
+  coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'
 }) {
   const groupRef = useRef<THREE.Group>(null)
 
@@ -895,20 +720,37 @@ function AIOrb({
     <group ref={groupRef}>
       {coreType === 'quantum' && (
         <>
-          <CoreCrystal isConnected={isConnected} isSpeaking={isSpeaking} mood={mood} />
+          <CoreCrystal isConnected={isConnected} isSpeaking={isSpeaking} />
           <ParticleShell isConnected={isConnected} isSpeaking={isSpeaking} />
-          <OrbitalRing radius={1.6} tube={0.007} tilt={Math.PI * 0.15} rotSpeed={0.22} isConnected={isConnected} isSpeaking={isSpeaking} phase={0} />
-          <OrbitalRing radius={1.85} tube={0.004} tilt={Math.PI * 0.45} rotSpeed={-0.14} isConnected={isConnected} isSpeaking={isSpeaking} phase={2} />
+          <OrbitalRing
+            radius={1.6}
+            tube={0.007}
+            tilt={Math.PI * 0.15}
+            rotSpeed={0.22}
+            isConnected={isConnected}
+            isSpeaking={isSpeaking}
+            phase={0}
+          />
+          <OrbitalRing
+            radius={1.85}
+            tube={0.004}
+            tilt={Math.PI * 0.45}
+            rotSpeed={-0.14}
+            isConnected={isConnected}
+            isSpeaking={isSpeaking}
+            phase={2}
+          />
         </>
       )}
       {coreType === 'cube' && <HypercubeCore isConnected={isConnected} isSpeaking={isSpeaking} />}
       {coreType === 'matrix' && <CyberRingCore isConnected={isConnected} isSpeaking={isSpeaking} />}
-      {coreType === 'nebula' && <NebulaSwarmCore isConnected={isConnected} isSpeaking={isSpeaking} />}
+      {coreType === 'nebula' && (
+        <NebulaSwarmCore isConnected={isConnected} isSpeaking={isSpeaking} />
+      )}
       {coreType === 'eva' && <EvaHologramCore isConnected={isConnected} isSpeaking={isSpeaking} />}
-      {coreType === 'jarvis' && <JarvisTacticalCore isConnected={isConnected} isSpeaking={isSpeaking} />}
-      {coreType === 'plasma' && <PlasmaCore isConnected={isConnected} isSpeaking={isSpeaking} />}
-      {coreType === 'vortex' && <VortexCore isConnected={isConnected} isSpeaking={isSpeaking} />}
-      {coreType === 'phoenix' && <PhoenixCore isConnected={isConnected} isSpeaking={isSpeaking} />}
+      {coreType === 'jarvis' && (
+        <JarvisTacticalCore isConnected={isConnected} isSpeaking={isSpeaking} />
+      )}
     </group>
   )
 }
@@ -943,21 +785,6 @@ const CORE_THEMES = {
     core: 'bg-[#ffaa00]',
     ring: 'border-[#ff3300]/30',
     glow: 'shadow-[0_0_40px_rgba(255,170,0,0.65)]'
-  },
-  plasma: {
-    core: 'bg-[#00aaff]',
-    ring: 'border-[#ff4400]/30',
-    glow: 'shadow-[0_0_40px_rgba(0,170,255,0.65)]'
-  },
-  vortex: {
-    core: 'bg-[#ffdd00]',
-    ring: 'border-[#0066ff]/30',
-    glow: 'shadow-[0_0_45px_rgba(255,221,0,0.6)]'
-  },
-  phoenix: {
-    core: 'bg-[#ff6600]',
-    ring: 'border-[#ff2200]/30',
-    glow: 'shadow-[0_0_40px_rgba(255,102,0,0.65)]'
   }
 }
 
@@ -969,7 +796,7 @@ export function AICore2D({
 }: {
   isConnected?: boolean
   isSpeaking?: boolean
-  coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix'
+  coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'
   coreSize?: number
 }) {
   const theme = CORE_THEMES[coreType] || CORE_THEMES.quantum
@@ -993,27 +820,58 @@ export function AICore2D({
       >
         {/* Outer Rotating Compass/HUD ring */}
         <div className="absolute inset-0 rounded-full border border-dashed border-[#00f3ff]/10 animate-[spin_40s_linear_infinite]" />
-        
+
         {/* Middle Rotating HUD ring with custom theme boundary */}
-        <div className={`absolute inset-4 rounded-full border border-double ${theme.ring} animate-[spin_15s_linear_infinite_reverse]`} />
-        
+        <div
+          className={`absolute inset-4 rounded-full border border-double ${theme.ring} animate-[spin_15s_linear_infinite_reverse]`}
+        />
+
         {/* Inner Technical HUD tickmarks (glowing ticks) */}
-        <svg className="absolute inset-8 w-[calc(100%-64px)] h-[calc(100%-64px)] animate-[spin_60s_linear_infinite] opacity-30" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="1 4" className="text-[#00f3ff]" />
-          <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="4 8" className="text-white" />
+        <svg
+          className="absolute inset-8 w-[calc(100%-64px)] h-[calc(100%-64px)] animate-[spin_60s_linear_infinite] opacity-30"
+          viewBox="0 0 100 100"
+        >
+          <circle
+            cx="50"
+            cy="50"
+            r="46"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="0.5"
+            strokeDasharray="1 4"
+            className="text-[#00f3ff]"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            r="42"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="0.5"
+            strokeDasharray="4 8"
+            className="text-white"
+          />
         </svg>
 
         {/* Main Core Glimmer - ambient aura */}
         <div
           className={`absolute inset-16 rounded-full opacity-25 blur-xl transition-all ${pulseSpeed} ${theme.core} ${
-            isSpeaking ? 'scale-130 opacity-45' : isConnected ? 'scale-110 opacity-30' : 'scale-90 opacity-15'
+            isSpeaking
+              ? 'scale-130 opacity-45'
+              : isConnected
+                ? 'scale-110 opacity-30'
+                : 'scale-90 opacity-15'
           }`}
         />
 
         {/* Primary Glowing Core Solid Sphere */}
         <div
           className={`absolute w-14 h-14 rounded-full transition-all ${pulseSpeed} ${theme.core} ${theme.glow} flex items-center justify-center ${
-            isSpeaking ? 'scale-125 animate-pulse' : isConnected ? 'scale-100' : 'scale-75 opacity-70'
+            isSpeaking
+              ? 'scale-125 animate-pulse'
+              : isConnected
+                ? 'scale-100'
+                : 'scale-75 opacity-70'
           }`}
         >
           {/* Core Center Dot */}
@@ -1022,7 +880,9 @@ export function AICore2D({
 
         {/* Orbiting Tech Nodes */}
         <div className="absolute inset-0 animate-[spin_8s_linear_infinite]">
-          <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full ${theme.core} shadow-[0_0_8px_currentColor]`} />
+          <div
+            className={`absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full ${theme.core} shadow-[0_0_8px_currentColor]`}
+          />
         </div>
         <div className="absolute inset-6 animate-[spin_12s_linear_infinite_reverse]">
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#00f3ff] shadow-[0_0_6px_#00f3ff]" />
@@ -1036,30 +896,29 @@ export default function AICore({
   isConnected = false,
   isSpeaking = false,
   coreType = 'quantum',
-  coreSize = 0.65,
-  mood = 'idle'
+  coreSize = 0.65
 }: {
   isConnected?: boolean
   isSpeaking?: boolean
-  coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix'
+  coreType?: 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'
   coreSize?: number
-  mood?: Mood
 }) {
   const [perfMode, setPerfMode] = useState<'high' | 'medium' | 'low'>(() => {
     const saved = localStorage.getItem('novax_perf_mode') as 'high' | 'medium' | 'low'
     if (saved) return saved
 
-    // No explicit user choice yet — auto-detect based on real hardware
-    // signals (cores/RAM/GPU type), not just "does WebGL exist at all".
-    // Previously this defaulted budget laptops (e.g. Intel integrated
-    // graphics) straight to 'high', which is what caused the crashing/
-    // lagging on weaker machines.
+    // Auto-detect WebGL context support
     try {
-      const tier = detectPerformanceTier()
-      localStorage.setItem('novax_perf_mode', tier)
-      return tier
+      const canvas = document.createElement('canvas')
+      const support = !!(
+        window.WebGLRenderingContext &&
+        (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+      )
+      if (!support) return 'low'
+
+      return localStorage.getItem('novax_low_end_mode') === 'true' ? 'low' : 'high'
     } catch (e) {
-      return 'medium'
+      return 'low'
     }
   })
 
@@ -1092,7 +951,9 @@ export default function AICore({
       <ErrorBoundary
         name="AICoreWebGL"
         fallback={() => {
-          console.warn('[AICore ErrorBoundary] WebGL rendering failed. Silently falling back to 2D HUD core.')
+          console.warn(
+            '[AICore ErrorBoundary] WebGL rendering failed. Silently falling back to 2D HUD core.'
+          )
           setTimeout(() => {
             setPerfMode('low')
           }, 0)
@@ -1125,7 +986,9 @@ export default function AICore({
               const canvasEl = gl.domElement
               const handleContextLost = (e: Event) => {
                 e.preventDefault()
-                console.warn('[AICore WebGL] Context lost event captured! Changing performance mode to low.')
+                console.warn(
+                  '[AICore WebGL] Context lost event captured! Changing performance mode to low.'
+                )
                 setPerfMode('low')
               }
               canvasEl.addEventListener('webglcontextlost', handleContextLost)
@@ -1135,7 +998,7 @@ export default function AICore({
           }}
         >
           <group scale={[coreSize, coreSize, coreSize]}>
-            <AIOrb isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} mood={mood} />
+            <AIOrb isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} />
           </group>
         </Canvas>
       </ErrorBoundary>

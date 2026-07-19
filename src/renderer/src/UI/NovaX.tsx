@@ -1,16 +1,6 @@
+import { LayoutGrid, FolderOpen, Phone, Settings, Image, Cpu, Heart, Clipboard, BarChart2, Mail } from 'lucide-react'
 import { useState, Suspense, lazy, useEffect } from 'react'
-import {
-  RiLayoutGridLine,
-  RiFolderOpenLine,
-  RiPhoneLine,
-  RiSettings4Line,
-  RiImageLine,
-  RiCpuLine,
-  RiMentalHealthLine,
-  RiClipboardLine,
-  RiBarChartLine,
-  RiMailLine
-} from 'react-icons/ri'
+
 
 import DashboardView from '../views/Dashboard'
 import PhoneView from '../views/Phone'
@@ -23,9 +13,8 @@ const MemoryView = lazy(() => import('../views/Memory'))
 const ClipboardView = lazy(() => import('../views/Clipboard'))
 const ActivityView = lazy(() => import('../views/Activity'))
 const GmailView = lazy(() => import('../views/Gmail'))
-const SystemCommandView = lazy(() => import('../views/SystemCommandCenter'))
 
-import NovaXLogo from '../components/UI/NovaXLogo'
+import Logo from '../assets/Logo.png'
 
 interface NovaXProps {
   isConnected: boolean
@@ -33,7 +22,6 @@ interface NovaXProps {
   isSpeaking: boolean
   isMuted: boolean
   handleMicToggle: () => void
-  mood: import('../lib/cognitiveCore').Mood
 }
 
 const glassPanel = 'bg-zinc-950/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-xl'
@@ -43,8 +31,7 @@ const NovaX = ({
   toggleConnection,
   isSpeaking,
   isMuted,
-  handleMicToggle,
-  mood
+  handleMicToggle
 }: NovaXProps) => {
   const [activeTab, setActiveTab] = useState('DASHBOARD')
 
@@ -59,7 +46,7 @@ const NovaX = ({
     // 2. Disable Inspect Element & View Source Shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
-      
+
       // F12
       if (e.key === 'F12') {
         e.preventDefault()
@@ -113,24 +100,23 @@ const NovaX = ({
   }, [])
 
   const tabs = [
-    { id: 'DASHBOARD', label: 'Command', icon: <RiLayoutGridLine size={16} /> },
-    { id: 'AGENTS', label: 'Agents', icon: <RiCpuLine size={16} /> },
-    { id: 'CLIPBOARD', label: 'Clipboard', icon: <RiClipboardLine size={16} /> },
-    { id: 'ACTIVITY', label: 'Activity', icon: <RiBarChartLine size={16} /> },
-    { id: 'NOTES', label: 'Notes', icon: <RiFolderOpenLine size={16} /> },
-    { id: 'GALLERY', label: 'Gallery', icon: <RiImageLine size={16} /> },
-    { id: 'MEMORY', label: 'Memory', icon: <RiMentalHealthLine size={16} /> },
-    { id: 'GMAIL', label: 'Gmail', icon: <RiMailLine size={16} /> },
-    { id: 'SYSTEM', label: 'System', icon: <RiCpuLine size={16} /> },
-    { id: 'PHONE', label: 'Mobile', icon: <RiPhoneLine size={16} /> },
-    { id: 'SETTINGS', label: 'Settings', icon: <RiSettings4Line size={16} /> }
+    { id: 'DASHBOARD', label: 'Command', icon: <LayoutGrid size={16} /> },
+    { id: 'AGENTS', label: 'Agents', icon: <Cpu size={16} /> },
+    { id: 'CLIPBOARD', label: 'Clipboard', icon: <Clipboard size={16} /> },
+    { id: 'ACTIVITY', label: 'Activity', icon: <BarChart2 size={16} /> },
+    { id: 'NOTES', label: 'Notes', icon: <FolderOpen size={16} /> },
+    { id: 'GALLERY', label: 'Gallery', icon: <Image size={16} /> },
+    { id: 'MEMORY', label: 'Memory', icon: <Heart size={16} /> },
+    { id: 'GMAIL', label: 'Gmail', icon: <Mail size={16} /> },
+    { id: 'PHONE', label: 'Mobile', icon: <Phone size={16} /> },
+    { id: 'SETTINGS', label: 'Settings', icon: <Settings size={16} /> }
   ]
 
   return (
     <div className="flex flex-col h-screen w-full bg-black text-zinc-100 font-sans overflow-hidden select-none relative">
       <div className="h-16 w-full flex items-center justify-between px-6 bg-black border-b border-white/5 z-50">
         <div className="flex items-center gap-3 w-48 cursor-pointer">
-          <NovaXLogo size={48} />
+          <img src={Logo} className="w-14 h-14" />
 
           <div
             onClick={() => {
@@ -189,7 +175,6 @@ const NovaX = ({
               isSpeaking={isSpeaking}
               isMuted={isMuted}
               handleMicToggle={handleMicToggle}
-              mood={mood}
             />
           </div>
 
@@ -214,7 +199,6 @@ const NovaX = ({
             {activeTab === 'CLIPBOARD' && <ClipboardView />}
             {activeTab === 'ACTIVITY' && <ActivityView />}
             {activeTab === 'GMAIL' && <GmailView />}
-            {activeTab === 'SYSTEM' && <SystemCommandView />}
             {activeTab === 'SETTINGS' && <SettingsView isSystemActive={isConnected} />}
           </Suspense>
         </div>

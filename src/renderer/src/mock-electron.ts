@@ -1,164 +1,146 @@
 // Real HTTP/SSE Bridge for NOVA-X in the Web Sandbox
 if (typeof window !== 'undefined') {
   // Setup SSE (Server-Sent Events) for real-time events from the backend (e.g. chat stream, companion commands)
-  const eventListeners: Record<string, Set<(...args: any[]) => void>> = {};
+  const eventListeners: Record<string, Set<(...args: any[]) => void>> = {}
 
   const setupSSE = () => {
-    console.log('[NOVA-X Bridge] Initializing EventStream connection...');
-    const eventSource = new EventSource('/api/ipc-events');
-    
+    console.log('[NOVA-X Bridge] Initializing EventStream connection...')
+    const eventSource = new EventSource('/api/ipc-events')
+
     eventSource.onmessage = (event) => {
       try {
-        const { channel, data } = JSON.parse(event.data);
-        console.log(`[NOVA-X SSE] Event received [${channel}]:`, data);
+        const { channel, data } = JSON.parse(event.data)
+        console.log(`[NOVA-X SSE] Event received [${channel}]:`, data)
         if (eventListeners[channel]) {
-          eventListeners[channel].forEach(listener => {
+          eventListeners[channel].forEach((listener) => {
             try {
-              listener({}, data);
+              listener({}, data)
             } catch (err) {
-              console.error('[NOVA-X SSE] Callback error:', err);
+              console.error('[NOVA-X SSE] Callback error:', err)
             }
-          });
+          })
         }
       } catch (e) {
-        console.error('[NOVA-X SSE] JSON Parse Error:', e);
+        console.error('[NOVA-X SSE] JSON Parse Error:', e)
       }
-    };
-    
+    }
+
     eventSource.onerror = (e) => {
-      console.warn('[NOVA-X SSE] EventSource disconnected. Retrying in 3s...', e);
-      eventSource.close();
-      setTimeout(setupSSE, 3000);
-    };
-  };
-  
-  setupSSE();
+      console.warn('[NOVA-X SSE] EventSource disconnected. Retrying in 3s...', e)
+      eventSource.close()
+      setTimeout(setupSSE, 3000)
+    }
+  }
+
+  setupSSE()
 
   // Define window.electron with a real bridge to /api/ipc
   if (!window.electron) {
     const mockIpcRenderer = {
       send: (channel: string, ...args: any[]) => {
-        console.log(`[NOVA-X Bridge] send: ${channel}`, args);
+        console.log(`[NOVA-X Bridge] send: ${channel}`, args)
         fetch('/api/ipc-send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ channel, args })
-        }).catch(err => console.error('[NOVA-X Bridge] Send failure:', err));
+        }).catch((err) => console.error('[NOVA-X Bridge] Send failure:', err))
       },
       on: (channel: string, func: (...args: any[]) => void) => {
         if (!eventListeners[channel]) {
-          eventListeners[channel] = new Set();
+          eventListeners[channel] = new Set()
         }
-        eventListeners[channel].add(func);
+        eventListeners[channel].add(func)
         return () => {
-          eventListeners[channel]?.delete(func);
-        };
+          eventListeners[channel]?.delete(func)
+        }
       },
       off: (channel: string, func: (...args: any[]) => void) => {
-        eventListeners[channel]?.delete(func);
+        eventListeners[channel]?.delete(func)
       },
       removeListener: (channel: string, func: (...args: any[]) => void) => {
-        eventListeners[channel]?.delete(func);
+        eventListeners[channel]?.delete(func)
       },
       removeAllListeners: (channel: string) => {
-        delete eventListeners[channel];
+        delete eventListeners[channel]
       },
       invoke: async (channel: string, ...args: any[]) => {
-        console.log(`[NOVA-X Bridge] invoke: ${channel}`, args);
+        console.log(`[NOVA-X Bridge] invoke: ${channel}`, args)
         try {
           const res = await fetch('/api/ipc', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ channel, args })
-          });
+          })
           if (!res.ok) {
-            throw new Error(`HTTP Error ${res.status}`);
+            throw new Error(`HTTP Error ${res.status}`)
           }
-          const data = await res.json();
+          const data = await res.json()
           if (data.error) {
-            throw new Error(data.error);
+            throw new Error(data.error)
           }
-          return data.result;
+          return data.result
         } catch (err) {
-          console.error(`[NOVA-X Bridge] IPC channel ${channel} failed:`, err);
-          throw err;
+          console.error(`[NOVA-X Bridge] IPC channel ${channel} failed:`, err)
+          throw err
         }
       }
-    };
+    }
 
-    (window as any).electron = {
+    ;(window as any).electron = {
       ipcRenderer: mockIpcRenderer,
       process: {
         platform: 'linux'
       }
-    };
+    }
   }
 
   // Define window.iris with a real bridge to /api/ipc
   if (!(window as any).iris) {
-    (window as any).iris = {
+    ;(window as any).iris = {
       getHistory: async () => {
         try {
-          return await window.electron.ipcRenderer.invoke('iris-get-history');
+          return await window.electron.ipcRenderer.invoke('iris-get-history')
         } catch (e) {
-          return [];
+          return []
         }
       },
       sendVisionFrame: async (base64Frame: string) => {
-        return await window.electron.ipcRenderer.invoke('iris-send-vision-frame', base64Frame);
-      },
-      saveChatHistory: async (history: any[]) => {
-        try {
-          return await window.electron.ipcRenderer.invoke('save-chat-history', history);
-        } catch (e) {
-          return { success: false };
-        }
-      },
-      loadChatHistory: async () => {
-        try {
-          return await window.electron.ipcRenderer.invoke('load-chat-history');
-        } catch (e) {
-          return [];
-        }
-      },
-      clearChatHistory: async () => {
-        try {
-          return await window.electron.ipcRenderer.invoke('clear-chat-history');
-        } catch (e) {
-          return { success: false };
-        }
+        return await window.electron.ipcRenderer.invoke('iris-send-vision-frame', base64Frame)
       },
       transcribeAudio: async (base64Audio: string, mimeType: string) => {
-        return await window.electron.ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType });
+        return await window.electron.ipcRenderer.invoke('iris-transcribe-audio', {
+          base64Audio,
+          mimeType
+        })
       },
       getMemories: async () => {
-        return await window.electron.ipcRenderer.invoke('get-memories');
+        return await window.electron.ipcRenderer.invoke('get-memories')
       },
       deleteMemory: async (index: number) => {
-        return await window.electron.ipcRenderer.invoke('delete-memory', index);
+        return await window.electron.ipcRenderer.invoke('delete-memory', index)
       },
       launchApp: async (appName: string) => {
-        return await window.electron.ipcRenderer.invoke('launch-app', appName);
+        return await window.electron.ipcRenderer.invoke('launch-app', appName)
       },
       adbConnect: async (ip: string, port: string) => {
-        return await window.electron.ipcRenderer.invoke('adb-connect', { ip, port });
+        return await window.electron.ipcRenderer.invoke('adb-connect', { ip, port })
       },
       adbDisconnect: async () => {
-        return await window.electron.ipcRenderer.invoke('adb-disconnect');
+        return await window.electron.ipcRenderer.invoke('adb-disconnect')
       },
       adbTelemetry: async () => {
-        return await window.electron.ipcRenderer.invoke('adb-telemetry');
+        return await window.electron.ipcRenderer.invoke('adb-telemetry')
       },
       adbQuickAction: async (action: string) => {
-        return await window.electron.ipcRenderer.invoke('adb-quick-action', { action });
+        return await window.electron.ipcRenderer.invoke('adb-quick-action', { action })
       },
       onTranscript: (callback: any) => {
-        (window as any)._onTranscriptCallback = callback;
+        ;(window as any)._onTranscriptCallback = callback
       },
       onTranscriptComplete: (callback: any) => {
-        (window as any)._onTranscriptCompleteCallback = callback;
+        ;(window as any)._onTranscriptCompleteCallback = callback
       }
-    };
+    }
   }
 }
-export {};
+export {}

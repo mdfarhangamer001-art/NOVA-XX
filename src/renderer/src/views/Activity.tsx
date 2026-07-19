@@ -1,27 +1,18 @@
+import { BarChart, Radar, Sparkles, Settings, Clock, Cpu, Play, Pause, RefreshCw } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell
 } from 'recharts'
-import { 
-  RiBarChartBoxLine, 
-  RiRadarLine, 
-  RiSparkling2Line, 
-  RiSettings3Line,
-  RiTimeLine,
-  RiCpuLine,
-  RiPlayLine,
-  RiPauseLine,
-  RiRefreshLine
-} from 'react-icons/ri'
+
 
 interface ActivityLog {
   date: string
@@ -59,7 +50,7 @@ export default function ActivityView(): JSX.Element {
         { date: '2026-07-17', app: 'Terminal', duration: 3600 },
         { date: '2026-07-17', app: 'Slack', duration: 1800 },
         { date: '2026-07-17', app: 'Spotify', duration: 4500 },
-        
+
         { date: '2026-07-16', app: 'VS Code', duration: 18000 },
         { date: '2026-07-16', app: 'Chrome', duration: 9000 },
         { date: '2026-07-15', app: 'VS Code', duration: 12000 },
@@ -110,13 +101,15 @@ export default function ActivityView(): JSX.Element {
 
   // Group logs for Today
   const todayStr = new Date().toISOString().split('T')[0]
-  const todayLogs = logs.filter(l => l.date === todayStr)
+  const todayLogs = logs.filter((l) => l.date === todayStr)
 
   // Format Today's Chart Data (Active Minutes)
-  const chartDataToday = todayLogs.map(l => ({
-    name: l.app,
-    minutes: Math.round(l.duration / 60)
-  })).sort((a, b) => b.minutes - a.minutes)
+  const chartDataToday = todayLogs
+    .map((l) => ({
+      name: l.app,
+      minutes: Math.round(l.duration / 60)
+    }))
+    .sort((a, b) => b.minutes - a.minutes)
 
   // Rolling 7-day history calculation
   const getSevenDayHistory = () => {
@@ -128,7 +121,7 @@ export default function ActivityView(): JSX.Element {
       map[dStr] = 0
     }
 
-    logs.forEach(l => {
+    logs.forEach((l) => {
       if (map[l.date] !== undefined) {
         map[l.date] += Math.round(l.duration / 60)
       }
@@ -148,7 +141,6 @@ export default function ActivityView(): JSX.Element {
   return (
     <div className="p-8 h-full overflow-y-auto custom-scrollbar bg-black/20">
       <div className="max-w-5xl mx-auto">
-        
         {/* Dynamic Tracking Status Bar */}
         <div className="mb-6 flex items-center justify-between p-4 bg-zinc-950/80 border border-white/5 rounded-2xl backdrop-blur-md">
           <div className="flex items-center gap-3">
@@ -163,7 +155,10 @@ export default function ActivityView(): JSX.Element {
               )}
             </span>
             <span className="font-mono text-xs uppercase tracking-widest text-zinc-400">
-              UPLINK_ACTIVITY_RADAR: <span className={isTrackingEnabled ? 'text-emerald-400 font-bold' : 'text-zinc-600'}>{isTrackingEnabled ? 'ACTIVE_MONITORING_ON' : 'IDLE'}</span>
+              UPLINK_ACTIVITY_RADAR:{' '}
+              <span className={isTrackingEnabled ? 'text-emerald-400 font-bold' : 'text-zinc-600'}>
+                {isTrackingEnabled ? 'ACTIVE_MONITORING_ON' : 'IDLE'}
+              </span>
             </span>
           </div>
 
@@ -175,7 +170,7 @@ export default function ActivityView(): JSX.Element {
                 : 'bg-zinc-900 border-white/5 hover:bg-zinc-800 text-zinc-400 hover:text-white'
             }`}
           >
-            {isTrackingEnabled ? <RiPauseLine size={14} /> : <RiPlayLine size={14} />}
+            {isTrackingEnabled ? <Pause size={14} /> : <Play size={14} />}
             {isTrackingEnabled ? 'Deactivate Monitor' : 'Activate Monitor'}
           </button>
         </div>
@@ -184,14 +179,14 @@ export default function ActivityView(): JSX.Element {
           <div>
             <div className="flex items-center gap-4 mb-2">
               <div className="p-3 bg-[#00f3ff]/10 rounded-xl border border-[#00f3ff]/20 shadow-[0_0_15px_rgba(0,243,255,0.1)]">
-                <RiBarChartBoxLine className="w-6 h-6 text-[#00f3ff]" />
+                <BarChart className="w-6 h-6 text-[#00f3ff]" />
               </div>
               <h1 className="text-3xl font-black tracking-tight text-white font-mono uppercase">
                 Activity & Focus <span className="text-[#00f3ff]">Metrics</span>
               </h1>
             </div>
             <p className="text-zinc-400 text-sm font-medium flex items-center gap-2 font-mono">
-              <RiRadarLine className="w-4 h-4 text-emerald-400" />
+              <Radar className="w-4 h-4 text-emerald-400" />
               Tracks active application boundaries locally. Zero network reporting.
             </p>
           </div>
@@ -200,19 +195,19 @@ export default function ActivityView(): JSX.Element {
         {loading ? (
           <div className="p-20 flex flex-col items-center justify-center gap-4">
             <div className="w-12 h-12 border-2 border-[#00f3ff]/20 border-t-[#00f3ff] rounded-full animate-spin" />
-            <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Scanning OS window logs...</p>
+            <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">
+              Scanning OS window logs...
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
             {/* Left Column: Today's App Breakdown */}
             <div className="lg:col-span-2 flex flex-col gap-6">
-              
               <div className="p-6 bg-zinc-900/40 border border-white/5 rounded-2xl backdrop-blur-md flex flex-col gap-4">
                 <h3 className="text-sm font-bold font-mono uppercase tracking-wider text-white flex items-center gap-2">
-                  <RiTimeLine className="text-emerald-400" /> Today&apos;s Active App Distribution
+                  <Clock className="text-emerald-400" /> Today&apos;s Active App Distribution
                 </h3>
-                
+
                 <div className="h-72 w-full mt-2">
                   {chartDataToday.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-600 font-mono text-xs">
@@ -220,11 +215,30 @@ export default function ActivityView(): JSX.Element {
                     </div>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartDataToday} layout="vertical" margin={{ left: 10, right: 30 }}>
-                        <XAxis type="number" stroke="#52525b" fontSize={10} tickFormatter={(v) => `${v}m`} />
-                        <YAxis type="category" dataKey="name" stroke="#52525b" fontSize={10} width={80} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px' }}
+                      <BarChart
+                        data={chartDataToday}
+                        layout="vertical"
+                        margin={{ left: 10, right: 30 }}
+                      >
+                        <XAxis
+                          type="number"
+                          stroke="#52525b"
+                          fontSize={10}
+                          tickFormatter={(v) => `${v}m`}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          stroke="#52525b"
+                          fontSize={10}
+                          width={80}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#09090b',
+                            borderColor: '#27272a',
+                            borderRadius: '12px'
+                          }}
                           labelStyle={{ color: '#ffffff', fontFamily: 'monospace' }}
                           itemStyle={{ color: '#10b981', fontFamily: 'monospace' }}
                         />
@@ -242,16 +256,20 @@ export default function ActivityView(): JSX.Element {
               {/* 7-Day Trend Chart */}
               <div className="p-6 bg-zinc-900/40 border border-white/5 rounded-2xl backdrop-blur-md flex flex-col gap-4">
                 <h3 className="text-sm font-bold font-mono uppercase tracking-wider text-white flex items-center gap-2">
-                  <RiBarChartBoxLine className="text-[#00f3ff]" /> Rolling 7-Day History
+                  <BarChart className="text-[#00f3ff]" /> Rolling 7-Day History
                 </h3>
-                
+
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={sevenDayData}>
                       <XAxis dataKey="date" stroke="#52525b" fontSize={10} />
                       <YAxis stroke="#52525b" fontSize={10} tickFormatter={(v) => `${v}m`} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px' }}
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#09090b',
+                          borderColor: '#27272a',
+                          borderRadius: '12px'
+                        }}
                         labelStyle={{ color: '#ffffff', fontFamily: 'monospace' }}
                         itemStyle={{ color: '#00f3ff', fontFamily: 'monospace' }}
                       />
@@ -260,16 +278,14 @@ export default function ActivityView(): JSX.Element {
                   </ResponsiveContainer>
                 </div>
               </div>
-
             </div>
 
             {/* Right Column: AI Day Summary */}
             <div className="flex flex-col gap-6">
-              
               <div className="p-6 bg-zinc-900/40 border border-white/5 rounded-2xl backdrop-blur-md flex flex-col gap-6 h-full">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold font-mono uppercase tracking-wider text-white flex items-center gap-2">
-                    <RiSparkling2Line className="text-yellow-400" /> Neural Day Summary
+                    <Sparkles className="text-yellow-400" /> Neural Day Summary
                   </h3>
                   <button
                     onClick={handleGenerateSummary}
@@ -277,7 +293,7 @@ export default function ActivityView(): JSX.Element {
                     className="p-2 bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-300 hover:text-white rounded-xl transition-all border border-white/5"
                     title="Generate updated summary"
                   >
-                    <RiRefreshLine size={14} className={summarizing ? 'animate-spin' : ''} />
+                    <RefreshCw size={14} className={summarizing ? 'animate-spin' : ''} />
                   </button>
                 </div>
 
@@ -286,13 +302,16 @@ export default function ActivityView(): JSX.Element {
                     {summarizing ? (
                       <div className="flex flex-col items-center gap-3">
                         <div className="w-8 h-8 border-2 border-yellow-400/20 border-t-yellow-400 rounded-full animate-spin" />
-                        <span className="font-mono text-[10px] uppercase text-zinc-500 tracking-widest">Aggregating Focus Matrix...</span>
+                        <span className="font-mono text-[10px] uppercase text-zinc-500 tracking-widest">
+                          Aggregating Focus Matrix...
+                        </span>
                       </div>
                     ) : summary ? (
                       <p className="whitespace-pre-wrap">{summary}</p>
                     ) : (
                       <div className="text-center text-zinc-600 font-mono py-12">
-                        Click the activation trigger below to summarize your day using local Gemini intelligence.
+                        Click the activation trigger below to summarize your day using local Gemini
+                        intelligence.
                       </div>
                     )}
                   </div>
@@ -306,12 +325,9 @@ export default function ActivityView(): JSX.Element {
                   </button>
                 </div>
               </div>
-
             </div>
-
           </div>
         )}
-
       </div>
     </div>
   )

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { LANGUAGES } from '../data/languages'
-import NovaXLogo from '../components/UI/NovaXLogo'
+import Logo from '../assets/Logo.png'
+import { auth as firebaseAuth, googleAuthProvider } from '../services/firebase'
+import { signInWithPopup, GoogleAuthProvider as FirebaseGoogleAuthProvider } from 'firebase/auth'
 
 // JWT token decode helper for real Google login profile parsing
 const decodeJwt = (token: string): any => {
@@ -19,10 +21,29 @@ const decodeJwt = (token: string): any => {
   }
 }
 
-import { Camera, Mic, MicOff, Phone, PhoneOff, Monitor, Cpu, Thermometer, Database, Radio, ArrowUp, ArrowDown, Activity, LogIn, Lock, LogOut, FileSliders as Sliders, Volume2, Tv } from 'lucide-react'
+import {
+  Camera,
+  Mic,
+  MicOff,
+  Phone,
+  PhoneOff,
+  Monitor,
+  Cpu,
+  Thermometer,
+  Database,
+  Radio,
+  ArrowUp,
+  ArrowDown,
+  Activity,
+  LogIn,
+  Lock,
+  LogOut,
+  Sliders,
+  Volume2,
+  Tv
+} from 'lucide-react'
 import RightPanel from '@renderer/components/UI/RightPanel'
 import AICore from '@renderer/components/UI/AICoreSphere'
-import type { Mood } from '@renderer/lib/cognitiveCore'
 import { getSystemStatus, SystemStats } from '@renderer/services/system-info'
 
 // 4 Custom Futuristic Neural Voices
@@ -64,7 +85,8 @@ const VOICES: VoiceProfile[] = [
     pitch: 0.65,
     rate: 0.96,
     chimeFreq: 240,
-    introText: 'Helios protocol active. System online and ready to execute terminal operations, operator.'
+    introText:
+      'Helios protocol active. System online and ready to execute terminal operations, operator.'
   },
   {
     id: 'LYRA',
@@ -74,7 +96,8 @@ const VOICES: VoiceProfile[] = [
     pitch: 1.12,
     rate: 1.0,
     chimeFreq: 440,
-    introText: 'Lyra virtual engine online. Diagnostics complete, how can I assist your workflow today?'
+    introText:
+      'Lyra virtual engine online. Diagnostics complete, how can I assist your workflow today?'
   },
   {
     id: 'ECHO',
@@ -93,15 +116,13 @@ export default function Dashboard({
   toggleConnection,
   isSpeaking,
   isMuted,
-  handleMicToggle,
-  mood
+  handleMicToggle
 }: {
   isConnected: boolean
   toggleConnection: () => void
   isSpeaking: boolean
   isMuted: boolean
   handleMicToggle: () => void
-  mood: Mood
 }): JSX.Element {
   const [visionMode, setVisionMode] = useState<'off' | 'camera' | 'screen'>('off')
 
@@ -129,15 +150,21 @@ export default function Dashboard({
   }, [])
 
   const getMicPulseClass = () => {
-    if (micLevel > 0.08) return 'scale-125 border-emerald-400/85 shadow-[0_0_20px_rgba(52,211,153,0.6)]'
-    if (micLevel > 0.04) return 'scale-115 border-emerald-400/65 shadow-[0_0_15px_rgba(52,211,153,0.4)]'
-    if (micLevel > 0.01) return 'scale-105 border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.2)]'
+    if (micLevel > 0.08)
+      return 'scale-125 border-emerald-400/85 shadow-[0_0_20px_rgba(52,211,153,0.6)]'
+    if (micLevel > 0.04)
+      return 'scale-115 border-emerald-400/65 shadow-[0_0_15px_rgba(52,211,153,0.4)]'
+    if (micLevel > 0.01)
+      return 'scale-105 border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.2)]'
     return 'scale-100 border-emerald-500/30'
   }
 
   // 3D Core customization states
-  const [coreType, setCoreType] = useState<'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix'>(
-    (localStorage.getItem('novax_core_type') as 'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'plasma' | 'vortex' | 'phoenix') || 'quantum'
+  const [coreType, setCoreType] = useState<
+    'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'
+  >(
+    (localStorage.getItem('novax_core_type') as
+      'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis') || 'quantum'
   )
   const [coreSize, setCoreSize] = useState<number>(
     parseFloat(localStorage.getItem('novax_core_size') || '0.8')
@@ -159,7 +186,7 @@ export default function Dashboard({
     else if (hours < 18) greeting = 'Good afternoon'
 
     const briefingText = `${greeting}, Boss. Systems are 100% operational. Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}. I have synchronized your neural store and prepared your tactical environment.`
-    
+
     if ((window as any).speakText) {
       ;(window as any).speakText(briefingText)
     }
@@ -201,8 +228,6 @@ export default function Dashboard({
     window.dispatchEvent(new CustomEvent('novax_lang_changed', { detail: selectedLanguage }))
   }, [selectedLanguage])
 
-
-
   // System stats fetched locally
   const [stats, setStats] = useState<SystemStats>({
     cpu: '0.0',
@@ -223,7 +248,11 @@ export default function Dashboard({
         setStats((prev: SystemStats) => ({
           ...prev,
           cpu: (Math.random() * 15 + 5).toFixed(1),
-          memory: { total: '16.0', free: '6.4', usedPercentage: (Math.random() * 5 + 58).toFixed(1) },
+          memory: {
+            total: '16.0',
+            free: '6.4',
+            usedPercentage: (Math.random() * 5 + 58).toFixed(1)
+          },
           temperature: Math.floor(Math.random() * 6 + 54),
           network: {
             tx: Math.floor(Math.random() * 30 + 10),
@@ -272,7 +301,10 @@ export default function Dashboard({
     }
   }, [])
 
-  const getBestVoiceForGenderAndLang = (gender: 'MALE' | 'FEMALE', lang: string): SpeechSynthesisVoice | null => {
+  const getBestVoiceForGenderAndLang = (
+    gender: 'MALE' | 'FEMALE',
+    lang: string
+  ): SpeechSynthesisVoice | null => {
     if (!window.speechSynthesis) return null
     const systemVoices = window.speechSynthesis.getVoices()
     if (systemVoices.length === 0) {
@@ -287,8 +319,12 @@ export default function Dashboard({
       (v) =>
         v.lang.toLowerCase().startsWith(langLower) &&
         (gender === 'MALE'
-          ? v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('google uk english male')
-          : v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('google uk english female'))
+          ? v.name.toLowerCase().includes('male') ||
+            v.name.toLowerCase().includes('david') ||
+            v.name.toLowerCase().includes('google uk english male')
+          : v.name.toLowerCase().includes('female') ||
+            v.name.toLowerCase().includes('zira') ||
+            v.name.toLowerCase().includes('google uk english female'))
     )
 
     // 2. Try any voice for that language prefix
@@ -328,65 +364,6 @@ export default function Dashboard({
   }
 
   // Expose global speech synthesizer hooked up to live window and layout states
-  useEffect(() => {
-    ;(window as any).speakText = (text: string) => {
-      if (!window.speechSynthesis) return
-
-      window.speechSynthesis.cancel()
-
-      const selected = VOICES.find((v) => v.id === activeVoice)
-      if (!selected) return
-
-      // Strip common Markdown characters for beautiful spoken audio
-      const cleanText = text.replace(/[*#`_\-]/g, '').trim()
-      const utterance = new SpeechSynthesisUtterance(cleanText)
-      utterance.lang = selectedLanguage
-
-      // Listen for voiceschanged event if browser hasn't finished loading voices
-      window.speechSynthesis.onvoiceschanged = () => {
-        const matchedVoice = getBestVoiceForGenderAndLang(selected.gender, selectedLanguage)
-        if (matchedVoice) {
-          utterance.voice = matchedVoice
-        }
-      }
-
-      const matchedVoice = getBestVoiceForGenderAndLang(selected.gender, selectedLanguage)
-      if (matchedVoice) {
-        utterance.voice = matchedVoice
-        console.log(`[NOVA-X TTS] Matched voice: ${matchedVoice.name} (${matchedVoice.lang})`)
-      } else {
-        console.warn(`[NOVA-X TTS] No voice match found for gender: ${selected.gender} and language: ${selectedLanguage}. Defaulting to browser choice.`)
-      }
-
-      utterance.pitch = selected.pitch
-      utterance.rate = selected.rate
-      utterance.volume = voiceVolume
-
-      utterance.onstart = () => {
-        if ((window as any).setIsSpeaking) {
-          ;(window as any).setIsSpeaking(true)
-        }
-      }
-      utterance.onend = () => {
-        if ((window as any).setIsSpeaking) {
-          ;(window as any).setIsSpeaking(false)
-        }
-      }
-      utterance.onerror = (e) => {
-        console.error('[NOVA-X TTS ERROR] Speech synthesis failed. Code:', e.error, '| Message:', (e as any).message, '| Utterance:', e)
-        if ((window as any).setIsSpeaking) {
-          ;(window as any).setIsSpeaking(false)
-        }
-      }
-
-      window.speechSynthesis.speak(utterance)
-    }
-
-    return () => {
-      delete (window as any).speakText
-    }
-  }, [activeVoice, voiceVolume, selectedLanguage])
-
   const changeVisionMode = (mode: 'off' | 'camera' | 'screen'): void => {
     setVisionMode(mode)
   }
@@ -394,7 +371,10 @@ export default function Dashboard({
   // Synthesize diagnostic electronic chime using Web Audio
   const playDiagnosticChime = (freq: number): void => {
     try {
-      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const audioCtx = new (
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      )()
       const osc = audioCtx.createOscillator()
       const gainNode = audioCtx.createGain()
 
@@ -457,75 +437,83 @@ export default function Dashboard({
     speakVoiceIntro(voiceId)
   }
 
-  // Google Sign-In: tries real OAuth via Electron IPC, falls back to local bypass.
-  // Owner identity is intentionally mysterious - NOVA-X never reveals who its owner is.
+  // Initialize Electron OAuth
   const triggerGoogleSignIn = async (): Promise<void> => {
     setShowGoogleModal(true)
     setGoogleStep('waiting')
     setAuthLoading(true)
-    setAuthProgress('Establishing secure uplink...')
+    setAuthProgress('Waiting for secure Google Browser Sign-In...')
 
-    // Attempt 1: Real Google OAuth via Electron main process
-    if (window.electron?.ipcRenderer) {
+    const isRealElectron =
+      typeof window !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
+    if (window.electron?.ipcRenderer && isRealElectron) {
       try {
-        setAuthProgress('Requesting Google authentication...')
-        const result = await window.electron.ipcRenderer.invoke('google-sign-in')
-        if (result?.success) {
+        const res = await window.electron.ipcRenderer.invoke('google-sign-in')
+        if (res && res.success) {
+          setGoogleStep('success')
+          setAuthProgress('Google profile synced successfully!')
           const operatorUser: OperatorUser = {
-            name: result.name || 'Operator',
-            email: result.email || 'operator@novax.local',
+            name: res.name || 'Operator',
+            email: res.email || '',
             provider: 'GOOGLE_AUTH',
-            syncTime: new Date().toLocaleTimeString(),
-            avatar: result.avatar || ''
+            syncTime: res.syncTime || new Date().toLocaleTimeString(),
+            avatar: res.avatar || ''
           }
           localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
-          setGoogleStep('success')
-          setAuthProgress('Google identity synced. Uplink active.')
           setTimeout(() => {
             setAuthOperator(operatorUser)
             setAuthLoading(false)
             setShowGoogleModal(false)
             playDiagnosticChime(880)
-          }, 800)
-          return
+          }, 1500)
+        } else {
+          setGoogleStep('failed')
+          setAuthProgress(res?.error || 'Google Sign-In failed.')
+          setAuthLoading(false)
+          playDiagnosticChime(150)
         }
-        // OAuth failed or not configured - fall through to local bypass
-        console.warn('[NOVA-X Auth] Google OAuth unavailable, falling back to local bypass:', result?.error)
-        setAuthProgress('OAuth not configured. Enabling offline bypass...')
-      } catch (err) {
-        console.warn('[NOVA-X Auth] IPC OAuth failed, falling back to local bypass:', err)
-        setAuthProgress('Offline bypass activating...')
-      }
-    }
-
-    // Attempt 2: Local bypass - owner identity stays mysterious
-    try {
-      const existingRaw = localStorage.getItem('novax_operator')
-      const existing = existingRaw ? JSON.parse(existingRaw) : null
-
-      const operatorUser: OperatorUser = {
-        name: existing?.name || 'Operator',
-        email: existing?.email || 'operator@novax.local',
-        provider: 'LOCAL_AUTH',
-        syncTime: new Date().toLocaleTimeString(),
-        avatar: existing?.avatar || ''
-      }
-
-      localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
-
-      setGoogleStep('success')
-      setAuthProgress('Offline secure uplink established. Identity classified.')
-      setTimeout(() => {
-        setAuthOperator(operatorUser)
+      } catch (err: any) {
+        setGoogleStep('failed')
+        setAuthProgress(err.message || 'Google Sign-In failed.')
         setAuthLoading(false)
-        setShowGoogleModal(false)
-        playDiagnosticChime(880)
-      }, 800)
-    } catch (err: any) {
-      setGoogleStep('failed')
-      setAuthProgress(err?.message || 'Authentication failed.')
-      setAuthLoading(false)
-      playDiagnosticChime(150)
+        playDiagnosticChime(150)
+      }
+    } else {
+      // Real Web-based Google Sign-In using Firebase OAuth Popup
+      try {
+        setAuthProgress('Opening secure Google Authorization popup...')
+        const result = await signInWithPopup(firebaseAuth, googleAuthProvider)
+        const credential = FirebaseGoogleAuthProvider.credentialFromResult(result)
+        const accessToken = credential?.accessToken
+
+        if (accessToken) {
+          setGoogleStep('success')
+          setAuthProgress('Google authentication successful! Core synchronized.')
+          const operatorUser: OperatorUser = {
+            name: result.user.displayName || 'Operator',
+            email: result.user.email || '',
+            provider: 'GOOGLE_AUTH',
+            syncTime: new Date().toLocaleTimeString(),
+            avatar: result.user.photoURL || '',
+            accessToken: accessToken
+          }
+          localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
+          setTimeout(() => {
+            setAuthOperator(operatorUser)
+            setAuthLoading(false)
+            setShowGoogleModal(false)
+            playDiagnosticChime(880)
+          }, 1500)
+        } else {
+          throw new Error('Google OAuth token extraction failed.')
+        }
+      } catch (err: any) {
+        console.error('[Web Google Sign-In] Error:', err)
+        setGoogleStep('failed')
+        setAuthProgress(err.message || 'Google Sign-In failed.')
+        setAuthLoading(false)
+        playDiagnosticChime(150)
+      }
     }
   }
 
@@ -572,12 +560,10 @@ export default function Dashboard({
           <div className="mb-6 flex flex-col items-center gap-3">
             <div className="relative w-16 h-16 flex items-center justify-center border border-[#00f3ff]/30 rounded-xl bg-zinc-900/60 shadow-[0_0_20px_rgba(0,243,255,0.15)] overflow-hidden">
               <div className="absolute inset-0 border border-emerald-400/10 rounded-lg animate-ping scale-105" />
-              <NovaXLogo size={44} />
+              <img src={Logo} className="w-11 h-11" />
             </div>
             <div>
-              <h2 className="text-2xl font-black tracking-[0.35em] text-white font-mono">
-                NOVA-X
-              </h2>
+              <h2 className="text-2xl font-black tracking-[0.35em] text-white font-mono">NOVA-X</h2>
               <p className="text-[10px] font-mono tracking-widest text-[#00f3ff]/70 uppercase mt-1">
                 Cognitive Operating System
               </p>
@@ -585,7 +571,8 @@ export default function Dashboard({
           </div>
 
           <p className="text-[11px] text-zinc-400 font-sans tracking-wide leading-relaxed mb-8 px-2">
-            Securely link your Google Identity to enable real-time network sync and preserve dynamic nodes.
+            Securely link your Google Identity to enable real-time network sync and preserve dynamic
+            nodes.
           </p>
 
           <div className="flex flex-col gap-3">
@@ -603,7 +590,6 @@ export default function Dashboard({
           {showGoogleModal && (
             <div className="absolute inset-0 bg-zinc-950/98 backdrop-blur-md flex flex-col items-center justify-center p-6 z-50 animate-in fade-in zoom-in-95 duration-200">
               <div className="w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-2xl relative text-left">
-                
                 {/* Close button */}
                 {googleStep !== 'success' && (
                   <button
@@ -651,7 +637,13 @@ export default function Dashboard({
                 {googleStep === 'success' && (
                   <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in duration-200">
                     <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mb-4 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        viewBox="0 0 24 24"
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
@@ -667,8 +659,18 @@ export default function Dashboard({
                 {googleStep === 'failed' && (
                   <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in duration-200">
                     <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mb-4 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
                       </svg>
                     </div>
                     <span className="font-mono text-[10px] tracking-[0.25em] text-red-400 uppercase">
@@ -685,7 +687,6 @@ export default function Dashboard({
                     </button>
                   </div>
                 )}
-
               </div>
             </div>
           )}
@@ -707,10 +708,8 @@ export default function Dashboard({
 
       {/* Main Dashboard Layout */}
       <main className="flex-1 min-h-0 grid grid-cols-12 gap-6 p-2 relative z-10">
-        
         {/* Left Column (col-span-3): Vision Feed & Voice Configuration */}
         <div className="col-span-3 flex flex-col gap-4 z-10 min-h-0">
-          
           {/* Operator Status Header */}
           <div className="p-3 bg-zinc-950/60 backdrop-blur-xl border border-white/10 rounded-xl flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-2.5">
@@ -744,8 +743,12 @@ export default function Dashboard({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2 w-2">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${visionMode !== 'off' ? 'bg-[#00f3ff]' : 'bg-zinc-700'}`} />
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${visionMode !== 'off' ? 'bg-[#00f3ff]' : 'bg-zinc-700'}`} />
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${visionMode !== 'off' ? 'bg-[#00f3ff]' : 'bg-zinc-700'}`}
+                  />
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${visionMode !== 'off' ? 'bg-[#00f3ff]' : 'bg-zinc-700'}`}
+                  />
                 </span>
                 <span className="font-mono text-[8px] tracking-[0.25em] text-zinc-300 uppercase">
                   Optics Monitor
@@ -759,7 +762,7 @@ export default function Dashboard({
             <div className="relative aspect-video w-full rounded-lg border border-white/5 bg-[#030303] flex items-center justify-center overflow-hidden">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,243,255,0.04)_0%,transparent_80%)] pointer-events-none" />
               <Camera size={18} className="text-zinc-700 absolute" />
-              
+
               {/* Corner Sci-Fi Brackets */}
               <div className="absolute top-1 left-1 border-t border-l border-[#00f3ff]/30 h-2 w-2" />
               <div className="absolute top-1 right-1 border-t border-r border-[#00f3ff]/30 h-2 w-2" />
@@ -786,7 +789,9 @@ export default function Dashboard({
 
             {/* Language Selection Dropdown */}
             <div className="flex flex-col gap-1 border-b border-white/5 pb-2.5">
-              <label className="font-mono text-[7px] tracking-widest text-[#00f3ff] uppercase font-bold">SYSTEM SYNTHESIS LANGUAGE</label>
+              <label className="font-mono text-[7px] tracking-widest text-[#00f3ff] uppercase font-bold">
+                SYSTEM SYNTHESIS LANGUAGE
+              </label>
               <select
                 value={selectedLanguage}
                 onChange={(e) => {
@@ -796,7 +801,11 @@ export default function Dashboard({
                 className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white font-mono outline-none focus:border-[#00f3ff] cursor-pointer hover:bg-zinc-800 transition-colors"
               >
                 {LANGUAGES.map((lang) => (
-                  <option key={lang.code} value={lang.code} className="bg-zinc-950 text-white font-mono text-xs">
+                  <option
+                    key={lang.code}
+                    value={lang.code}
+                    className="bg-zinc-950 text-white font-mono text-xs"
+                  >
                     {lang.name} {lang.nativeName ? `(${lang.nativeName})` : ''}
                   </option>
                 ))}
@@ -822,10 +831,14 @@ export default function Dashboard({
                     )}
 
                     <div className="flex items-center justify-between">
-                      <span className={`font-mono text-[9px] font-bold tracking-widest uppercase ${isSelected ? 'text-[#00f3ff]' : 'text-zinc-300'}`}>
+                      <span
+                        className={`font-mono text-[9px] font-bold tracking-widest uppercase ${isSelected ? 'text-[#00f3ff]' : 'text-zinc-300'}`}
+                      >
                         {v.name}
                       </span>
-                      <span className={`font-mono text-[7px] uppercase px-1.5 py-0.5 rounded border ${isSelected ? 'bg-[#00f3ff]/10 text-[#00f3ff] border-[#00f3ff]/20' : 'bg-zinc-800/80 text-zinc-500 border-transparent'}`}>
+                      <span
+                        className={`font-mono text-[7px] uppercase px-1.5 py-0.5 rounded border ${isSelected ? 'bg-[#00f3ff]/10 text-[#00f3ff] border-[#00f3ff]/20' : 'bg-zinc-800/80 text-zinc-500 border-transparent'}`}
+                      >
                         {v.gender}
                       </span>
                     </div>
@@ -854,7 +867,7 @@ export default function Dashboard({
                 onChange={(e): void => setVoiceVolume(parseFloat(e.target.value))}
                 className="w-full accent-[#00f3ff] bg-zinc-800 h-1 rounded-lg cursor-pointer"
               />
-              
+
               <button
                 onClick={(): void => speakVoiceIntro(activeVoice)}
                 className="cursor-pointer w-full py-1.5 bg-[#00f3ff]/10 hover:bg-[#00f3ff]/20 text-[#00f3ff] border border-[#00f3ff]/20 rounded-md font-mono text-[8px] font-bold tracking-widest uppercase transition-all"
@@ -867,7 +880,6 @@ export default function Dashboard({
 
         {/* Center Column (col-span-6): 3D Sphere Core Workspace & Telemetry Header/Footer */}
         <div className="col-span-6 relative flex flex-col justify-between items-center min-h-0 gap-4">
-          
           {/* TELEMETRY HEADER (All CPU, RAM, Temp, Network elements moved to the top bar!) */}
           <div className="w-full bg-zinc-950/70 backdrop-blur-2xl border border-white/10 rounded-xl p-3 shadow-lg flex flex-col gap-2 z-20">
             <div className="flex items-center justify-between border-b border-white/5 pb-1">
@@ -970,7 +982,6 @@ export default function Dashboard({
 
           {/* Main 3D Sphere Interactive Canvas */}
           <div className="flex-1 w-full relative flex items-center justify-center border border-white/5 rounded-2xl overflow-hidden bg-zinc-950/20 shadow-inner">
-            
             {/* Floating Core Customizer bar at the top of the canvas */}
             <div className="absolute top-4 flex items-center gap-1.5 p-1.5 rounded-xl border border-white/5 bg-zinc-950/85 backdrop-blur-md z-20 shadow-xl max-w-[95%] overflow-x-auto scrollbar-none">
               <button
@@ -1051,49 +1062,12 @@ export default function Dashboard({
               >
                 Jarvis grid
               </button>
-              <button
-                onClick={() => {
-                  setCoreType('plasma')
-                  localStorage.setItem('novax_core_type', 'plasma')
-                }}
-                className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
-                  coreType === 'plasma'
-                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_8px_rgba(0,170,255,0.1)]'
-                    : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/5'
-                }`}
-              >
-                Plasma Knot
-              </button>
-              <button
-                onClick={() => {
-                  setCoreType('vortex')
-                  localStorage.setItem('novax_core_type', 'vortex')
-                }}
-                className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
-                  coreType === 'vortex'
-                    ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20 shadow-[0_0_8px_rgba(255,221,0,0.1)]'
-                    : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/5'
-                }`}
-              >
-                Vortex
-              </button>
-              <button
-                onClick={() => {
-                  setCoreType('phoenix')
-                  localStorage.setItem('novax_core_type', 'phoenix')
-                }}
-                className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
-                  coreType === 'phoenix'
-                    ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-[0_0_8px_rgba(255,102,0,0.1)]'
-                    : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/5'
-                }`}
-              >
-                Phoenix
-              </button>
-              
+
               <div className="h-4 w-px bg-white/10 mx-1 shrink-0" />
-              
-              <span className="text-[7px] font-mono text-zinc-500 tracking-wider uppercase ml-1 shrink-0">Scale:</span>
+
+              <span className="text-[7px] font-mono text-zinc-500 tracking-wider uppercase ml-1 shrink-0">
+                Scale:
+              </span>
               <input
                 type="range"
                 min="0.5"
@@ -1110,7 +1084,12 @@ export default function Dashboard({
             </div>
 
             {/* Embedded 3D Core with dynamic type and size scale properties */}
-            <AICore isConnected={isConnected} isSpeaking={isSpeaking} coreType={coreType} coreSize={coreSize} mood={mood} />
+            <AICore
+              isConnected={isConnected}
+              isSpeaking={isSpeaking}
+              coreType={coreType}
+              coreSize={coreSize}
+            />
 
             {/* FLANKING DOCK LEFT (Optics mode switch) */}
             <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20 bg-zinc-950/80 backdrop-blur-2xl border border-white/10 p-1.5 rounded-2xl shadow-2xl">
@@ -1161,7 +1140,7 @@ export default function Dashboard({
                   Comm Core
                 </span>
               </div>
-              
+
               {/* Standalone glowing microphone option moved here to the side! */}
               <button
                 onClick={handleMicToggle}
@@ -1191,7 +1170,7 @@ export default function Dashboard({
                 {isConnected ? <PhoneOff size={14} /> : <Phone size={14} />}
               </button>
             </div>
-            
+
             {/* Micro holographic telemetry indicators */}
             <div className="absolute bottom-4 flex items-center gap-6 p-2 rounded-full border border-white/5 bg-black/40 backdrop-blur-md">
               <div className="flex items-center gap-1.5 text-[8px] font-mono text-zinc-500">
@@ -1200,7 +1179,9 @@ export default function Dashboard({
               </div>
               <div className="flex items-center gap-1.5 text-[8px] font-mono text-zinc-500">
                 <span>CORE:</span>
-                <span className="text-emerald-400 font-bold">{isConnected ? 'SYNCHRONIZED' : 'STANDBY'}</span>
+                <span className="text-emerald-400 font-bold">
+                  {isConnected ? 'SYNCHRONIZED' : 'STANDBY'}
+                </span>
               </div>
             </div>
           </div>
@@ -1211,17 +1192,19 @@ export default function Dashboard({
               <span className="font-mono text-[8px] tracking-[0.25em] text-zinc-400 font-bold uppercase">
                 Neural Comm Interface
               </span>
-              <span className={`font-mono text-[8px] uppercase font-semibold transition-all duration-300 ${
-                isSpeaking
-                  ? 'text-cyan-400 animate-pulse'
-                  : micStatus === 'listening'
-                    ? 'text-emerald-400 animate-pulse font-bold'
-                    : micStatus === 'transcribing'
-                      ? 'text-amber-400 animate-pulse'
-                      : isConnected
-                        ? 'text-emerald-500'
-                        : 'text-zinc-500'
-              }`}>
+              <span
+                className={`font-mono text-[8px] uppercase font-semibold transition-all duration-300 ${
+                  isSpeaking
+                    ? 'text-cyan-400 animate-pulse'
+                    : micStatus === 'listening'
+                      ? 'text-emerald-400 animate-pulse font-bold'
+                      : micStatus === 'transcribing'
+                        ? 'text-amber-400 animate-pulse'
+                        : isConnected
+                          ? 'text-emerald-500'
+                          : 'text-zinc-500'
+                }`}
+              >
                 {isSpeaking
                   ? 'NOVA-X SPEAKING'
                   : micStatus === 'listening'
@@ -1240,13 +1223,15 @@ export default function Dashboard({
                 {isConnected && !isMuted && (
                   <>
                     <div className="absolute w-14 h-14 rounded-full border border-emerald-500/20 animate-ping" />
-                    <div className={`absolute w-12 h-12 rounded-full border transition-all duration-300 ${
-                      isSpeaking 
-                        ? 'scale-125 border-pink-500/40 animate-pulse' 
-                        : micStatus === 'listening'
-                          ? getMicPulseClass()
-                          : 'scale-100 border-emerald-500/30'
-                    }`} />
+                    <div
+                      className={`absolute w-12 h-12 rounded-full border transition-all duration-300 ${
+                        isSpeaking
+                          ? 'scale-125 border-pink-500/40 animate-pulse'
+                          : micStatus === 'listening'
+                            ? getMicPulseClass()
+                            : 'scale-100 border-emerald-500/30'
+                      }`}
+                    />
                   </>
                 )}
                 <button
@@ -1292,18 +1277,19 @@ export default function Dashboard({
             {/* Simulated ambient sound waveform nodes */}
             <div className="flex items-end justify-center gap-0.5 h-6 w-48 mt-1">
               {[...Array(24)].map((_, i) => {
-                const height = isConnected && !isMuted 
-                  ? isSpeaking 
-                    ? Math.floor(Math.random() * 20 + 4) 
-                    : Math.floor(Math.random() * 6 + 2)
-                  : 2;
+                const height =
+                  isConnected && !isMuted
+                    ? isSpeaking
+                      ? Math.floor(Math.random() * 20 + 4)
+                      : Math.floor(Math.random() * 6 + 2)
+                    : 2
                 return (
                   <div
                     key={i}
                     className={`w-[3px] rounded-full transition-all duration-150 ${isConnected && !isMuted ? (isSpeaking ? 'bg-gradient-to-t from-emerald-500 to-pink-500' : 'bg-emerald-500/60') : 'bg-zinc-800'}`}
                     style={{ height: `${height}px` }}
                   />
-                );
+                )
               })}
             </div>
           </div>

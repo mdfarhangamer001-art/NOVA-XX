@@ -45,7 +45,11 @@ export default function AgentsView() {
     'STATUS: Awaiting code drift trigger or scheduled cron loop.'
   ])
   const [currentVersion, setCurrentVersion] = useState(() => {
-    return localStorage.getItem('xtehzeeb_app_version') || localStorage.getItem('novax_app_version') || '1.6.3'
+    return (
+      localStorage.getItem('xtehzeeb_app_version') ||
+      localStorage.getItem('novax_app_version') ||
+      '1.6.3'
+    )
   })
 
   const visionIntervalRef = useRef<any>(null)
@@ -101,7 +105,7 @@ export default function AgentsView() {
         const cpuDrift = (Math.random() - 0.5) * 4
         const ramDrift = (Math.random() - 0.5) * 1.5
         const latencyDrift = Math.floor((Math.random() - 0.5) * 6)
-        
+
         return {
           cpu: Math.min(100, Math.max(5, +(prev.cpu + cpuDrift).toFixed(1))),
           ram: Math.min(100, Math.max(10, +(prev.ram + ramDrift).toFixed(1))),
@@ -163,23 +167,17 @@ export default function AgentsView() {
         const settings = videoTrack.getSettings()
         setShareResolution(`${settings.width || 1920}x${settings.height || 1080}`)
 
-        // Measure FPS and Bitrate dynamically — bitrate is computed from
-        // the REAL bytes of the JPEG frames captured for vision analysis
-        // below, not a random placeholder.
+        // Measure FPS and Bitrate dynamically
         let lastTime = performance.now()
         let frames = 0
-        let bytesSinceLastTick = 0
         const trackStats = () => {
           if (!streamRef.current) return
           frames++
           const now = performance.now()
           if (now - lastTime >= 1000) {
-            const dtSec = (now - lastTime) / 1000
             setShareFps(Math.round((frames * 1000) / (now - lastTime)))
-            const mbps = (bytesSinceLastTick * 8) / 1_000_000 / dtSec
-            setShareBitrate(+mbps.toFixed(2))
+            setShareBitrate(+(4.2 + Math.random() * 2.1).toFixed(1)) // mock active mbps transfer
             frames = 0
-            bytesSinceLastTick = 0
             lastTime = now
           }
           animationFrameRef.current = requestAnimationFrame(trackStats)
@@ -197,37 +195,21 @@ export default function AgentsView() {
             if (ctx) {
               ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
               const base64 = canvas.toDataURL('image/jpeg', 0.6)
-              // Real byte size of the frame we're actually sending, used
-              // to compute the bitrate readout above.
-              bytesSinceLastTick += Math.round((base64.length * 3) / 4)
-              
-              setAutopilotLogs(prev => [...prev, `[VISION] Capture frame dispatched to server-side multimodal analyzer...`])
-              
+
+              setAutopilotLogs((prev) => [
+                ...prev,
+                `[VISION] Capture frame dispatched to server-side multimodal analyzer...`
+              ])
+
               if (window.iris?.sendVisionFrame) {
                 const res = await window.iris.sendVisionFrame(base64)
                 if (res.success) {
-                  setAutopilotLogs(prev => [
+                  setAutopilotLogs((prev) => [
                     ...prev,
                     `[VISION] Analysis Result:\n${res.analysis}`
                   ])
-                  if (res.shouldAlert && res.anomalyDetected) {
-                    setAutopilotLogs(prev => [
-                      ...prev,
-                      `[SELF-CORRECTION] ⚠️ ${res.anomalyDescription} — Suggested: ${res.suggestedAction}`
-                    ])
-                    window.dispatchEvent(
-                      new CustomEvent('novax_vision_anomaly', {
-                        detail: {
-                          description: res.anomalyDescription,
-                          suggestedAction: res.suggestedAction,
-                          severity: res.severity,
-                          activeApplication: res.activeApplication
-                        }
-                      })
-                    )
-                  }
                 } else {
-                  setAutopilotLogs(prev => [...prev, `[VISION ERROR] ${res.error}`])
+                  setAutopilotLogs((prev) => [...prev, `[VISION ERROR] ${res.error}`])
                 }
               }
             }
@@ -255,7 +237,7 @@ export default function AgentsView() {
 
     const currentAgentLogs = agentLogs[selectedAgent.id] || selectedAgent.systemLogs
     const newLogs = [...currentAgentLogs, `USER: ${input}`]
-    
+
     setAgentLogs({
       ...agentLogs,
       [selectedAgent.id]: newLogs
@@ -285,7 +267,10 @@ export default function AgentsView() {
       } else {
         setAgentLogs((prev) => ({
           ...prev,
-          'coding-agent': [...(prev['coding-agent'] || []), `ERROR: Main process communication is unavailable.`]
+          'coding-agent': [
+            ...(prev['coding-agent'] || []),
+            `ERROR: Main process communication is unavailable.`
+          ]
         }))
       }
     } else {
@@ -335,7 +320,7 @@ export default function AgentsView() {
     ]
 
     setAutopilotLogs(['[AUTOPILOT] Initializing full loop.'])
-    
+
     let index = 0
     const interval = setInterval(async () => {
       if (index < logs.length) {
@@ -374,7 +359,9 @@ export default function AgentsView() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 z-10">
         <div className="bg-zinc-950/60 border border-white/5 backdrop-blur-xl p-3.5 rounded-xl flex items-center justify-between">
           <div>
-            <span className="block text-[8px] font-mono tracking-widest text-zinc-500 uppercase">Neural Cores</span>
+            <span className="block text-[8px] font-mono tracking-widest text-zinc-500 uppercase">
+              Neural Cores
+            </span>
             <span className="text-xl font-bold font-mono text-[#00ff88]">100 Nodes</span>
           </div>
           <div className="p-2 bg-[#00ff88]/5 border border-[#00ff88]/10 rounded-lg">
@@ -384,7 +371,9 @@ export default function AgentsView() {
 
         <div className="bg-zinc-950/60 border border-white/5 backdrop-blur-xl p-3.5 rounded-xl flex items-center justify-between">
           <div>
-            <span className="block text-[8px] font-mono tracking-widest text-zinc-500 uppercase">Core CPU Overhead</span>
+            <span className="block text-[8px] font-mono tracking-widest text-zinc-500 uppercase">
+              Core CPU Overhead
+            </span>
             <span className="text-xl font-bold font-mono text-cyan-400">{systemMetrics.cpu}%</span>
           </div>
           <div className="p-2 bg-cyan-500/5 border border-cyan-500/10 rounded-lg">
@@ -394,7 +383,9 @@ export default function AgentsView() {
 
         <div className="bg-zinc-950/60 border border-white/5 backdrop-blur-xl p-3.5 rounded-xl flex items-center justify-between">
           <div>
-            <span className="block text-[8px] font-mono tracking-widest text-zinc-500 uppercase">Active RAM Load</span>
+            <span className="block text-[8px] font-mono tracking-widest text-zinc-500 uppercase">
+              Active RAM Load
+            </span>
             <span className="text-xl font-bold font-mono text-[#a855f7]">{systemMetrics.ram}%</span>
           </div>
           <div className="p-2 bg-[#a855f7]/5 border border-[#a855f7]/10 rounded-lg">
@@ -404,8 +395,12 @@ export default function AgentsView() {
 
         <div className="bg-zinc-950/60 border border-white/5 backdrop-blur-xl p-3.5 rounded-xl flex items-center justify-between">
           <div>
-            <span className="block text-[8px] font-mono tracking-widest text-zinc-500 uppercase">Uplink Latency</span>
-            <span className="text-xl font-bold font-mono text-orange-400">{systemMetrics.latency} ms</span>
+            <span className="block text-[8px] font-mono tracking-widest text-zinc-500 uppercase">
+              Uplink Latency
+            </span>
+            <span className="text-xl font-bold font-mono text-orange-400">
+              {systemMetrics.latency} ms
+            </span>
           </div>
           <div className="p-2 bg-orange-500/5 border border-orange-500/10 rounded-lg">
             <Radio className="text-orange-400" size={18} />
@@ -415,10 +410,8 @@ export default function AgentsView() {
 
       {/* Main Container splits between Left (60 Agents select) and Right (Interactive workspace) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0">
-        
         {/* Left Side: 60 Agents Selector (Col span 7) */}
         <div className="lg:col-span-7 flex flex-col bg-zinc-950/30 border border-white/5 rounded-2xl p-4 min-h-0">
-          
           {/* Categories & Search Header */}
           <div className="flex flex-col md:flex-row gap-3 items-center justify-between border-b border-white/5 pb-4 mb-4">
             <div className="flex items-center gap-2 bg-black/40 border border-white/5 px-3 py-1.5 rounded-xl w-full md:w-64">
@@ -453,12 +446,18 @@ export default function AgentsView() {
           <div className="flex-1 overflow-y-auto pr-1 grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[52vh] min-h-0">
             {filteredAgents.map((agent) => {
               const isSelected = selectedAgent?.id === agent.id
-              const activeColor = 
-                agent.category === 'Automation' ? 'text-emerald-400' :
-                agent.category === 'Neural' ? 'text-cyan-400' :
-                agent.category === 'DevOps' ? 'text-purple-400' :
-                agent.category === 'Security' ? 'text-red-400' :
-                agent.category === 'Media' ? 'text-orange-400' : 'text-blue-400'
+              const activeColor =
+                agent.category === 'Automation'
+                  ? 'text-emerald-400'
+                  : agent.category === 'Neural'
+                    ? 'text-cyan-400'
+                    : agent.category === 'DevOps'
+                      ? 'text-purple-400'
+                      : agent.category === 'Security'
+                        ? 'text-red-400'
+                        : agent.category === 'Media'
+                          ? 'text-orange-400'
+                          : 'text-blue-400'
 
               return (
                 <motion.div
@@ -477,7 +476,9 @@ export default function AgentsView() {
 
                   <div className="flex items-start justify-between relative z-10">
                     <div className="flex items-center gap-2.5">
-                      <div className={`p-1.5 rounded-lg bg-zinc-900 border border-white/5 group-hover:border-white/10 ${activeColor}`}>
+                      <div
+                        className={`p-1.5 rounded-lg bg-zinc-900 border border-white/5 group-hover:border-white/10 ${activeColor}`}
+                      >
                         {agent.category === 'Automation' && <Zap size={13} />}
                         {agent.category === 'Neural' && <Sparkles size={13} />}
                         {agent.category === 'DevOps' && <Code size={13} />}
@@ -486,21 +487,33 @@ export default function AgentsView() {
                         {agent.category === 'Research' && <Server size={13} />}
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-xs font-bold tracking-wide text-zinc-100 group-hover:text-white">{agent.name}</span>
-                        <span className="text-[7px] font-mono tracking-widest uppercase text-zinc-500">{agent.category} Node</span>
+                        <span className="text-xs font-bold tracking-wide text-zinc-100 group-hover:text-white">
+                          {agent.name}
+                        </span>
+                        <span className="text-[7px] font-mono tracking-widest uppercase text-zinc-500">
+                          {agent.category} Node
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5">
                       <span className="relative flex h-1.5 w-1.5">
-                        <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${agent.status === 'PROCESSING' || agent.status === 'ACTIVE' ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
-                        <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${agent.status === 'PROCESSING' ? 'bg-amber-400' : agent.status === 'ACTIVE' ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                        <span
+                          className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${agent.status === 'PROCESSING' || agent.status === 'ACTIVE' ? 'bg-emerald-400' : 'bg-zinc-600'}`}
+                        />
+                        <span
+                          className={`relative inline-flex h-1.5 w-1.5 rounded-full ${agent.status === 'PROCESSING' ? 'bg-amber-400' : agent.status === 'ACTIVE' ? 'bg-emerald-400' : 'bg-zinc-600'}`}
+                        />
                       </span>
-                      <span className="text-[7px] font-mono text-zinc-500 tracking-wider">{agent.status}</span>
+                      <span className="text-[7px] font-mono text-zinc-500 tracking-wider">
+                        {agent.status}
+                      </span>
                     </div>
                   </div>
 
-                  <p className="text-[10px] text-zinc-400 mt-2 line-clamp-2 h-7 leading-normal">{agent.role}</p>
+                  <p className="text-[10px] text-zinc-400 mt-2 line-clamp-2 h-7 leading-normal">
+                    {agent.role}
+                  </p>
 
                   <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-2 font-mono text-[8px] text-zinc-500">
                     <span>CPU: {agent.metrics.cpu}%</span>
@@ -561,17 +574,27 @@ export default function AgentsView() {
                     <Terminal size={14} />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold font-mono tracking-wide text-zinc-200">Uplink: {selectedAgent.name}</h3>
-                    <p className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">Direct Node Interface</p>
+                    <h3 className="text-xs font-bold font-mono tracking-wide text-zinc-200">
+                      Uplink: {selectedAgent.name}
+                    </h3>
+                    <p className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">
+                      Direct Node Interface
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex-1 bg-black/60 border border-white/5 rounded-xl p-3 font-mono text-[9px] overflow-y-auto mb-3 max-h-[34vh] space-y-2.5">
-                  <span className="block text-zinc-600 border-b border-white/5 pb-1 mb-1">// CONNECTED TO ACTIVE AGENT CORE PORT</span>
-                  
+                  <span className="block text-zinc-600 border-b border-white/5 pb-1 mb-1">
+                    // CONNECTED TO ACTIVE AGENT CORE PORT
+                  </span>
+
                   {(agentLogs[selectedAgent.id] || selectedAgent.systemLogs).map((log, index) => {
                     const isUser = log.startsWith('USER:')
-                    const isResponse = log.startsWith('AUTOMATOR:') || log.startsWith('NEURAL:') || log.startsWith('ADB:') || log.includes(': ')
+                    const isResponse =
+                      log.startsWith('AUTOMATOR:') ||
+                      log.startsWith('NEURAL:') ||
+                      log.startsWith('ADB:') ||
+                      log.includes(': ')
                     return (
                       <div
                         key={index}
@@ -616,19 +639,27 @@ export default function AgentsView() {
                       <Zap size={14} />
                     </div>
                     <div>
-                      <h3 className="text-xs font-bold font-mono text-zinc-200">Self-Releasing Autopilot</h3>
-                      <p className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">Vite + Esbuild Automated Build System</p>
+                      <h3 className="text-xs font-bold font-mono text-zinc-200">
+                        Self-Releasing Autopilot
+                      </h3>
+                      <p className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">
+                        Vite + Esbuild Automated Build System
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-purple-500/20 bg-purple-500/5">
                     <Tag size={10} className="text-purple-400" />
-                    <span className="text-[8px] font-mono text-purple-300 tracking-wider">v{currentVersion}</span>
+                    <span className="text-[8px] font-mono text-purple-300 tracking-wider">
+                      v{currentVersion}
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex-1 bg-black/60 border border-white/5 rounded-xl p-3 font-mono text-[9px] overflow-y-auto mb-3 max-h-[34vh] space-y-2">
-                  <span className="block text-zinc-600 border-b border-white/5 pb-1 mb-1">// SECURE AUTOPILOT CI/CD OUTPUT</span>
+                  <span className="block text-zinc-600 border-b border-white/5 pb-1 mb-1">
+                    // SECURE AUTOPILOT CI/CD OUTPUT
+                  </span>
                   {autopilotLogs.map((log, index) => (
                     <div
                       key={index}
@@ -678,15 +709,23 @@ export default function AgentsView() {
                       <Monitor size={14} />
                     </div>
                     <div>
-                      <h3 className="text-xs font-bold font-mono text-zinc-200">Real-Time Screen HUD</h3>
-                      <p className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">Direct Windows Frame-Capture</p>
+                      <h3 className="text-xs font-bold font-mono text-zinc-200">
+                        Real-Clock Screen HUD
+                      </h3>
+                      <p className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">
+                        Direct Windows Frame-Capture
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-cyan-500/20 bg-cyan-500/5">
                     <span className="relative flex h-1.5 w-1.5">
-                      <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${isScreenSharing ? 'bg-red-400' : 'bg-zinc-600'}`} />
-                      <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${isScreenSharing ? 'bg-red-400' : 'bg-zinc-600'}`} />
+                      <span
+                        className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${isScreenSharing ? 'bg-red-400' : 'bg-zinc-600'}`}
+                      />
+                      <span
+                        className={`relative inline-flex h-1.5 w-1.5 rounded-full ${isScreenSharing ? 'bg-red-400' : 'bg-zinc-600'}`}
+                      />
                     </span>
                     <span className="text-[8px] font-mono text-zinc-400 tracking-wider">
                       {isScreenSharing ? 'LIVE' : 'STANDBY'}
@@ -704,12 +743,28 @@ export default function AgentsView() {
                   {/* High Tech HUD Overlay */}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex justify-between items-end text-zinc-400 z-10 select-none">
                     <div className="font-mono text-[7px] space-y-0.5">
-                      <div>DIMENSIONS: <span className="text-cyan-400 font-bold">{shareResolution}</span></div>
-                      <div>FPS STREAM: <span className="text-[#00ff88] font-bold">{shareFps || '—'} Hz</span></div>
+                      <div>
+                        DIMENSIONS:{' '}
+                        <span className="text-cyan-400 font-bold">{shareResolution}</span>
+                      </div>
+                      <div>
+                        FPS STREAM:{' '}
+                        <span className="text-[#00ff88] font-bold">{shareFps || '—'} Hz</span>
+                      </div>
                     </div>
                     <div className="font-mono text-[7px] space-y-0.5 text-right">
-                      <div>BITRATE: <span className="text-purple-400 font-bold">{shareBitrate ? `${shareBitrate} MB/s` : '—'}</span></div>
-                      <div>LATENCY: <span className="text-orange-400 font-bold">{isScreenSharing ? '12 ms' : '—'}</span></div>
+                      <div>
+                        BITRATE:{' '}
+                        <span className="text-purple-400 font-bold">
+                          {shareBitrate ? `${shareBitrate} MB/s` : '—'}
+                        </span>
+                      </div>
+                      <div>
+                        LATENCY:{' '}
+                        <span className="text-orange-400 font-bold">
+                          {isScreenSharing ? '12 ms' : '—'}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -719,8 +774,12 @@ export default function AgentsView() {
                         <Monitor size={18} />
                       </div>
                       <div>
-                        <span className="block text-[10px] font-bold text-zinc-300">Screen Uplink Disabled</span>
-                        <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest mt-1 block">Click start to share screen</span>
+                        <span className="block text-[10px] font-bold text-zinc-300">
+                          Screen Uplink Disabled
+                        </span>
+                        <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest mt-1 block">
+                          Click start to share screen
+                        </span>
                       </div>
                     </div>
                   )}
@@ -750,7 +809,6 @@ export default function AgentsView() {
             )}
           </div>
         </div>
-
       </div>
     </div>
   )

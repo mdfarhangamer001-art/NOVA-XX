@@ -1,0 +1,6 @@
+{
+  "name": "NOVA-X",
+  "description": "An advanced desktop AI assistant.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation", "display-capture"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

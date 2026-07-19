@@ -1,16 +1,8 @@
+import { StickyNote, Trash2, FileText, FileCode, Plus, Save, X, Edit } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactFileCode from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import {
-  RiStickyNoteLine,
-  RiDeleteBinLine,
-  RiFileTextLine,
-  RiMarkdownLine,
-  RiAddLine,
-  RiSave3Line,
-  RiCloseLine,
-  RiEditLine 
-} from 'react-icons/ri'
+
 
 interface Note {
   filename: string
@@ -19,7 +11,7 @@ interface Note {
   createdAt: Date
 }
 
-const MarkdownComponents = {
+const FileCodeComponents = {
   code({ node, inline, className, children, ...props }: any) {
     return !inline ? (
       <div className="bg-black/50 rounded-lg p-3 my-2 border border-white/10 font-mono text-xs overflow-x-auto">
@@ -50,16 +42,14 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
       if (!window.electron?.ipcRenderer) return
       const data = await window.electron.ipcRenderer.invoke('get-notes')
       setNotes(data)
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   useEffect(() => {
     fetchNotes()
-    const interval = setInterval(fetchNotes, 3000) 
+    const interval = setInterval(fetchNotes, 3000)
     return () => clearInterval(interval)
   }, [])
-
 
   const startCreating = () => {
     setSelectedNote(null)
@@ -126,7 +116,7 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
       <div className="col-span-4 flex flex-col gap-4 h-full overflow-hidden">
         <div className="flex items-center justify-between pb-2 border-b border-white/10">
           <div className="flex items-center gap-2 text-zinc-100">
-            <RiStickyNoteLine className="text-emerald-400" />
+            <StickyNote className="text-emerald-400" />
             <span className="text-xs font-bold tracking-widest">MEMORY BANK</span>
           </div>
 
@@ -137,7 +127,7 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
               className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500 hover:text-black transition-all"
               title="Create Manual Note"
             >
-              <RiAddLine size={14} />
+              <Plus size={14} />
             </button>
           </div>
         </div>
@@ -177,7 +167,7 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
                   onClick={(e) => deleteNote(note.filename, e)}
                   className="opacity-0 group-hover:opacity-100 p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                 >
-                  <RiDeleteBinLine size={14} />
+                  <Trash2 size={14} />
                 </button>
               </div>
             ))
@@ -204,13 +194,13 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
                   onClick={cancelEditor}
                   className="p-2 text-zinc-500 hover:text-white transition-colors"
                 >
-                  <RiCloseLine size={20} />
+                  <X size={20} />
                 </button>
               </div>
             </div>
 
             <textarea
-              placeholder="Write your note in Markdown..."
+              placeholder="Write your note in FileCode..."
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}
               className="flex-1 bg-transparent border-none outline-none resize-none text-sm font-mono text-zinc-50 placeholder-zinc-500 leading-relaxed p-2 scrollbar-small"
@@ -222,7 +212,7 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
                 disabled={!newTitle || !newContent}
                 className="flex items-center gap-2 px-6 py-2 bg-emerald-500 text-black font-bold text-xs rounded-lg hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
-                <RiSave3Line /> {editOriginalFilename ? 'UPDATE MEMORY' : 'SAVE TO MEMORY'}
+                <Save /> {editOriginalFilename ? 'UPDATE MEMORY' : 'SAVE TO MEMORY'}
               </button>
             </div>
           </div>
@@ -230,7 +220,7 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
           <>
             <div className="h-12 border-b border-white/5 flex items-center justify-between px-6 bg-white/5">
               <div className="flex items-center gap-2 text-zinc-300">
-                <RiMarkdownLine size={18} className="opacity-50" />
+                <FileCode size={18} className="opacity-50" />
                 <span className="text-xs font-bold tracking-wider">{selectedNote.title}</span>
               </div>
               <div className="flex items-center gap-3">
@@ -242,22 +232,22 @@ const NotesView = ({ glassPanel }: { glassPanel?: string }) => {
                   className="text-zinc-500 hover:text-emerald-400 transition-colors"
                   title="Edit Note"
                 >
-                  <RiEditLine size={16} />
+                  <Edit size={16} />
                 </button>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 scrollbar-small bg-zinc-950/30">
               <div className="prose prose-invert prose-sm max-w-none text-zinc-300">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                <ReactFileCode remarkPlugins={[remarkGfm]} components={FileCodeComponents}>
                   {selectedNote.content}
-                </ReactMarkdown>
+                </ReactFileCode>
               </div>
             </div>
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-zinc-200 gap-4">
-            <RiFileTextLine size={48} className="opacity-20" />
+            <FileText size={48} className="opacity-20" />
             <span className="text-xs tracking-widest opacity-50">
               SELECT A DATA NODE OR CREATE NEW
             </span>

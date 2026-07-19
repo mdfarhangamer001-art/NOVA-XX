@@ -1,18 +1,6 @@
+import { Image, Trash2, FolderOpen, X, Database, FileWarning, ChevronLeft, ChevronRight, Download, Video, PlayCircle, LayoutGrid } from 'lucide-react'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import {
-  RiImage2Line,
-  RiDeleteBinLine,
-  RiFolderOpenLine,
-  RiCloseLine,
-  RiDatabase2Line,
-  RiFileWarningLine,
-  RiArrowLeftSLine,
-  RiArrowRightSLine,
-  RiDownloadLine,
-  RiVideoLine,
-  RiPlayCircleLine,
-  RiLayoutGridFill
-} from 'react-icons/ri'
+
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface MediaFile {
@@ -155,7 +143,7 @@ const GalleryView = () => {
       <div className="flex items-end justify-between pb-6 border-b border-white/5 mb-8 shrink-0">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-neutral-900 rounded-2xl border border-neutral-800 shadow-md">
-            <RiLayoutGridFill className="text-emerald-500" size={28} />
+            <LayoutGrid className="text-emerald-500" size={28} />
           </div>
           <div>
             <h2 className="text-xl font-bold tracking-wider text-white uppercase flex items-center gap-2">
@@ -168,7 +156,7 @@ const GalleryView = () => {
         </div>
 
         <div className="text-xs font-bold tracking-widest text-emerald-500 bg-neutral-900 px-4 py-2 rounded-lg border border-neutral-800 shadow-sm flex items-center gap-2">
-          <RiDatabase2Line size={14} /> {allMedia.length} FILES
+          <Database size={14} /> {allMedia.length} FILES
         </div>
       </div>
 
@@ -176,7 +164,7 @@ const GalleryView = () => {
         {allMedia.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-neutral-600 gap-5">
             <div className="w-24 h-24 rounded-full bg-neutral-900 flex items-center justify-center border border-neutral-800 shadow-inner">
-              <RiImage2Line size={40} className="opacity-20" />
+              <Image size={40} className="opacity-20" />
             </div>
             <p className="text-sm font-bold tracking-widest opacity-40 uppercase">No Media Found</p>
           </div>
@@ -231,7 +219,7 @@ const GalleryView = () => {
                   )}
 
                   <div className="hidden absolute inset-0 items-center justify-center flex-col gap-3 bg-neutral-950">
-                    <RiFileWarningLine className="text-red-500/40" size={32} />
+                    <FileWarning className="text-red-500/40" size={32} />
                     <span className="text-[10px] font-bold tracking-widest text-neutral-500">
                       CANNOT LOAD
                     </span>
@@ -239,7 +227,7 @@ const GalleryView = () => {
 
                   {isVideo && (
                     <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5 z-10 pointer-events-none">
-                      <RiVideoLine size={12} className="text-emerald-400" />
+                      <Video size={12} className="text-emerald-400" />
                       <span className="text-[10px] font-bold tracking-widest text-white">
                         VIDEO
                       </span>
@@ -262,21 +250,21 @@ const GalleryView = () => {
                         className="p-2 bg-neutral-800 text-white rounded hover:bg-emerald-500 hover:text-black transition-colors"
                         title="Locate File"
                       >
-                        <RiFolderOpenLine size={16} />
+                        <FolderOpen size={16} />
                       </button>
                       <button
                         onClick={(e) => deleteMedia(media.filename, e)}
                         className="p-2 bg-neutral-800 text-white rounded hover:bg-red-500 hover:text-white transition-colors"
                         title="Delete File"
                       >
-                        <RiDeleteBinLine size={16} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
 
                   {isVideo && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                      <RiPlayCircleLine size={48} className="text-white drop-shadow-md" />
+                      <PlayCircle size={48} className="text-white drop-shadow-md" />
                     </div>
                   )}
                 </motion.div>
@@ -299,9 +287,9 @@ const GalleryView = () => {
               <div className="text-left px-4 py-2 bg-neutral-900/60 backdrop-blur-md rounded-lg border border-white/10">
                 <h3 className="text-base font-bold text-white tracking-wide flex items-center gap-2">
                   {selectedMedia.type === 'video' ? (
-                    <RiVideoLine className="text-emerald-500" />
+                    <Video className="text-emerald-500" />
                   ) : (
-                    <RiImage2Line className="text-emerald-500" />
+                    <Image className="text-emerald-500" />
                   )}
                   {selectedMedia.displayName}
                 </h3>
@@ -314,7 +302,7 @@ const GalleryView = () => {
                 onClick={() => setSelectedMedia(null)}
                 className="cursor-pointer p-3 bg-neutral-900 hover:bg-red-500 hover:text-white rounded-full text-neutral-400 transition-colors border border-white/10"
               >
-                <RiCloseLine size={24} />
+                <X size={24} />
               </button>
             </div>
 
@@ -323,7 +311,7 @@ const GalleryView = () => {
               onClick={() => navigateMedia(-1)}
             >
               <div className="p-4 bg-neutral-900 group-hover:bg-white text-white group-hover:text-black rounded-full transition-colors border border-white/10">
-                <RiArrowLeftSLine size={28} />
+                <ChevronLeft size={28} />
               </div>
             </div>
 
@@ -332,7 +320,7 @@ const GalleryView = () => {
               onClick={() => navigateMedia(1)}
             >
               <div className="p-4 bg-neutral-900 group-hover:bg-white text-white group-hover:text-black rounded-full transition-colors border border-white/10">
-                <RiArrowRightSLine size={28} />
+                <ChevronRight size={28} />
               </div>
             </div>
 
@@ -370,19 +358,19 @@ const GalleryView = () => {
                 onClick={(e) => openLocation(selectedMedia.path, e)}
                 className="cursor-pointer flex items-center gap-2 px-5 py-2.5 hover:bg-white text-white hover:text-black rounded-lg text-xs font-bold tracking-wide transition-colors"
               >
-                <RiFolderOpenLine size={16} /> Locate
+                <FolderOpen size={16} /> Locate
               </button>
               <button
                 onClick={(e) => saveCopy(selectedMedia.path, e)}
                 className="cursor-pointer flex items-center gap-2 px-5 py-2.5 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-black rounded-lg text-xs font-bold tracking-wide transition-colors border border-emerald-500/20"
               >
-                <RiDownloadLine size={16} /> Export
+                <Download size={16} /> Export
               </button>
               <button
                 onClick={(e) => deleteMedia(selectedMedia.filename, e)}
                 className="cursor-pointer flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg text-xs font-bold tracking-wide transition-colors border border-red-500/20"
               >
-                <RiDeleteBinLine size={16} /> Delete
+                <Trash2 size={16} /> Delete
               </button>
             </div>
           </motion.div>

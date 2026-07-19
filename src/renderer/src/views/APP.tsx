@@ -1,41 +1,34 @@
+import { LayoutGrid, TerminalBox, Chrome, Code, Spotify, Discord, Gamepad2 } from 'lucide-react'
 import { AppItem, getAllApps } from '@renderer/services/system-info'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import {
-  RiAppsLine,
-  RiTerminalBoxLine,
-  RiChromeLine,
-  RiCodeLine,
-  RiSpotifyLine,
-  RiDiscordLine,
-  RiGamepadLine
-} from 'react-icons/ri'
+
 
 const SmartIcon = ({ name }: { name: string }) => {
   if (!name) return <div className="w-10 h-10 bg-zinc-800 rounded-lg border border-white/5" />
 
   const lower = name.toLowerCase()
-  let icon = <RiTerminalBoxLine size={20} />
+  let icon = <TerminalBox size={20} />
   let color = 'text-zinc-400'
   let bg = 'bg-zinc-800'
 
   if (lower.includes('chrome') || lower.includes('edge')) {
-    icon = <RiChromeLine size={20} />
+    icon = <Chrome size={20} />
     color = 'text-blue-400'
     bg = 'bg-blue-500/10'
   } else if (lower.includes('code') || lower.includes('dev')) {
-    icon = <RiCodeLine size={20} />
+    icon = <Code size={20} />
     color = 'text-cyan-400'
     bg = 'bg-cyan-500/10'
   } else if (lower.includes('spotify') || lower.includes('music')) {
-    icon = <RiSpotifyLine size={20} />
+    icon = <Spotify size={20} />
     color = 'text-green-400'
     bg = 'bg-green-500/10'
   } else if (lower.includes('discord') || lower.includes('telegram')) {
-    icon = <RiDiscordLine size={20} />
+    icon = <Discord size={20} />
     color = 'text-indigo-400'
     bg = 'bg-indigo-500/10'
   } else if (lower.includes('game') || lower.includes('launcher')) {
-    icon = <RiGamepadLine size={20} />
+    icon = <Gamepad2 size={20} />
     color = 'text-purple-400'
     bg = 'bg-purple-500/10'
   }
@@ -112,7 +105,7 @@ const AppsView = () => {
       <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-            <RiAppsLine className="text-emerald-400" size={20} />
+            <LayoutGrid className="text-emerald-400" size={20} />
           </div>
           <div>
             <h2 className="text-sm font-bold text-zinc-200 tracking-widest">SYSTEM APPLICATIONS</h2>

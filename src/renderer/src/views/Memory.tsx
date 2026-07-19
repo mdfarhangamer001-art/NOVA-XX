@@ -56,13 +56,17 @@ export default function MemoryView(): JSX.Element {
           {loading ? (
             <div className="p-20 flex flex-col items-center justify-center gap-4">
               <div className="w-12 h-12 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-              <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Accessing Synaptic Store...</p>
+              <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">
+                Accessing Synaptic Store...
+              </p>
             </div>
           ) : memories.length === 0 ? (
             <div className="p-16 border border-white/5 bg-zinc-900/40 rounded-3xl text-center">
               <ShieldCheck className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
               <h3 className="text-white font-bold mb-1">Memory Vault Empty</h3>
-              <p className="text-zinc-500 text-sm">Start conversing with NOVA-X to build your personal knowledge base.</p>
+              <p className="text-zinc-500 text-sm">
+                Start conversing with NOVA-X to build your personal knowledge base.
+              </p>
             </div>
           ) : (
             <AnimatePresence mode="popLayout">

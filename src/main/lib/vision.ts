@@ -1,51 +1,76 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ipcMain } from 'electron'
-import { GoogleGenAI, Type } from '@google/genai'
-import { getGeminiApiKey } from './secureKeys'
+import { ipcMain, safeStorage } from 'electron'
+import { GoogleGenAI } from '@google/genai'
+import os from 'os'
+import Store from 'electron-store'
+
+const store = new Store()
+
+function getGeminiApiKey(): string {
+  const envKey = process.env.GEMINI_API_KEY
+  if (envKey) return envKey
+
+  // 1. Try decrypting using Electron's native safeStorage API
+  try {
+    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
+    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
+      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
+      const parsed = JSON.parse(decrypted)
+      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
+    }
+  } catch (e) {
+    // ignore safeStorage decryption error
+  }
+
+  // 2. Try unencrypted fallback
+  const secureKeys: any = store.get('secure_api_keys')
+  if (secureKeys && secureKeys.GEMINI_API_KEY) {
+    return secureKeys.GEMINI_API_KEY
+  }
+
+  // 3. Try legacy encrypted block with dynamic device-specific details
+  const decryptedKeysStr = store.get('secure_api_keys_enc') as string
+  if (decryptedKeysStr) {
+    try {
+      const crypto = require('crypto')
+      // Create a secure, dynamic, device-specific salt generation pipeline
+      const dynamicSalt =
+        os.platform() + os.arch() + os.hostname() + (os.userInfo()?.username || 'system')
+      const ENCRYPTION_KEY = crypto.scryptSync(dynamicSalt, 'salt', 32)
+      const textParts = decryptedKeysStr.split(':')
+      const iv = Buffer.from(textParts.shift()!, 'hex')
+      const encryptedText = Buffer.from(textParts.join(':'), 'hex')
+      const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
+      let decrypted = decipher.update(encryptedText)
+      decrypted = Buffer.concat([decrypted, decipher.final()])
+      const parsed = JSON.parse(decrypted.toString())
+      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
+    } catch (e) {
+      // try legacy fallback if username info failed
+      try {
+        const crypto = require('crypto')
+        const dynamicSaltFallback = os.platform() + os.arch() + os.hostname() + 'fallback'
+        const ENCRYPTION_KEY = crypto.scryptSync(dynamicSaltFallback, 'salt', 32)
+        const textParts = decryptedKeysStr.split(':')
+        const iv = Buffer.from(textParts.shift()!, 'hex')
+        const encryptedText = Buffer.from(textParts.join(':'), 'hex')
+        const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
+        let decrypted = decipher.update(encryptedText)
+        decrypted = Buffer.concat([decrypted, decipher.final()])
+        const parsed = JSON.parse(decrypted.toString())
+        if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
+      } catch (err2) {
+        // ignore
+      }
+    }
+  }
+
+  return ''
+}
 
 let lastCallTime = 0
 let lastResult: any = null
 const THROTTLE_LIMIT_MS = 1500
-
-// Self-correction cooldown: even when frames aren't throttled, we don't
-// want to re-surface the SAME anomaly to the user every single frame.
-// We remember the last anomaly description and only re-alert if it
-// changes, or after this cooldown elapses.
-let lastAnomalySignature: string | null = null
-let lastAnomalyAlertTime = 0
-const ANOMALY_REALERT_COOLDOWN_MS = 30000
-
-const VISION_RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    activeApplication: {
-      type: Type.STRING,
-      description: 'Best guess at the application or window currently in focus.'
-    },
-    workflowSummary: {
-      type: Type.STRING,
-      description: 'One or two sentence summary of what the user appears to be doing.'
-    },
-    anomalyDetected: {
-      type: Type.BOOLEAN,
-      description: 'True if there is an error dialog, crash, stuck/frozen state, failed build, broken UI, or other actionable problem visible on screen.'
-    },
-    anomalyDescription: {
-      type: Type.STRING,
-      description: 'If anomalyDetected is true, a concise description of the problem. Empty string otherwise.'
-    },
-    suggestedAction: {
-      type: Type.STRING,
-      description: 'If anomalyDetected is true, a concrete, specific suggestion for how to fix or respond to it. Empty string otherwise.'
-    },
-    severity: {
-      type: Type.STRING,
-      enum: ['none', 'low', 'medium', 'high'],
-      description: 'How urgent the anomaly is. "none" if nothing is wrong.'
-    }
-  },
-  required: ['activeApplication', 'workflowSummary', 'anomalyDetected', 'anomalyDescription', 'suggestedAction', 'severity']
-}
 
 export function registerVisionHandlers(): void {
   ipcMain.removeHandler('iris-send-vision-frame')
@@ -58,7 +83,7 @@ export function registerVisionHandlers(): void {
     try {
       const apiKey = getGeminiApiKey()
       if (!apiKey) {
-      throw new Error('Gemini API Key is missing. Please set it in Settings > NOVA-X Vault.')
+        throw new Error('Gemini API Key is missing. Please set it in Settings > NOVA-X Vault.')
       }
 
       const ai = new GoogleGenAI({
@@ -93,63 +118,16 @@ export function registerVisionHandlers(): void {
               mimeType: mimeType
             }
           },
-          'Analyze this screen capture. Identify the active application, summarize the user\'s workflow, ' +
-          'and specifically look for error dialogs, crash reports, failed builds/tests, frozen/unresponsive ' +
-          'UI, red error text/tracebacks, or anything else that looks broken and actionable. ' +
-          'Respond ONLY with the structured JSON described by the schema.'
-        ],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: VISION_RESPONSE_SCHEMA
-        }
+          "analyze screen workflow. Identify the active application, detect text and code components, check if there are any visual anomalies, and summarize the user's workflow context."
+        ]
       })
-
-      let parsed: any
-      try {
-        parsed = JSON.parse(response.text || '{}')
-      } catch (parseErr) {
-        console.error('[Screen Vision] Failed to parse structured response, falling back to raw text:', parseErr)
-        parsed = {
-          activeApplication: 'unknown',
-          workflowSummary: response.text || 'No analysis returned from model.',
-          anomalyDetected: false,
-          anomalyDescription: '',
-          suggestedAction: '',
-          severity: 'none'
-        }
-      }
-
-      // Decide whether this anomaly should actually surface to the user,
-      // vs. being suppressed as a repeat of what we already flagged.
-      let shouldAlert = false
-      if (parsed.anomalyDetected && parsed.severity && parsed.severity !== 'none') {
-        const signature = `${parsed.anomalyDescription}`.trim()
-        const nowTs = Date.now()
-        const isNewAnomaly = signature !== lastAnomalySignature
-        const cooldownElapsed = nowTs - lastAnomalyAlertTime > ANOMALY_REALERT_COOLDOWN_MS
-        if (signature && (isNewAnomaly || cooldownElapsed)) {
-          shouldAlert = true
-          lastAnomalySignature = signature
-          lastAnomalyAlertTime = nowTs
-        }
-      } else {
-        // Screen looks fine again — reset so a recurring issue re-alerts.
-        lastAnomalySignature = null
-      }
 
       lastCallTime = Date.now()
       lastResult = {
         success: true,
-        analysis: parsed.workflowSummary,
-        activeApplication: parsed.activeApplication,
-        anomalyDetected: !!parsed.anomalyDetected,
-        anomalyDescription: parsed.anomalyDescription || '',
-        suggestedAction: parsed.suggestedAction || '',
-        severity: parsed.severity || 'none',
-        shouldAlert
+        analysis: response.text || 'No analysis returned from model.'
       }
       return lastResult
-
     } catch (err: any) {
       console.error('[Screen Vision Error] failed to process vision frame:', err)
       return { success: false, error: err.message }

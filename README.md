@@ -916,12 +916,12 @@ To ensure absolute privacy and safety, **NOVA-X does not use local `.env` files*
 
 ### What's Protected?
 
-| Path            | Protected?  | Access        |
+| Path | Protected? | Access |
 | --------------- | ----------- | ------------- | ------ |
-| `novax-ai.ts`    | ✅ Bytecode | Sponsors only |
-| `tools.ts`      | ✅ Bytecode | Sponsors only |
-| `src/renderer/` | ✅ React    | ✅ Open       | Public |
-| IPC handlers    | ✅ Bytecode | Built-in only |
+| `novax-ai.ts` | ✅ Bytecode | Sponsors only |
+| `tools.ts` | ✅ Bytecode | Sponsors only |
+| `src/renderer/` | ✅ React | ✅ Open | Public |
+| IPC handlers | ✅ Bytecode | Built-in only |
 
 ---
 
@@ -1025,7 +1025,6 @@ Use responsibly. The maintainers are not liable for misuse, data loss, or uninte
 **NOVA-X Team**  
 AI Systems Engineer & Creator
 
-
 - 💻 GitHub: [@novax-project](https://github.com/novax-project)
 
 ---
@@ -1065,6 +1064,5 @@ If you find NOVA-X valuable, consider:
 - 🐛 **Report** bugs & suggest features
 
 ---
-
 
 **System Online.**

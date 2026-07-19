@@ -1,12 +1,6 @@
+import { Minus, X, Square, Copy, Cpu, Activity } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import {
-  RiSubtractLine,
-  RiCloseLine,
-  RiCheckboxBlankLine,
-  RiCheckboxMultipleBlankLine,
-  RiCpuLine,
-  RiPulseLine
-} from 'react-icons/ri'
+
 
 export default function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false)
@@ -38,7 +32,7 @@ export default function TitleBar() {
               onClick={close}
               className="w-3 h-3 rounded-full bg-zinc-800 hover:bg-[#ff5f56] border border-black/20 transition-colors flex items-center justify-center shadow-inner"
             >
-              <RiCloseLine
+              <X
                 size={8}
                 className="opacity-0 group-hover/mac:opacity-100 text-[#4c0002]"
               />
@@ -47,7 +41,7 @@ export default function TitleBar() {
               onClick={minimize}
               className="w-3 h-3 rounded-full bg-zinc-800 hover:bg-[#ffbd2e] border border-black/20 transition-colors flex items-center justify-center shadow-inner"
             >
-              <RiSubtractLine
+              <Minus
                 size={8}
                 className="opacity-0 group-hover/mac:opacity-100 text-[#5c3e00]"
               />
@@ -56,7 +50,7 @@ export default function TitleBar() {
               onClick={toggleMaximize}
               className="w-3 h-3 rounded-full bg-zinc-800 hover:bg-[#27c93f] border border-black/20 transition-colors flex items-center justify-center shadow-inner"
             >
-              <RiCheckboxBlankLine
+              <Square
                 size={6}
                 className="opacity-0 group-hover/mac:opacity-100 text-[#024d04]"
               />
@@ -77,7 +71,7 @@ export default function TitleBar() {
               <span className="text-[10px] text-zinc-700">|</span>
 
               <div className="flex items-center gap-1.5 text-emerald-400">
-                <RiPulseLine size={12} className="animate-pulse" />
+                <Activity size={12} className="animate-pulse" />
                 <span className="text-[9px] font-mono tracking-widest font-bold uppercase drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">
                   Active
                 </span>
@@ -94,23 +88,23 @@ export default function TitleBar() {
               onClick={minimize}
               className="w-12 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
             >
-              <RiSubtractLine size={16} />
+              <Minus size={16} />
             </button>
             <button
               onClick={toggleMaximize}
               className="w-12 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
             >
               {isMaximized ? (
-                <RiCheckboxMultipleBlankLine size={14} />
+                <Copy size={14} />
               ) : (
-                <RiCheckboxBlankLine size={14} />
+                <Square size={14} />
               )}
             </button>
             <button
               onClick={close}
               className="w-12 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-red-500/90 hover:shadow-[inset_0_0_15px_rgba(255,255,255,0.2)] transition-all"
             >
-              <RiCloseLine size={18} />
+              <X size={18} />
             </button>
           </div>
         ) : (

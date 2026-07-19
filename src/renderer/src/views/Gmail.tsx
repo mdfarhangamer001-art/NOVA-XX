@@ -47,7 +47,7 @@ export default function GmailView(): JSX.Element {
   const [selectedEmail, setSelectedEmail] = useState<GmailMessage | null>(null)
   const [selectedEmailBody, setSelectedEmailBody] = useState<string>('')
   const [loadingBody, setLoadingBody] = useState<boolean>(false)
-  
+
   // Compose Email States
   const [showCompose, setShowCompose] = useState<boolean>(false)
   const [composeTo, setComposeTo] = useState<string>('')
@@ -55,7 +55,7 @@ export default function GmailView(): JSX.Element {
   const [composeBody, setComposeBody] = useState<string>('')
   const [sending, setSending] = useState<boolean>(false)
   const [showConfirmSend, setShowConfirmSend] = useState<boolean>(false)
-  
+
   // Status Messages
   const [statusMsg, setStatusMsg] = useState<{ text: string; isError: boolean } | null>(null)
 
@@ -71,7 +71,7 @@ export default function GmailView(): JSX.Element {
           return
         }
       }
-      
+
       // If no token in local storage, check if Electron main has it
       if (window.electron?.ipcRenderer) {
         const tokenRes = await window.electron.ipcRenderer.invoke('google-get-tokens')
@@ -127,7 +127,7 @@ export default function GmailView(): JSX.Element {
         localStorage.setItem('novax_operator', JSON.stringify(operatorUser))
         setToken(accessToken)
         setOperator(operatorUser)
-        
+
         // Push activity log to local store if available
         if (window.electron?.ipcRenderer) {
           await window.electron.ipcRenderer.invoke('save-offline-profile', operatorUser)
@@ -150,10 +150,13 @@ export default function GmailView(): JSX.Element {
     setStatusMsg(null)
     try {
       const q = searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ''
-      const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15${q}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      
+      const res = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15${q}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      )
+
       if (res.status === 401) {
         // Token expired, clear token
         handleSignOut()
@@ -170,14 +173,19 @@ export default function GmailView(): JSX.Element {
       // Fetch message details in parallel
       const detailedEmails = await Promise.all(
         data.messages.map(async (msg: { id: string }) => {
-          const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
+          const detailRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+            {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          )
           const detail = await detailRes.json()
-          
+
           const headers = detail.payload?.headers || []
-          const subject = headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '(No Subject)'
-          const from = headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || 'Unknown Sender'
+          const subject =
+            headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '(No Subject)'
+          const from =
+            headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || 'Unknown Sender'
           const dateVal = headers.find((h: any) => h.name.toLowerCase() === 'date')?.value || ''
           const isUnread = detail.labelIds?.includes('UNREAD') || false
 
@@ -208,11 +216,14 @@ export default function GmailView(): JSX.Element {
     setSelectedEmailBody('')
     setLoadingBody(true)
     try {
-      const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${email.id}?format=full`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const detailRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${email.id}?format=full`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      )
       const detail = await detailRes.json()
-      
+
       // Parse body helper
       let bodyText = ''
       const parts = detail.payload?.parts
@@ -226,19 +237,22 @@ export default function GmailView(): JSX.Element {
       }
 
       setSelectedEmailBody(bodyText || email.snippet || '(Empty Body)')
-      
+
       // Mark as read in Gmail if unread
       if (email.unread) {
-        await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${email.id}/batchModify`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ removeLabelIds: ['UNREAD'] })
-        })
+        await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${email.id}/batchModify`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ removeLabelIds: ['UNREAD'] })
+          }
+        )
         // Update local unread state
-        setEmails(prev => prev.map(e => e.id === email.id ? { ...e, unread: false } : e))
+        setEmails((prev) => prev.map((e) => (e.id === email.id ? { ...e, unread: false } : e)))
       }
     } catch (err: any) {
       console.error('[Gmail Body] Fetch body error:', err)
@@ -261,7 +275,7 @@ export default function GmailView(): JSX.Element {
         '',
         composeBody
       ].join('\r\n')
-      
+
       const rawBase64 = btoa(unescape(encodeURIComponent(emailContent)))
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
@@ -309,13 +323,12 @@ export default function GmailView(): JSX.Element {
 
   return (
     <div className="h-full w-full flex flex-col font-sans select-text text-zinc-100">
-      
       {/* AUTHENTICATION PORTAL */}
       {!token ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-full max-w-md bg-zinc-950/60 backdrop-blur-xl border border-white/5 rounded-2xl p-8 shadow-2xl relative">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[1px] w-1/2 bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
-            
+
             <div className="h-16 w-16 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
               <Mail className="h-8 w-8" />
             </div>
@@ -324,7 +337,8 @@ export default function GmailView(): JSX.Element {
               Secure Gmail Connector
             </h2>
             <p className="text-xs text-zinc-400 leading-relaxed mb-8">
-              Authorize secure network access to connect your Google Workspace. Read, manage, and dispatch communications directly from the NOVA-X Nerve System.
+              Authorize secure network access to connect your Google Workspace. Read, manage, and
+              dispatch communications directly from the NOVA-X Nerve System.
             </p>
 
             {statusMsg && (
@@ -345,13 +359,10 @@ export default function GmailView(): JSX.Element {
           </div>
         </div>
       ) : (
-        
         /* GMAIL WORKSPACE */
         <div className="flex-1 flex gap-4 overflow-hidden h-full pb-2">
-          
           {/* EMAIL LIST SIDEBAR (LEFT) */}
           <div className="w-1/2 flex flex-col bg-zinc-950/40 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-xl">
-            
             {/* Toolbar */}
             <div className="p-4 border-b border-white/5 flex flex-col gap-3">
               <div className="flex items-center justify-between">
@@ -366,9 +377,11 @@ export default function GmailView(): JSX.Element {
                     onClick={fetchInbox}
                     disabled={loading}
                     className="p-1.5 rounded-lg border border-white/5 hover:bg-white/5 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
-                    title="Refresh Inbox"
+                    title="RefreshCw Inbox"
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-emerald-400' : ''}`}
+                    />
                   </button>
                   <button
                     onClick={() => setShowCompose(true)}
@@ -424,16 +437,23 @@ export default function GmailView(): JSX.Element {
                         {email.unread && (
                           <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                         )}
-                        <span className={`text-xs font-semibold truncate ${email.unread ? 'text-white' : 'text-zinc-300'}`}>
+                        <span
+                          className={`text-xs font-semibold truncate ${email.unread ? 'text-white' : 'text-zinc-300'}`}
+                        >
                           {email.from.split('<')[0].trim()}
                         </span>
                       </div>
                       <span className="text-[9px] font-mono text-zinc-500">
-                        {new Date(email.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {new Date(email.date).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric'
+                        })}
                       </span>
                     </div>
-                    
-                    <h4 className={`text-xs font-mono truncate ${email.unread ? 'text-emerald-400 font-bold' : 'text-zinc-400'}`}>
+
+                    <h4
+                      className={`text-xs font-mono truncate ${email.unread ? 'text-emerald-400 font-bold' : 'text-zinc-400'}`}
+                    >
                       {email.subject}
                     </h4>
                     <p className="text-[11px] text-zinc-500 line-clamp-1 leading-relaxed">
@@ -443,12 +463,15 @@ export default function GmailView(): JSX.Element {
                 ))
               )}
             </div>
-            
+
             {/* Account Info Footer */}
             <div className="p-3 bg-zinc-950 border-t border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {operator?.avatar ? (
-                  <img src={operator.avatar} className="h-6 w-6 rounded-full border border-white/10" />
+                  <img
+                    src={operator.avatar}
+                    className="h-6 w-6 rounded-full border border-white/10"
+                  />
                 ) : (
                   <div className="h-6 w-6 bg-zinc-800 rounded-full flex items-center justify-center">
                     <User className="h-3 w-3 text-zinc-400" />
@@ -458,9 +481,7 @@ export default function GmailView(): JSX.Element {
                   <span className="text-[10px] font-mono font-bold leading-none text-zinc-300">
                     {operator?.name}
                   </span>
-                  <span className="text-[9px] font-mono text-zinc-500">
-                    {operator?.email}
-                  </span>
+                  <span className="text-[9px] font-mono text-zinc-500">{operator?.email}</span>
                 </div>
               </div>
               <button
@@ -476,7 +497,6 @@ export default function GmailView(): JSX.Element {
           <div className="w-1/2 flex flex-col bg-zinc-950/40 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-xl">
             {selectedEmail ? (
               <div className="flex-1 flex flex-col h-full">
-                
                 {/* Header detail */}
                 <div className="p-5 border-b border-white/5 text-left flex flex-col gap-3 bg-zinc-950/20">
                   <div className="flex items-start justify-between">
@@ -484,15 +504,21 @@ export default function GmailView(): JSX.Element {
                       {selectedEmail.subject}
                     </h3>
                   </div>
-                  
+
                   <div className="flex flex-col gap-1.5 text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="text-zinc-500 font-mono text-[10px] uppercase w-12">From:</span>
+                      <span className="text-zinc-500 font-mono text-[10px] uppercase w-12">
+                        From:
+                      </span>
                       <span className="font-semibold text-zinc-300">{selectedEmail.from}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-zinc-500 font-mono text-[10px] uppercase w-12">Date:</span>
-                      <span className="font-mono text-zinc-400 text-[11px]">{selectedEmail.date}</span>
+                      <span className="text-zinc-500 font-mono text-[10px] uppercase w-12">
+                        Date:
+                      </span>
+                      <span className="font-mono text-zinc-400 text-[11px]">
+                        {selectedEmail.date}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -508,7 +534,6 @@ export default function GmailView(): JSX.Element {
                     selectedEmailBody
                   )}
                 </div>
-                
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 font-mono text-xs gap-3">
@@ -533,7 +558,7 @@ export default function GmailView(): JSX.Element {
               className="w-full max-w-xl bg-zinc-950 border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative flex flex-col text-left"
             >
               <div className="absolute top-0 left-0 h-[1px] w-full bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
-              
+
               {/* Header */}
               <div className="p-4 border-b border-white/5 flex items-center justify-between bg-zinc-900/40">
                 <div className="flex items-center gap-2">
@@ -553,7 +578,9 @@ export default function GmailView(): JSX.Element {
               {/* Compose Inputs */}
               <div className="p-4 flex flex-col gap-3 flex-1">
                 <div>
-                  <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-1">Recipient (To)</label>
+                  <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-1">
+                    Recipient (To)
+                  </label>
                   <input
                     type="email"
                     value={composeTo}
@@ -563,7 +590,9 @@ export default function GmailView(): JSX.Element {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-1">Subject</label>
+                  <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-1">
+                    Subject
+                  </label>
                   <input
                     type="text"
                     value={composeSubject}
@@ -573,7 +602,9 @@ export default function GmailView(): JSX.Element {
                   />
                 </div>
                 <div className="flex-1 min-h-[200px] flex flex-col">
-                  <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-1">Transmission Message</label>
+                  <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-1">
+                    Transmission Message
+                  </label>
                   <textarea
                     value={composeBody}
                     onChange={(e) => setComposeBody(e.target.value)}
@@ -588,7 +619,7 @@ export default function GmailView(): JSX.Element {
                 <span className="text-[10px] font-mono text-zinc-500">
                   DISPATCH SECURITY LEVEL: G-OAUTH
                 </span>
-                
+
                 <button
                   onClick={() => setShowConfirmSend(true)}
                   disabled={!composeTo || !composeSubject || !composeBody}
@@ -621,7 +652,8 @@ export default function GmailView(): JSX.Element {
                 Confirm Outer Transmission?
               </h3>
               <p className="text-[11px] text-zinc-400 leading-relaxed mb-6">
-                Are you absolutely sure you want to dispatch this email transmission? This is a real Google Workspace API action and will send a real message to:
+                Are you absolutely sure you want to dispatch this email transmission? This is a real
+                Google Workspace API action and will send a real message to:
                 <span className="block mt-2 font-mono text-emerald-400 font-bold bg-zinc-950 p-2 rounded-lg border border-white/5">
                   {composeTo}
                 </span>
@@ -646,7 +678,6 @@ export default function GmailView(): JSX.Element {
           </div>
         )}
       </AnimatePresence>
-      
     </div>
   )
 }

@@ -33,7 +33,9 @@ if (hasContextBridge) {
         }
       }
     })
-    console.log('[NOVA-X Preload] contextBridge.exposeInMainWorld("electron") completed successfully.')
+    console.log(
+      '[NOVA-X Preload] contextBridge.exposeInMainWorld("electron") completed successfully.'
+    )
 
     console.log('[NOVA-X Preload] Initiating contextBridge.exposeInMainWorld for "api"...')
     contextBridge.exposeInMainWorld('api', api)
@@ -41,11 +43,10 @@ if (hasContextBridge) {
 
     console.log('[NOVA-X Preload] Initiating contextBridge.exposeInMainWorld for "iris"...')
     contextBridge.exposeInMainWorld('iris', {
-      sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame),
-      transcribeAudio: (base64Audio: string, mimeType: string) => ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType }),
-      saveChatHistory: (history: any[]) => ipcRenderer.invoke('save-chat-history', history),
-      loadChatHistory: () => ipcRenderer.invoke('load-chat-history'),
-      clearChatHistory: () => ipcRenderer.invoke('clear-chat-history'),
+      sendVisionFrame: (base64Frame: string) =>
+        ipcRenderer.invoke('iris-send-vision-frame', base64Frame),
+      transcribeAudio: (base64Audio: string, mimeType: string) =>
+        ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType }),
       getMemories: () => ipcRenderer.invoke('get-memories'),
       deleteMemory: (index: number) => ipcRenderer.invoke('delete-memory', index),
       launchApp: (appName: string) => ipcRenderer.invoke('launch-app', appName),
@@ -54,10 +55,10 @@ if (hasContextBridge) {
       adbTelemetry: () => ipcRenderer.invoke('adb-telemetry'),
       adbQuickAction: (action: string) => ipcRenderer.invoke('adb-quick-action', { action }),
       onTranscript: (callback: any) => {
-        (window as any)._onTranscriptCallback = callback;
+        ;(window as any)._onTranscriptCallback = callback
       },
       onTranscriptComplete: (callback: any) => {
-        (window as any)._onTranscriptCompleteCallback = callback;
+        ;(window as any)._onTranscriptCompleteCallback = callback
       }
     })
     console.log('[NOVA-X Preload] contextBridge.exposeInMainWorld("iris") completed successfully.')
@@ -77,13 +78,17 @@ if (hasContextBridge) {
   })
 
   if (windowElectronType === 'undefined' || windowIrisType === 'undefined') {
-    console.warn('[NOVA-X Preload Warning] window.electron or window.iris remains undefined after contextBridge initialization! Attempting window exposure fallback.')
+    console.warn(
+      '[NOVA-X Preload Warning] window.electron or window.iris remains undefined after contextBridge initialization! Attempting window exposure fallback.'
+    )
     exposeOnWindow()
   } else {
     console.log('[NOVA-X Preload] Critical APIs are successfully detected on the window object.')
   }
 } else {
-  console.log('[NOVA-X Preload] contextBridge is not available in this environment. Falling back directly to window exposure.')
+  console.log(
+    '[NOVA-X Preload] contextBridge is not available in this environment. Falling back directly to window exposure.'
+  )
   exposeOnWindow()
 }
 
@@ -116,11 +121,10 @@ function exposeOnWindow() {
 
     // @ts-ignore
     window.iris = {
-      sendVisionFrame: (base64Frame: string) => ipcRenderer.invoke('iris-send-vision-frame', base64Frame),
-      transcribeAudio: (base64Audio: string, mimeType: string) => ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType }),
-      saveChatHistory: (history: any[]) => ipcRenderer.invoke('save-chat-history', history),
-      loadChatHistory: () => ipcRenderer.invoke('load-chat-history'),
-      clearChatHistory: () => ipcRenderer.invoke('clear-chat-history'),
+      sendVisionFrame: (base64Frame: string) =>
+        ipcRenderer.invoke('iris-send-vision-frame', base64Frame),
+      transcribeAudio: (base64Audio: string, mimeType: string) =>
+        ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType }),
       getMemories: () => ipcRenderer.invoke('get-memories'),
       deleteMemory: (index: number) => ipcRenderer.invoke('delete-memory', index),
       launchApp: (appName: string) => ipcRenderer.invoke('launch-app', appName),
@@ -129,10 +133,10 @@ function exposeOnWindow() {
       adbTelemetry: () => ipcRenderer.invoke('adb-telemetry'),
       adbQuickAction: (action: string) => ipcRenderer.invoke('adb-quick-action', { action }),
       onTranscript: (callback: any) => {
-        (window as any)._onTranscriptCallback = callback;
+        ;(window as any)._onTranscriptCallback = callback
       },
       onTranscriptComplete: (callback: any) => {
-        (window as any)._onTranscriptCompleteCallback = callback;
+        ;(window as any)._onTranscriptCompleteCallback = callback
       }
     }
     console.log('[NOVA-X Preload] Direct "window.iris" assignment completed.')

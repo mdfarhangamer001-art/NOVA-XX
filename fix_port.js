@@ -1,0 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+const file = path.join(__dirname, 'server.ts');
+let content = fs.readFileSync(file, 'utf8');
+content = content.replace('const PORT = process.env.PORT || 3000;', 'const PORT = 3000;');
+fs.writeFileSync(file, content, 'utf8');

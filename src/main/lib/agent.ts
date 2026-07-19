@@ -1,17 +1,82 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ipcMain, BrowserWindow, dialog } from 'electron'
+import { ipcMain, BrowserWindow, dialog, safeStorage } from 'electron'
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai'
 import fs from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
-import { getGeminiApiKey } from './secureKeys'
+import os from 'os'
+import Store from 'electron-store'
+
+const store = new Store()
+
+function getGeminiApiKey(): string {
+  const envKey = process.env.GEMINI_API_KEY
+  if (envKey) return envKey
+
+  // 1. Try decrypting using Electron's native safeStorage API
+  try {
+    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
+    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
+      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
+      const parsed = JSON.parse(decrypted)
+      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
+    }
+  } catch (e) {
+    // ignore safeStorage decryption error
+  }
+
+  // 2. Try unencrypted fallback
+  const secureKeys: any = store.get('secure_api_keys')
+  if (secureKeys && secureKeys.GEMINI_API_KEY) {
+    return secureKeys.GEMINI_API_KEY
+  }
+
+  // 3. Try legacy encrypted block with dynamic device-specific details
+  const decryptedKeysStr = store.get('secure_api_keys_enc') as string
+  if (decryptedKeysStr) {
+    try {
+      const crypto = require('crypto')
+      // Create a secure, dynamic, device-specific salt generation pipeline
+      const dynamicSalt =
+        os.platform() + os.arch() + os.hostname() + (os.userInfo()?.username || 'system')
+      const ENCRYPTION_KEY = crypto.scryptSync(dynamicSalt, 'salt', 32)
+      const textParts = decryptedKeysStr.split(':')
+      const iv = Buffer.from(textParts.shift()!, 'hex')
+      const encryptedText = Buffer.from(textParts.join(':'), 'hex')
+      const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
+      let decrypted = decipher.update(encryptedText)
+      decrypted = Buffer.concat([decrypted, decipher.final()])
+      const parsed = JSON.parse(decrypted.toString())
+      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
+    } catch (e) {
+      // try legacy fallback if username info failed
+      try {
+        const crypto = require('crypto')
+        const fallbackSalt = os.platform() + os.arch() + 'fallback'
+        const ENCRYPTION_KEY = crypto.scryptSync(fallbackSalt, 'salt', 32)
+        const textParts = decryptedKeysStr.split(':')
+        const iv = Buffer.from(textParts.shift()!, 'hex')
+        const encryptedText = Buffer.from(textParts.join(':'), 'hex')
+        const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
+        let decrypted = decipher.update(encryptedText)
+        decrypted = Buffer.concat([decrypted, decipher.final()])
+        const parsed = JSON.parse(decrypted.toString())
+        if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
+      } catch (err2) {
+        // ignore
+      }
+    }
+  }
+
+  return ''
+}
 
 // Map the workspace root path
 const WORKSPACE_ROOT = process.cwd()
 
 function validateAgentCommand(command: string): { valid: boolean; reason?: string } {
   const trimmed = command.trim()
-  
+
   const dangerousPatterns = [
     /rm\s+-rf\s+[^\w\.\-\/]/i,
     />\s*\/etc\//,
@@ -28,7 +93,10 @@ function validateAgentCommand(command: string): { valid: boolean; reason?: strin
     }
   }
 
-  if (trimmed.includes('../') && (trimmed.includes('rm ') || trimmed.includes('mv ') || trimmed.includes('cp '))) {
+  if (
+    trimmed.includes('../') &&
+    (trimmed.includes('rm ') || trimmed.includes('mv ') || trimmed.includes('cp '))
+  ) {
     return { valid: false, reason: 'Command attempts to modify files outside the workspace root.' }
   }
 
@@ -68,7 +136,8 @@ const readFileTool: FunctionDeclaration = {
 
 const writeFileTool: FunctionDeclaration = {
   name: 'write_file',
-  description: 'Create a new file or write/overwrite content to a file in the workspace. Requires operator approval.',
+  description:
+    'Create a new file or write/overwrite content to a file in the workspace. Requires operator approval.',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -87,7 +156,8 @@ const writeFileTool: FunctionDeclaration = {
 
 const runCommandTool: FunctionDeclaration = {
   name: 'run_command',
-  description: 'Run a shell command in the project workspace (e.g. npm run test, npm run lint). Requires operator approval.',
+  description:
+    'Run a shell command in the project workspace (e.g. npm run test, npm run lint). Requires operator approval.',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -144,9 +214,7 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
       sendLog('Analyzing task strategy and compiling toolchain...')
 
       // We maintain history manually for the loop
-      const contentsHistory: any[] = [
-        { role: 'user', parts: [{ text: prompt }] }
-      ]
+      const contentsHistory: any[] = [{ role: 'user', parts: [{ text: prompt }] }]
 
       let loopCount = 0
       const maxLoops = 8
@@ -197,7 +265,7 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
             } else {
               if (fs.existsSync(targetDir)) {
                 const files = fs.readdirSync(targetDir)
-                const fileStats = files.map(file => {
+                const fileStats = files.map((file) => {
                   const fp = path.join(targetDir, file)
                   const isDir = fs.statSync(fp).isDirectory()
                   return `${file}${isDir ? '/' : ''}`
@@ -211,8 +279,7 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
           } catch (e: any) {
             toolResult = { error: e.message }
           }
-        } 
-        else if (toolName === 'read_file') {
+        } else if (toolName === 'read_file') {
           try {
             const targetPath = path.resolve(WORKSPACE_ROOT, args.filePath)
             if (!targetPath.startsWith(WORKSPACE_ROOT)) {
@@ -229,8 +296,7 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
           } catch (e: any) {
             toolResult = { error: e.message }
           }
-        } 
-        else if (toolName === 'write_file') {
+        } else if (toolName === 'write_file') {
           // Ask for Operator Confirmation
           sendLog('Awaiting operator authorization for write_file operation...')
           const dialogResponse = await dialog.showMessageBox(focusedWindow || undefined!, {
@@ -261,8 +327,7 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
               toolResult = { error: e.message }
             }
           }
-        } 
-        else if (toolName === 'run_command') {
+        } else if (toolName === 'run_command') {
           // Ask for Operator Confirmation
           sendLog('Awaiting operator authorization for run_command operation...')
           const dialogResponse = await dialog.showMessageBox(focusedWindow || undefined!, {
@@ -286,11 +351,13 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
             } else {
               try {
                 sendLog(`Running shell command: ${args.command}`)
-                const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-                  exec(args.command, { cwd: WORKSPACE_ROOT }, (error, stdout, stderr) => {
-                    resolve({ stdout, stderr })
-                  })
-                })
+                const result = await new Promise<{ stdout: string; stderr: string }>(
+                  (resolve, reject) => {
+                    exec(args.command, { cwd: WORKSPACE_ROOT }, (error, stdout, stderr) => {
+                      resolve({ stdout, stderr })
+                    })
+                  }
+                )
                 toolResult = { stdout: result.stdout, stderr: result.stderr }
                 sendLog(`Command execution complete. Stdout length: ${result.stdout.length}`)
               } catch (e: any) {
@@ -316,7 +383,6 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
 
       sendLog('Maximum step loops exceeded without final response. Stopping.')
       return { success: false, error: 'Maximum loop steps exceeded.' }
-
     } catch (err: any) {
       sendLog(`ERROR in agent loop: ${err.message}`)
       return { success: false, error: err.message }
