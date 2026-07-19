@@ -163,17 +163,23 @@ export default function AgentsView() {
         const settings = videoTrack.getSettings()
         setShareResolution(`${settings.width || 1920}x${settings.height || 1080}`)
 
-        // Measure FPS and Bitrate dynamically
+        // Measure FPS and Bitrate dynamically — bitrate is computed from
+        // the REAL bytes of the JPEG frames captured for vision analysis
+        // below, not a random placeholder.
         let lastTime = performance.now()
         let frames = 0
+        let bytesSinceLastTick = 0
         const trackStats = () => {
           if (!streamRef.current) return
           frames++
           const now = performance.now()
           if (now - lastTime >= 1000) {
+            const dtSec = (now - lastTime) / 1000
             setShareFps(Math.round((frames * 1000) / (now - lastTime)))
-            setShareBitrate(+(4.2 + Math.random() * 2.1).toFixed(1)) // mock active mbps transfer
+            const mbps = (bytesSinceLastTick * 8) / 1_000_000 / dtSec
+            setShareBitrate(+mbps.toFixed(2))
             frames = 0
+            bytesSinceLastTick = 0
             lastTime = now
           }
           animationFrameRef.current = requestAnimationFrame(trackStats)
@@ -191,6 +197,9 @@ export default function AgentsView() {
             if (ctx) {
               ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
               const base64 = canvas.toDataURL('image/jpeg', 0.6)
+              // Real byte size of the frame we're actually sending, used
+              // to compute the bitrate readout above.
+              bytesSinceLastTick += Math.round((base64.length * 3) / 4)
               
               setAutopilotLogs(prev => [...prev, `[VISION] Capture frame dispatched to server-side multimodal analyzer...`])
               
