@@ -3,6 +3,7 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { ErrorBoundary } from './ErrorBoundary'
 import { MOOD_COLORS, type Mood } from '../../lib/cognitiveCore'
+import { detectPerformanceTier } from '../../utils/detectPerformanceTier'
 
 // Premium futuristic color palette for NOVA-X Fusion Core
 const IDLE_COLOR = new THREE.Color('#00f3ff') // Electric Cyan
@@ -1047,16 +1048,18 @@ export default function AICore({
   const [perfMode, setPerfMode] = useState<'high' | 'medium' | 'low'>(() => {
     const saved = localStorage.getItem('novax_perf_mode') as 'high' | 'medium' | 'low'
     if (saved) return saved
-    
-    // Auto-detect WebGL context support
+
+    // No explicit user choice yet — auto-detect based on real hardware
+    // signals (cores/RAM/GPU type), not just "does WebGL exist at all".
+    // Previously this defaulted budget laptops (e.g. Intel integrated
+    // graphics) straight to 'high', which is what caused the crashing/
+    // lagging on weaker machines.
     try {
-      const canvas = document.createElement('canvas')
-      const support = !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')))
-      if (!support) return 'low'
-      
-      return localStorage.getItem('novax_low_end_mode') === 'true' ? 'low' : 'high'
+      const tier = detectPerformanceTier()
+      localStorage.setItem('novax_perf_mode', tier)
+      return tier
     } catch (e) {
-      return 'low'
+      return 'medium'
     }
   })
 
