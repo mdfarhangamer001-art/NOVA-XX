@@ -107,6 +107,27 @@ if (typeof window !== 'undefined') {
       sendVisionFrame: async (base64Frame: string) => {
         return await window.electron.ipcRenderer.invoke('iris-send-vision-frame', base64Frame);
       },
+      saveChatHistory: async (history: any[]) => {
+        try {
+          return await window.electron.ipcRenderer.invoke('save-chat-history', history);
+        } catch (e) {
+          return { success: false };
+        }
+      },
+      loadChatHistory: async () => {
+        try {
+          return await window.electron.ipcRenderer.invoke('load-chat-history');
+        } catch (e) {
+          return [];
+        }
+      },
+      clearChatHistory: async () => {
+        try {
+          return await window.electron.ipcRenderer.invoke('clear-chat-history');
+        } catch (e) {
+          return { success: false };
+        }
+      },
       transcribeAudio: async (base64Audio: string, mimeType: string) => {
         return await window.electron.ipcRenderer.invoke('iris-transcribe-audio', { base64Audio, mimeType });
       },
