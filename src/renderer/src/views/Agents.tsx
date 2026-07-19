@@ -201,6 +201,22 @@ export default function AgentsView() {
                     ...prev,
                     `[VISION] Analysis Result:\n${res.analysis}`
                   ])
+                  if (res.shouldAlert && res.anomalyDetected) {
+                    setAutopilotLogs(prev => [
+                      ...prev,
+                      `[SELF-CORRECTION] ⚠️ ${res.anomalyDescription} — Suggested: ${res.suggestedAction}`
+                    ])
+                    window.dispatchEvent(
+                      new CustomEvent('novax_vision_anomaly', {
+                        detail: {
+                          description: res.anomalyDescription,
+                          suggestedAction: res.suggestedAction,
+                          severity: res.severity,
+                          activeApplication: res.activeApplication
+                        }
+                      })
+                    )
+                  }
                 } else {
                   setAutopilotLogs(prev => [...prev, `[VISION ERROR] ${res.error}`])
                 }
