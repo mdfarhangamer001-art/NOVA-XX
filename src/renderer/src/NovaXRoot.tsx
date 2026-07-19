@@ -60,8 +60,23 @@ const IndexRoot = (): JSX.Element => {
       if (!window.speechSynthesis) return;
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 0.95;
+      
+      const vibe = localStorage.getItem('novax_operator_vibe') || 'TACTICAL';
+      let rate = 1.05;
+      let pitch = 0.95;
+      if (vibe === 'EMPATHETIC') {
+        rate = 0.92;
+        pitch = 1.05;
+      } else if (vibe === 'CALM') {
+        rate = 0.85;
+        pitch = 0.88;
+      } else if (vibe === 'INTENSE') {
+        rate = 1.20;
+        pitch = 1.08;
+      }
+      
+      utterance.rate = rate;
+      utterance.pitch = pitch;
       const voices = window.speechSynthesis.getVoices();
       // Try to find a good female English voice like Google UK English Female or Microsoft Zira
       const voice = voices.find((v) => v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Samantha') || (v.lang === 'en-US' && v.name.includes('Google'))) || voices[0];

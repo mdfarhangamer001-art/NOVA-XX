@@ -110,7 +110,7 @@ export function registerVisionHandlers(): void {
       console.log(`[Screen Vision] Processing screen frame of mime: ${mimeType}`)
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.5-flash',
         contents: [
           {
             inlineData: {

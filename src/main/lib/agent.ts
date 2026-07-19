@@ -224,7 +224,7 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
         sendLog(`[Step ${loopCount}] Querying Gemini neural model...`)
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-3.5-flash',
           contents: contentsHistory,
           config: {
             systemInstruction,

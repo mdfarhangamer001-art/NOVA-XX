@@ -432,7 +432,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         })
 
         const model = ai.getGenerativeModel({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-3.5-flash',
           systemInstruction,
           generationConfig: {
             temperature: 0.7,
@@ -473,7 +473,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
 
     async function extractAndStoreMemories(apiKey: string, text: string) {
       const ai = new GoogleGenAI({ apiKey })
-      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' })
       const prompt = `Extract important personal facts about the operator from this text (e.g. name, preferences, habits). 
     Respond ONLY with a JSON array of strings: ["fact 1", "fact 2"]. If nothing important, respond [].
     Text: ${text}`
@@ -625,7 +625,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         })
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-3.5-flash',
           contents: [
             {
               role: 'user',
@@ -1196,7 +1196,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
 
       try {
         const ai = new GoogleGenAI({ apiKey })
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+        const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' })
         const res = await model.generateContent(prompt)
         return res.response.text().trim()
       } catch (e: any) {

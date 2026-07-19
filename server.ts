@@ -1,6 +1,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import fs from 'fs';
 
 async function startServer() {
   const app = express();
@@ -8,136 +9,524 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Setup directories for Notes and Gallery
+  const NOTES_DIR = path.join(process.cwd(), 'notes');
+  const GALLERY_DIR = path.join(process.cwd(), 'gallery');
+
+  if (!fs.existsSync(NOTES_DIR)) {
+    fs.mkdirSync(NOTES_DIR, { recursive: true });
+    fs.writeFileSync(path.join(NOTES_DIR, 'welcome.json'), JSON.stringify({
+      filename: 'welcome.json',
+      title: 'Welcome to NOVA-X',
+      content: 'Hello Boss! This is your autonomous desktop workspace. Feel free to type commands or speak to me directly. Let\'s build something extraordinary today!',
+      createdAt: new Date().toISOString()
+    }, null, 2), 'utf8');
+  }
+  if (!fs.existsSync(GALLERY_DIR)) {
+    fs.mkdirSync(GALLERY_DIR, { recursive: true });
+  }
+
+  // Active SSE Clients for real-time streaming
+  let sseClients: any[] = [];
+
   // SSE endpoint
   app.get('/api/ipc-events', (req, res) => {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive'
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
     });
+    
+    sseClients.push(res);
+    console.log(`[Web Preview] SSE Client connected. Active clients: ${sseClients.length}`);
+
     const interval = setInterval(() => {
       res.write(': keepalive\n\n');
     }, 15000);
-    req.on('close', () => clearInterval(interval));
+
+    req.on('close', () => {
+      clearInterval(interval);
+      sseClients = sseClients.filter(c => c !== res);
+      console.log(`[Web Preview] SSE Client disconnected. Active clients: ${sseClients.length}`);
+    });
   });
+
+  function broadcast(channel: string, data: any) {
+    const payload = JSON.stringify({ channel, data });
+    sseClients.forEach(client => {
+      try {
+        client.write(`data: ${payload}\n\n`);
+      } catch (err) {
+        console.error('[Web Preview] Failed to write SSE broadcast:', err);
+      }
+    });
+  }
+
+  // Global Mock States
+  if (!global.mockKeys) global.mockKeys = {};
+  if (!global.clipboardHistory) {
+    global.clipboardHistory = [
+      { id: '1', type: 'text', content: 'sk-proj-716492816439281', timestamp: Date.now() - 3600000, pinned: true },
+      { id: '2', type: 'text', content: 'https://github.com/google/genai', timestamp: Date.now() - 1200000 },
+      { id: '3', type: 'text', content: 'operator@example.com', timestamp: Date.now() - 600000 }
+    ];
+  }
+  if (global.activityTrackingEnabled === undefined) {
+    global.activityTrackingEnabled = false;
+  }
+  if (!global.activityLogs) {
+    global.activityLogs = [
+      { date: new Date().toISOString().split('T')[0], app: 'VS Code', duration: 14400 },
+      { date: new Date().toISOString().split('T')[0], app: 'Chrome', duration: 7200 },
+      { date: new Date().toISOString().split('T')[0], app: 'Terminal', duration: 3600 },
+      { date: new Date().toISOString().split('T')[0], app: 'Slack', duration: 1800 },
+      { date: new Date().toISOString().split('T')[0], app: 'Spotify', duration: 4500 }
+    ];
+  }
+  if (!global.memories) {
+    global.memories = [
+      { fact: 'Operator preference is a dark slate futuristic UI with minimal telemetry.' }
+    ];
+  }
+  if (!global.offlineProfile) {
+    global.offlineProfile = { name: 'Operator', email: 'operator@example.com', syncTime: new Date().toLocaleTimeString(), avatar: '' };
+  }
 
   // Mock IPC invoke
   app.post('/api/ipc', async (req, res) => {
     const { channel, args } = req.body;
-    let result = null;
-    if (!global.mockKeys) global.mockKeys = {};
+    let result: any = null;
 
-    if (channel === 'get-companion-status') {
-      result = { connected: false, url: '', ip: '', pin: '' };
-    } else if (channel === 'secure-save-keys') {
-      global.mockKeys = { ...global.mockKeys, ...args[0] };
-      result = { success: true };
-    
-    } else if (channel === 'secure-get-keys') {
-      result = {
-        geminiKey: process.env.GEMINI_API_KEY || global.mockKeys.geminiKey || '',
-        groqKey: process.env.GROQ_API_KEY || global.mockKeys.groqKey || '',
-        hfKey: process.env.HF_API_KEY || global.mockKeys.hfKey || '',
-        tavilyKey: process.env.TAVILY_API_KEY || global.mockKeys.tavilyKey || '',
-        openrouterKey: process.env.OPENROUTER_API_KEY || global.mockKeys.openrouterKey || ''
-      };
-    } else if (channel === 'google-sign-in') {
-      result = { success: true, name: 'Operator', email: 'operator@example.com', token: 'mock-token', syncTime: new Date().toLocaleTimeString(), avatar: '' };
-    } else if (channel === 'iris-transcribe-audio') {
-      try {
-         const { base64Audio, mimeType } = args[0];
-         const apiKey = process.env.GEMINI_API_KEY || global.mockKeys.geminiKey;
-         if (!apiKey) throw new Error('Gemini API key is required');
-         const { GoogleGenAI } = require('@google/genai');
-         const ai = new GoogleGenAI({ apiKey });
-         const response = await ai.models.generateContent({
-           model: 'gemini-2.0-flash',
-           contents: [{
-             role: 'user',
-             parts: [
-               { text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add quotes or commentary.' },
-               { inlineData: { mimeType: mimeType.split(';')[0], data: base64Audio } }
-             ]
-           }]
-         });
-         result = response.text;
-      } catch (err) {
-         console.error('[Web Preview] Transcribe Error:', err);
-         result = '';
+    console.log(`[Web Preview] IPC Invoke [${channel}]`, args);
+
+    try {
+      // Companion Status
+      if (channel === 'get-companion-status') {
+        result = { connected: false, url: '', ip: '', pin: '' };
       }
-    } else if (channel === 'agent-run-task') {
-      try {
-         const apiKey = process.env.GEMINI_API_KEY || global.mockKeys.geminiKey;
-         if (!apiKey) throw new Error('Gemini API key is required');
-         const { GoogleGenAI } = require('@google/genai');
-         const ai = new GoogleGenAI({ apiKey });
-         const query = args[0];
-         
-         const execSync = require('child_process').execSync;
-         const workspaceRoot = process.cwd();
+      // Save and Get Keys
+      else if (channel === 'secure-save-keys') {
+        global.mockKeys = { ...global.mockKeys, ...args[0] };
+        result = { success: true };
+      } 
+      else if (channel === 'secure-get-keys') {
+        result = {
+          geminiKey: process.env.GEMINI_API_KEY || global.mockKeys.geminiKey || '',
+          groqKey: process.env.GROQ_API_KEY || global.mockKeys.groqKey || '',
+          hfKey: process.env.HF_API_KEY || global.mockKeys.hfKey || '',
+          tavilyKey: process.env.TAVILY_API_KEY || global.mockKeys.tavilyKey || '',
+          openrouterKey: process.env.OPENROUTER_API_KEY || global.mockKeys.openrouterKey || ''
+        };
+      }
+      // Google Sign-In
+      else if (channel === 'google-sign-in') {
+        result = { success: true, name: 'Operator', email: 'operator@example.com', token: 'mock-token', syncTime: new Date().toLocaleTimeString(), avatar: '' };
+      }
+      else if (channel === 'google-sign-out') {
+        result = { success: true };
+      }
+      // Offline profile
+      else if (channel === 'get-offline-profile') {
+        result = global.offlineProfile;
+      }
+      else if (channel === 'save-offline-profile') {
+        global.offlineProfile = { ...global.offlineProfile, ...args[0] };
+        result = { success: true };
+      }
+      // App details
+      else if (channel === 'get-app-version') {
+        result = '1.0.0';
+      }
+      else if (channel === 'bump-app-version') {
+        result = '1.0.1';
+      }
+      // Audio transcription (Upgraded model!)
+      else if (channel === 'iris-transcribe-audio') {
+        try {
+           const { base64Audio, mimeType } = args[0];
+           const apiKey = process.env.GEMINI_API_KEY || global.mockKeys.geminiKey;
+           if (!apiKey) throw new Error('Gemini API key is required');
+           const { GoogleGenAI } = require('@google/genai');
+           const ai = new GoogleGenAI({ apiKey });
+           const response = await ai.models.generateContent({
+             model: 'gemini-3.5-flash',
+             contents: [{
+               role: 'user',
+               parts: [
+                 { text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add quotes or commentary.' },
+                 { inlineData: { mimeType: mimeType.split(';')[0], data: base64Audio } }
+               ]
+             }]
+           });
+           result = response.text;
+        } catch (err) {
+           console.error('[Web Preview] Transcribe Error:', err);
+           result = '';
+        }
+      }
+      // Agent orchestration (Upgraded model!)
+      else if (channel === 'agent-run-task') {
+        try {
+           const apiKey = process.env.GEMINI_API_KEY || global.mockKeys.geminiKey;
+           if (!apiKey) throw new Error('Gemini API key is required');
+           const { GoogleGenAI } = require('@google/genai');
+           const ai = new GoogleGenAI({ apiKey });
+           const query = args[0];
+           
+           const execSync = require('child_process').execSync;
+           const workspaceRoot = process.cwd();
 
-         const runCommandDeclaration = {
-           name: 'runCommand',
-           description: 'Executes a shell command on the host machine. Can be used to create files, build apps, deploy websites, or change system settings.',
-           parameters: {
-             type: 'OBJECT',
-             properties: {
-               command: {
-                 type: 'STRING',
-                 description: 'The shell command to execute.'
+           const runCommandDeclaration = {
+             name: 'runCommand',
+             description: 'Executes a shell command on the host machine. Can be used to create files, build apps, deploy websites, or change system settings.',
+             parameters: {
+               type: 'OBJECT',
+               properties: {
+                 command: {
+                   type: 'STRING',
+                   description: 'The shell command to execute.'
+                 }
+               },
+               required: ['command']
+             }
+           };
+
+           let contents = [
+               { role: 'user', parts: [{ text: 'You are NOVA-X, an advanced autonomous AI desktop assistant. You have full system control. Fulfill the operator\'s request. If asked to create a website, use runCommand to create files (e.g. echo "code" > index.html) and deploy it if requested. If asked to change wallpaper, use runCommand with appropriate OS commands. Ensure you execute tasks for real, do not simulate.' }] },
+               { role: 'user', parts: [{ text: query }] }
+           ];
+
+           const response = await ai.models.generateContent({
+             model: 'gemini-3.5-flash',
+             contents: contents,
+             config: {
+               tools: [{ functionDeclarations: [runCommandDeclaration] }]
+             }
+           });
+           
+           let finalResponse = response;
+           // Handle tool calls
+           if (response.functionCalls && response.functionCalls.length > 0) {
+              const call = response.functionCalls[0];
+              const cmdArgs = call.args;
+              
+              console.log('[Web Preview] Executing command:', cmdArgs.command);
+              let resultOutput;
+              try {
+                 const stdout = execSync(cmdArgs.command, { cwd: workspaceRoot, encoding: 'utf8' });
+                 resultOutput = { success: true, output: stdout.slice(0, 2000) };
+              } catch (err) {
+                 resultOutput = { success: false, error: err.message };
+              }
+              
+              contents.push({ role: 'model', parts: [{ functionCall: call }] });
+              contents.push({ role: 'user', parts: [{ functionResponse: { name: 'runCommand', response: resultOutput } }] });
+              
+              finalResponse = await ai.models.generateContent({
+                model: 'gemini-3.5-flash',
+                contents: contents,
+                config: { tools: [{ functionDeclarations: [runCommandDeclaration] }] }
+              });
+           }
+
+           result = finalResponse.text;
+        } catch (err) {
+           console.error('[Web Preview] Agent Error:', err);
+           result = 'Sorry, there was an error processing your request: ' + err.message;
+        }
+      }
+      // Real-Time Secure Chat Call with Streaming (SSE integrated!)
+      else if (channel === 'gemini-chat-call') {
+        try {
+           const { contents, systemInstruction, stream } = args[0];
+           const apiKey = process.env.GEMINI_API_KEY || global.mockKeys.geminiKey;
+           if (!apiKey) throw new Error('Gemini API key is required. Please add your key in Settings.');
+           const { GoogleGenAI } = require('@google/genai');
+           const ai = new GoogleGenAI({ apiKey });
+
+           if (stream) {
+             const responseStream = await ai.models.generateContentStream({
+               model: 'gemini-3.5-flash',
+               contents,
+               config: {
+                 systemInstruction,
+                 temperature: 0.7,
                }
-             },
-             required: ['command']
+             });
+             
+             let fullText = '';
+             for await (const chunk of responseStream) {
+               const chunkText = chunk.text;
+               if (chunkText) {
+                 fullText += chunkText;
+                 broadcast('gemini-stream-chunk', chunkText);
+               }
+             }
+             result = {
+               candidates: [{
+                 content: {
+                   parts: [{ text: fullText }]
+                 }
+               }]
+             };
+           } else {
+             const response = await ai.models.generateContent({
+               model: 'gemini-3.5-flash',
+               contents,
+               config: {
+                 systemInstruction,
+                 temperature: 0.7,
+               }
+             });
+             result = response;
            }
-         };
-
-         let contents = [
-             { role: 'user', parts: [{ text: 'You are NOVA-X, an advanced autonomous AI desktop assistant. You have full system control. Fulfill the operator\'s request. If asked to create a website, use runCommand to create files (e.g. echo "code" > index.html) and deploy it if requested. If asked to change wallpaper, use runCommand with appropriate OS commands. Ensure you execute tasks for real, do not simulate.' }] },
-             { role: 'user', parts: [{ text: query }] }
-         ];
-
-         const response = await ai.models.generateContent({
-           model: 'gemini-2.0-flash',
-           contents: contents,
-           config: {
-             tools: [{ functionDeclarations: [runCommandDeclaration] }]
-           }
-         });
-         
-         let finalResponse = response;
-         // Handle tool calls
-         if (response.functionCalls && response.functionCalls.length > 0) {
-            const call = response.functionCalls[0];
-            const cmdArgs = call.args;
-            
-            console.log('[Web Preview] Executing command:', cmdArgs.command);
-            let resultOutput;
-            try {
-               const stdout = execSync(cmdArgs.command, { cwd: workspaceRoot, encoding: 'utf8' });
-               resultOutput = { success: true, output: stdout.slice(0, 2000) };
-            } catch (err) {
-               resultOutput = { success: false, error: err.message };
-            }
-            
-            contents.push({ role: 'model', parts: [{ functionCall: call }] });
-            contents.push({ role: 'user', parts: [{ functionResponse: { name: 'runCommand', response: resultOutput } }] });
-            
-            finalResponse = await ai.models.generateContent({
-              model: 'gemini-2.0-flash',
-              contents: contents,
-              config: { tools: [{ functionDeclarations: [runCommandDeclaration] }] }
-            });
-         }
-
-         result = finalResponse.text;
-      } catch (err) {
-         console.error('[Web Preview] Agent Error:', err);
-         result = 'Sorry, there was an error processing your request: ' + err.message;
+        } catch (err) {
+           console.error('[Web Preview] Chat Error:', err);
+           result = {
+             candidates: [{
+               content: {
+                 parts: [{ text: `Error in cognitive link: ${err.message}. Please verify your Gemini API Key in Settings.` }]
+               }
+             }]
+           };
+        }
       }
+      // Clipboard Handlers
+      else if (channel === 'get-clipboard-history') {
+        result = global.clipboardHistory;
+      }
+      else if (channel === 'copy-to-clipboard') {
+        const { type, content } = args[0];
+        const newEntry = {
+          id: String(Date.now()),
+          type: type || 'text',
+          content: content || '',
+          timestamp: Date.now()
+        };
+        global.clipboardHistory = [newEntry, ...global.clipboardHistory].slice(0, 50);
+        result = global.clipboardHistory;
+      }
+      else if (channel === 'delete-clipboard-entry') {
+        const id = args[0];
+        global.clipboardHistory = global.clipboardHistory.filter((c: any) => c.id !== id);
+        result = global.clipboardHistory;
+      }
+      else if (channel === 'toggle-pin-clipboard-entry') {
+        const id = args[0];
+        global.clipboardHistory = global.clipboardHistory.map((c: any) => 
+          c.id === id ? { ...c, pinned: !c.pinned } : c
+        );
+        result = global.clipboardHistory;
+      }
+      else if (channel === 'clear-clipboard-history') {
+        global.clipboardHistory = [];
+        result = [];
+      }
+      // Activity Tracking Handlers
+      else if (channel === 'get-activity-tracking-enabled') {
+        result = global.activityTrackingEnabled;
+      }
+      else if (channel === 'set-activity-tracking-enabled') {
+        global.activityTrackingEnabled = !!args[0];
+        result = { success: true };
+      }
+      else if (channel === 'get-activity-log') {
+        result = global.activityLogs;
+      }
+      else if (channel === 'summarize-activity-day') {
+        try {
+          const apiKey = process.env.GEMINI_API_KEY || global.mockKeys.geminiKey;
+          if (apiKey) {
+            const { GoogleGenAI } = require('@google/genai');
+            const ai = new GoogleGenAI({ apiKey });
+            const logSummary = JSON.stringify(global.activityLogs);
+            const response = await ai.models.generateContent({
+              model: 'gemini-3.5-flash',
+              contents: `Analyze these active window telemetry logs and write a concise, professional executive briefing addressing the user as "Boss": ${logSummary}`
+            });
+            result = response.text;
+          } else {
+            result = `Boss, based on today's telemetry, your productivity has been exceptionally structured. You dedicated **4 hours** to development activities in VS Code and **2 hours** to research in Chrome. Solid performance!`;
+          }
+        } catch (e) {
+          result = `Analysis completed Boss. CPU load and memory ratios remain optimal. (AI Link: ${e.message})`;
+        }
+      }
+      // Notes Handlers (using REAL fs folders!)
+      else if (channel === 'get-notes') {
+        const files = fs.readdirSync(NOTES_DIR);
+        const notes: any[] = [];
+        for (const file of files) {
+          if (file.endsWith('.json')) {
+            try {
+              const content = fs.readFileSync(path.join(NOTES_DIR, file), 'utf8');
+              notes.push(JSON.parse(content));
+            } catch (e) {}
+          }
+        }
+        result = notes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+      else if (channel === 'save-note') {
+        const payload = args[0];
+        const filename = payload.filename || `note_${Date.now()}.json`;
+        const filePath = path.join(NOTES_DIR, filename);
+        const data = {
+          filename,
+          title: payload.title,
+          content: payload.content,
+          createdAt: new Date()
+        };
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+        result = { success: true, filename };
+      }
+      else if (channel === 'delete-note') {
+        const filename = args[0];
+        const filePath = path.join(NOTES_DIR, filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+        result = { success: true };
+      }
+      // Gallery Handlers (using REAL fs folders!)
+      else if (channel === 'get-gallery') {
+        const files = fs.readdirSync(GALLERY_DIR);
+        const media: any[] = [];
+        for (const file of files) {
+          const lower = file.toLowerCase();
+          if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.gif') || lower.endsWith('.mp4')) {
+            const filePath = path.join(GALLERY_DIR, file);
+            const stats = fs.statSync(filePath);
+            media.push({
+              filename: file,
+              displayName: file,
+              path: filePath,
+              url: `/api/media?path=${encodeURIComponent(filePath)}`,
+              createdAt: stats.birthtime || stats.mtime,
+              type: lower.endsWith('.mp4') ? 'video' : 'image'
+            });
+          }
+        }
+        result = media.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+      else if (channel === 'delete-image') {
+        const filename = args[0];
+        const filePath = path.join(GALLERY_DIR, filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+        result = { success: true };
+      }
+      else if (channel === 'open-image-location' || channel === 'save-image-external') {
+        result = { success: true };
+      }
+      // System Telemetry Stats
+      else if (channel === 'get-system-stats') {
+        const cpuUsage = Number((20 + Math.random() * 25).toFixed(1));
+        const freeMem = 4 + Math.random() * 2;
+        result = {
+          cpu: cpuUsage,
+          memory: {
+            total: 16.0,
+            free: Number(freeMem.toFixed(1)),
+            used: Number((16.0 - freeMem).toFixed(1)),
+            usedPercentage: Number(((16.0 - freeMem) / 16.0 * 100).toFixed(1))
+          },
+          temperature: 40 + Math.random() * 10,
+          network: {
+            latency: Math.floor(10 + Math.random() * 20)
+          },
+          uptime: Math.floor(6000 + Math.random() * 100)
+        };
+      }
+      else if (channel === 'get-installed-apps') {
+        result = ['VS Code', 'Google Chrome', 'Terminal', 'Spotify', 'Slack', 'File Explorer', 'Settings'];
+      }
+      else if (channel === 'get-drives') {
+        result = [
+          { drive: 'C:', size: '512 GB', free: '184 GB', used: '328 GB', percentage: 64 },
+          { drive: 'D:', size: '1 TB', free: '420 GB', used: '580 GB', percentage: 58 }
+        ];
+      }
+      // Phone companion
+      else if (channel === 'forget-companion-device') {
+        result = { success: true };
+      }
+      else if (channel === 'adb-get-history') {
+        result = [];
+      }
+      else if (channel === 'adb-connect') {
+        result = { success: true, connected: true };
+      }
+      else if (channel === 'adb-disconnect') {
+        result = { success: true };
+      }
+      else if (channel === 'adb-telemetry') {
+        result = { battery: 84, charge: '84%', temp: 36.2, status: 'nominal' };
+      }
+      else if (channel === 'adb-screenshot') {
+        result = { success: true };
+      }
+      else if (channel === 'adb-quick-action') {
+        result = { success: true };
+      }
+      else if (channel === 'phone-broadcast-reply') {
+        result = { success: true };
+      }
+      // Execute system terminal commands (REAL Terminal!)
+      else if (channel === 'execute-system-action') {
+        const payload = args[0];
+        const cmd = payload.command || payload.cmd;
+        const execSync = require('child_process').execSync;
+        if (cmd) {
+          try {
+            const stdout = execSync(cmd, { cwd: process.cwd(), encoding: 'utf8' });
+            result = { success: true, output: stdout };
+          } catch (err) {
+            result = { success: false, error: err.message };
+          }
+        } else {
+          result = { success: true };
+        }
+      }
+      // Jarvis Cognitive Memories
+      else if (channel === 'get-memories') {
+        result = global.memories;
+      }
+      else if (channel === 'delete-memory') {
+        const index = args[0];
+        if (global.memories && global.memories[index]) {
+          global.memories.splice(index, 1);
+        }
+        result = global.memories;
+      }
+      else if (channel === 'launch-app') {
+        result = { success: true };
+      }
+      // Vision Frame mock analysis
+      else if (channel === 'iris-send-vision-frame') {
+        result = { success: true, description: 'Screen telemetry nominal.' };
+      }
+      else if (channel === 'iris-get-history') {
+        result = [];
+      }
+    } catch (e: any) {
+      console.error(`[Web Preview] Error processing IPC ${channel}:`, e);
+      res.status(500).json({ error: e.message });
+      return;
     }
 
-
     res.json({ result });
+  });
+
+  // Media server to render local images
+  app.get('/api/media', (req, res) => {
+    const filePath = req.query.path as string;
+    if (filePath && fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(404).send('Not Found');
+    }
   });
 
   // Mock IPC send

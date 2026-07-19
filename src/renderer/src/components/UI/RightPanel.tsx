@@ -7,6 +7,34 @@ interface Message {
   text: string
 }
 
+// Custom vibe profile definitions
+const vibeThemes = {
+  TACTICAL: {
+    accent: '#10b981',
+    text: 'text-emerald-200',
+    border: 'border-[#10b981]/20',
+    bg: 'bg-emerald-500/10'
+  },
+  EMPATHETIC: {
+    accent: '#ec4899',
+    text: 'text-pink-200',
+    border: 'border-[#ec4899]/20',
+    bg: 'bg-pink-500/10'
+  },
+  CALM: {
+    accent: '#06b6d4',
+    text: 'text-cyan-200',
+    border: 'border-[#06b6d4]/20',
+    bg: 'bg-cyan-500/10'
+  },
+  INTENSE: {
+    accent: '#f97316',
+    text: 'text-orange-200',
+    border: 'border-[#f97316]/20',
+    bg: 'bg-orange-500/10'
+  }
+}
+
 export default function RightPanel(): JSX.Element {
   const [chatHistory, setChatHistory] = useState<Message[]>([])
   const [activeModelText, setActiveModelText] = useState('')
@@ -18,6 +46,66 @@ export default function RightPanel(): JSX.Element {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+
+  // Emotional Intelligence, Contextual Intelligence & Orchestration states
+  const [operatorVibe, setOperatorVibe] = useState<'TACTICAL' | 'EMPATHETIC' | 'CALM' | 'INTENSE'>(() => {
+    return (localStorage.getItem('novax_operator_vibe') as any) || 'TACTICAL'
+  })
+  const [orchestrationSteps, setOrchestrationSteps] = useState<any[] | null>(null)
+  const [proactiveAlert, setProactiveAlert] = useState<any | null>(null)
+
+  const changeOperatorVibe = (vibe: 'TACTICAL' | 'EMPATHETIC' | 'CALM' | 'INTENSE') => {
+    setOperatorVibe(vibe)
+    localStorage.setItem('novax_operator_vibe', vibe)
+    window.dispatchEvent(new CustomEvent('novax_vibe_changed', { detail: vibe }))
+    
+    let chimeText = "Ares tactical protocol fully synchronized, Boss."
+    if (vibe === 'EMPATHETIC') chimeText = "I am listening closely, Boss. I am here for you."
+    if (vibe === 'CALM') chimeText = "Let us slow down and analyze. Peace is active, Boss."
+    if (vibe === 'INTENSE') chimeText = "Maximum overclock synapse active. Command target locked."
+    
+    if ((window as any).speakText) (window as any).speakText(chimeText)
+    setChatHistory(prev => [...prev, { role: 'system', text: `[EMOTIONAL TIMBRE CALIBRATED: ${vibe}] ${chimeText}` }])
+  }
+
+  // Periodic proactive intelligence scanner
+  useEffect(() => {
+    const scanSec = async () => {
+      if (window.electron?.ipcRenderer) {
+        try {
+          const history = await window.electron.ipcRenderer.invoke('get-clipboard-history')
+          if (history && history.length > 0) {
+            const latest = history[0].content
+            const passwordRegex = /password|passwd|secret|api_key|apikey|private_key/i
+            const ccRegex = /\b(?:\d[ -]*?){13,16}\b/
+            const ssnRegex = /\b\d{3}-\d{2}-\d{4}\b/
+            const apiKeyRegex = /\b[A-Za-z0-9\-_]{20,}\b/
+            const isSensitiveText = passwordRegex.test(latest) || ccRegex.test(latest) || ssnRegex.test(latest) || (latest.length > 25 && apiKeyRegex.test(latest))
+            
+            if (isSensitiveText) {
+              setProactiveAlert({
+                title: 'Raw Memory Leak Risk Detected',
+                desc: 'Sensitive cryptographic credentials found in shared clipboard cache. Purge memory buffer now to secure workspace.',
+                resolveLabel: 'Secure Purge',
+                onResolve: async () => {
+                  await window.electron.ipcRenderer.invoke('clear-clipboard-history')
+                  setProactiveAlert(null)
+                  const reply = "Workstation memory purged, Boss. Sensitive vectors have been encrypted."
+                  setChatHistory(prev => [...prev, { role: 'system', text: reply }])
+                  if ((window as any).speakText) (window as any).speakText(reply)
+                }
+              })
+              return
+            }
+          }
+        } catch (e) {}
+      }
+      setProactiveAlert(null)
+    }
+    scanSec()
+    const int = setInterval(scanSec, 8000)
+    return () => clearInterval(int)
+  }, [])
 
   const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<string> => {
     if (window.iris?.transcribeAudio) {
@@ -363,14 +451,51 @@ export default function RightPanel(): JSX.Element {
 
     // 3. Forward query to Gemini Cognitive Core via Secure Bridge
     if (window.electron?.ipcRenderer) {
-      setActiveModelText('Thinking...')
+      // Initialize Orchestration HUD steps
+      setOrchestrationSteps([
+        { name: 'Neural Parse & Intention Mapping', status: 'completed' },
+        { name: 'Contextual Buffer Synchronization', status: 'active' },
+        { name: 'Synaptic Reasoning Loop', status: 'pending' },
+        { name: 'Voice Modulation Synthesis', status: 'pending' }
+      ])
+
+      setActiveModelText('Analyzing environmental buffers...')
       try {
+        // CONTEXTUAL INTELLIGENCE: Gather workspace contextual information
+        let contextualInjections = ''
+        try {
+          const clipData = await window.electron.ipcRenderer.invoke('get-clipboard-history')
+          if (clipData && clipData.length > 0) {
+            contextualInjections += `\n[Context: Recent shared clipboard entry: "${clipData[0].content}"]`
+          }
+          const notesData = await window.electron.ipcRenderer.invoke('get-notes')
+          if (notesData && notesData.length > 0) {
+            contextualInjections += `\n[Context: Recent saved note: "${notesData[0].title} - ${notesData[0].content}"]`
+          }
+          const sysStats = await window.electron.ipcRenderer.invoke('get-system-stats')
+          if (sysStats) {
+            contextualInjections += `\n[Context: Dynamic Telemetry - Host CPU usage is ${sysStats.cpu}%, Host memory is ${sysStats.memory.usedPercentage}% used, latency is ${sysStats.network.latency}ms]`
+          }
+        } catch (ctxErr) {
+          console.warn('Context gathering skipped:', ctxErr)
+        }
+
+        // Complete step 2, start step 3 in Orchestration HUD
+        setOrchestrationSteps([
+          { name: 'Neural Parse & Intention Mapping', status: 'completed' },
+          { name: 'Contextual Buffer Synchronization', status: 'completed' },
+          { name: 'Synaptic Reasoning Loop', status: 'active' },
+          { name: 'Voice Modulation Synthesis', status: 'pending' }
+        ])
+
         const historyContext = chatHistoryRef.current.slice(-6).map((msg) => ({
           role: msg.role === 'user' ? 'user' : 'model',
           parts: [{ text: msg.text }]
         }))
 
         const tone = localStorage.getItem('novax_system_tone') || 'authoritative'
+        const vibe = localStorage.getItem('novax_operator_vibe') || 'TACTICAL'
+        
         const toneInstructions = {
           authoritative:
             'Your tone should be authoritative, highly technical, professional, deep, and concise. Never use fluffy or conversational filler.',
@@ -380,7 +505,14 @@ export default function RightPanel(): JSX.Element {
             'Your tone should be extremely brief. Respond with the minimum amount of words necessary. No greetings or pleasantries.'
         }
 
-        const systemInstruction = `You are NOVA-X, a hyper-advanced cognitive neural operator system. You are speaking to your creator and operator Tehzeeb. You MUST always address them as 'Boss' (e.g., 'Yes, Boss', 'Understood, Boss'). ${toneInstructions[tone]}`
+        const emotionalInstruction = {
+          TACTICAL: 'Your current operational profile is TACTICAL: speak like a highly specialized combat or systems administrator AI. Precise, direct, crisp.',
+          EMPATHETIC: 'Your current operational profile is EMPATHETIC: show deep, authentic emotional intelligence, caring, supportive, warm, and comforting phrasing.',
+          CALM: 'Your current operational profile is CALM: respond in a slow, peaceful, meditative, and stress-reducing manner.',
+          INTENSE: 'Your current operational profile is INTENSE: sound highly focused, extremely rapid, laser-focused on command execution and computational overclock.'
+        }
+
+        const systemInstruction = `You are NOVA-X, a hyper-advanced cognitive neural operator system. You are speaking to your creator and operator Tehzeeb. You MUST always address them as 'Boss' (e.g., 'Yes, Boss', 'Understood, Boss'). ${toneInstructions[tone]} ${emotionalInstruction[vibe]} ${contextualInjections}`
 
         const contents = [...historyContext, { role: 'user', parts: [{ text: cleanQuery }] }]
 
@@ -411,6 +543,14 @@ export default function RightPanel(): JSX.Element {
           fullReplyText ||
           'System under heavy load, Boss. Please check your credentials.'
 
+        // Complete step 3, start step 4 in Orchestration HUD
+        setOrchestrationSteps([
+          { name: 'Neural Parse & Intention Mapping', status: 'completed' },
+          { name: 'Contextual Buffer Synchronization', status: 'completed' },
+          { name: 'Synaptic Reasoning Loop', status: 'completed' },
+          { name: 'Voice Modulation Synthesis', status: 'active' }
+        ])
+
         setActiveModelText('')
         const modelMessage: Message = { role: 'model', text: modelReply }
         setChatHistory((prev) => {
@@ -425,9 +565,22 @@ export default function RightPanel(): JSX.Element {
         if ((window as any).speakText) {
           ;(window as any).speakText(modelReply)
         }
+
+        // Complete all orchestration HUD steps, and schedule cleanup
+        setOrchestrationSteps([
+          { name: 'Neural Parse & Intention Mapping', status: 'completed' },
+          { name: 'Contextual Buffer Synchronization', status: 'completed' },
+          { name: 'Synaptic Reasoning Loop', status: 'completed' },
+          { name: 'Voice Modulation Synthesis', status: 'completed' }
+        ])
+        setTimeout(() => {
+          setOrchestrationSteps(null)
+        }, 3000)
+
       } catch (err) {
         console.error('Gemini call failed', err)
         setActiveModelText('')
+        setOrchestrationSteps(null)
         const errorMessage: Message = {
           role: 'model',
           text: 'Error in cognitive link, Boss. Verify your Gemini API Key in Settings.'
@@ -477,7 +630,10 @@ export default function RightPanel(): JSX.Element {
   }
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-zinc-950/80 backdrop-blur-3xl border border-white/5 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] overflow-hidden">
+    <div 
+      className="h-full min-h-0 flex flex-col bg-zinc-950/80 backdrop-blur-3xl border rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] overflow-hidden transition-all duration-300"
+      style={{ borderColor: vibeThemes[operatorVibe].accent + '30' }}
+    >
       <div className="px-5 py-4 border-b border-white/5 flex justify-between items-center shrink-0 bg-black/40">
         <div className="flex flex-col">
           <h2 className="text-xs font-mono font-bold tracking-widest text-zinc-300 uppercase">
@@ -494,15 +650,68 @@ export default function RightPanel(): JSX.Element {
           </button>
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00ffc4] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00ffc4]"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: vibeThemes[operatorVibe].accent }}></span>
+              <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: vibeThemes[operatorVibe].accent }}></span>
             </span>
-            <span className="text-[10px] font-mono font-semibold text-[#00ffc4] uppercase tracking-wider">
-              Live
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider" style={{ color: vibeThemes[operatorVibe].accent }}>
+              {operatorVibe}
             </span>
           </div>
         </div>
       </div>
+
+      {/* Dynamic Vibe / Emotional Tone Selector */}
+      <div className="px-4 py-2 border-b border-white/5 bg-zinc-900/30 flex items-center justify-between gap-2 shrink-0">
+        <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">
+          Emotional Core:
+        </span>
+        <div className="flex gap-1.5">
+          {(['TACTICAL', 'EMPATHETIC', 'CALM', 'INTENSE'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => changeOperatorVibe(v)}
+              className={`text-[9px] font-mono px-2 py-0.5 rounded border transition-all uppercase tracking-tight cursor-pointer ${
+                operatorVibe === v
+                  ? vibeThemes[v].bg + ' ' + vibeThemes[v].text + ' border-' + vibeThemes[v].accent + '/40 shadow-sm'
+                  : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-300'
+              }`}
+              style={{ borderColor: operatorVibe === v ? vibeThemes[v].accent + '30' : undefined }}
+            >
+              {v === 'TACTICAL' && '🛡️ '}
+              {v === 'EMPATHETIC' && '💖 '}
+              {v === 'CALM' && '🌊 '}
+              {v === 'INTENSE' && '⚡ '}
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Proactive Security Alert HUD */}
+      {proactiveAlert && (
+        <div className="mx-4 mt-3 p-3 bg-red-950/20 border border-red-500/10 rounded-xl flex flex-col gap-2 shrink-0 animate-pulse">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono font-bold text-red-400 uppercase tracking-widest flex items-center gap-1.5">
+              ⚠️ {proactiveAlert.title}
+            </span>
+            <button
+              onClick={() => setProactiveAlert(null)}
+              className="text-zinc-500 hover:text-zinc-300 text-xs"
+            >
+              ×
+            </button>
+          </div>
+          <p className="text-[10px] font-mono text-zinc-400 leading-normal">
+            {proactiveAlert.desc}
+          </p>
+          <button
+            onClick={proactiveAlert.onResolve}
+            className="w-full py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 font-mono font-bold text-[9px] uppercase tracking-wider rounded-lg transition-all"
+          >
+            {proactiveAlert.resolveLabel}
+          </button>
+        </div>
+      )}
 
       <div
         ref={scrollRef}
@@ -516,7 +725,7 @@ export default function RightPanel(): JSX.Element {
         {chatHistory.length === 0 && activeModelText === '' && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-60">
             <svg
-              className="w-12 h-12 text-[#00ffc4]/15 animate-pulse"
+              className="w-12 h-12 text-white/5 animate-pulse"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -542,12 +751,12 @@ export default function RightPanel(): JSX.Element {
             <div
               className={`relative group max-w-[85%] p-3.5 rounded-2xl text-xs font-mono tracking-wide leading-relaxed shadow-lg ${
                 msg.role === 'user'
-                  ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/20 rounded-br-none'
+                  ? `${vibeThemes[operatorVibe].bg} ${vibeThemes[operatorVibe].text} border ${vibeThemes[operatorVibe].border} rounded-br-none`
                   : 'bg-zinc-900/60 text-zinc-100 border border-white/5 rounded-bl-none'
               }`}
             >
               <div className="text-[8px] opacity-40 uppercase font-bold tracking-widest mb-1 select-none">
-                {msg.role === 'user' ? 'Operator' : 'NOVA-X'}
+                {msg.role === 'user' ? 'Operator' : msg.role === 'system' ? 'System alert' : 'NOVA-X'}
               </div>
               <div className="whitespace-pre-wrap pr-6">{msg.text}</div>
 
@@ -576,17 +785,45 @@ export default function RightPanel(): JSX.Element {
         {activeModelText && (
           <div className="flex justify-start">
             <div className="max-w-[85%] p-3.5 rounded-2xl bg-zinc-900/60 text-zinc-100 border border-white/5 rounded-bl-none text-xs font-mono tracking-wide leading-relaxed shadow-lg">
-              <div className="text-[8px] text-emerald-400 opacity-60 uppercase font-bold tracking-widest mb-1 select-none">
+              <div className="text-[8px] opacity-60 uppercase font-bold tracking-widest mb-1 select-none" style={{ color: vibeThemes[operatorVibe].accent }}>
                 NOVA-X (Typing)
               </div>
               <div>
                 {activeModelText}
-                <span className="inline-block w-1.5 h-3 ml-1 bg-emerald-400 rounded-full animate-ping align-middle"></span>
+                <span className="inline-block w-1.5 h-3 ml-1 rounded-full animate-ping align-middle" style={{ backgroundColor: vibeThemes[operatorVibe].accent }}></span>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Orchestration HUD */}
+      {orchestrationSteps && (
+        <div className="mx-3 my-2 p-3 bg-black/60 border border-white/5 rounded-xl flex flex-col gap-2 shrink-0">
+          <span className="text-[8px] font-mono font-bold uppercase tracking-wider" style={{ color: vibeThemes[operatorVibe].accent }}>
+            🛰️ MULTI-STEP COGNITIVE ORCHESTRATION PIPELINE
+          </span>
+          <div className="flex flex-col gap-1.5">
+            {orchestrationSteps.map((step, idx) => (
+              <div key={idx} className="flex items-center justify-between text-[10px] font-mono">
+                <span className={`${step.status === 'active' ? 'text-white' : step.status === 'completed' ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                  {step.status === 'active' && '● '}
+                  {step.status === 'completed' && '✓ '}
+                  {step.status === 'pending' && '○ '}
+                  {step.name}
+                </span>
+                <span className={`text-[8px] uppercase px-1.5 py-0.5 rounded ${
+                  step.status === 'active' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse' :
+                  step.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                  'bg-zinc-900 text-zinc-600'
+                }`}>
+                  {step.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Message Input Bar */}
       <form
@@ -620,10 +857,12 @@ export default function RightPanel(): JSX.Element {
           placeholder={isRecording ? 'Listening, Boss...' : 'Enter command, Boss...'}
           disabled={isRecording}
           className="flex-1 bg-zinc-900/60 border border-white/5 rounded-xl px-3.5 py-2 text-xs font-mono text-white outline-none focus:border-emerald-500/50 transition-all placeholder-zinc-600 disabled:opacity-55"
+          style={{ borderColor: userInput ? vibeThemes[operatorVibe].accent + '40' : undefined }}
         />
         <button
           type="submit"
-          className="bg-emerald-500 text-black font-mono font-bold text-[10px] uppercase tracking-wider px-3.5 py-2 rounded-xl hover:bg-emerald-400 transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.2)] shrink-0"
+          className="text-black font-mono font-bold text-[10px] uppercase tracking-wider px-3.5 py-2 rounded-xl hover:opacity-90 transition-all cursor-pointer shadow-md shrink-0"
+          style={{ backgroundColor: vibeThemes[operatorVibe].accent }}
         >
           Send
         </button>

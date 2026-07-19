@@ -16,7 +16,7 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import Store from 'electron-store'
-import icon from '../../resources/icon.png?asset'
+// Removed icon import as resources/icon.png was deleted
 import registerSystemHandlers from './lib/system'
 import { registerAgentHandlers } from './lib/agent'
 import { registerVisionHandlers } from './lib/vision'
@@ -218,7 +218,6 @@ function createWindow(): void {
     frame: false,
     backgroundColor: '#000000',
     transparent: false,
-    ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
