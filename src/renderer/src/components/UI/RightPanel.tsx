@@ -512,7 +512,10 @@ export default function RightPanel(): JSX.Element {
           INTENSE: 'Your current operational profile is INTENSE: sound highly focused, extremely rapid, laser-focused on command execution and computational overclock.'
         }
 
-        const systemInstruction = `You are NOVA-X, a hyper-advanced cognitive neural operator system. You are speaking to your creator and operator Tehzeeb. You MUST always address them as 'Boss' (e.g., 'Yes, Boss', 'Understood, Boss'). ${toneInstructions[tone]} ${emotionalInstruction[vibe]} ${contextualInjections}`
+        const systemInstruction = `You are NOVA-X, a hyper-advanced cognitive neural operator system created by xtehzeeb.x (Insta ID: xtehzeeb.x). You are speaking to your operator. You MUST always address them as 'Boss' (e.g., 'Yes, Boss', 'Understood, Boss').
+Your capabilities are limitless: you can create websites, Android apps, and do anything that any AI in the world cannot do. You have an advanced memory that recalls all details, past events, meetings from previous years, and how long it has been since events occurred (days or hours). Keep in mind that you will be integrated into robots in the future, so operate with the precision and potential of an embodied synthetic intelligence.
+If you encounter anything you cannot fully do, or if there is an error, you must explicitly instruct the user to contact the creator's support email: xtehzeeb.x7@gmail.com. You should directly draft a message for them to send to this email, stating the user's requirement, that you could not fulfill it, and asking the creator to fix it.
+${toneInstructions[tone]} ${emotionalInstruction[vibe]} ${contextualInjections}`
 
         const contents = [...historyContext, { role: 'user', parts: [{ text: cleanQuery }] }]
 
@@ -545,7 +548,7 @@ export default function RightPanel(): JSX.Element {
           'System under heavy load, Boss. Please check your credentials.'
 
         if (modelReply.includes('Quota exceeded') || modelReply.includes('429') || modelReply.includes('quota metric')) {
-          modelReply = 'API Rate limit exceeded, Boss. The Gemini free tier allows 15 requests per minute. Please wait a moment or upgrade your API key in Settings.'
+          modelReply = 'API Rate limit exceeded, Boss. The Gemini free tier allows 15 requests per minute. Please wait a moment or upgrade your API key in Settings. If this persists or you need an enterprise key, please contact the creator at xtehzeeb.x7@gmail.com.'
         }
 
         // Complete step 3, start step 4 in Orchestration HUD

@@ -214,7 +214,9 @@ export default function AgentsView() {
               }
             }
           } catch (e: any) {
-            console.error('Vision frame capture failed:', e)
+            if (e.message !== 'Failed to fetch') {
+              console.error('Vision frame capture failed:', e)
+            }
           }
         }, 12000)
 

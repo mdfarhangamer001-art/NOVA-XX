@@ -177,8 +177,10 @@ async function startServer() {
              }]
            });
            result = response.text;
-        } catch (err) {
-           console.error('[Web Preview] Transcribe Error:', err);
+        } catch (err: any) {
+           if (!err.message?.includes('429') && !err.message?.includes('Quota exceeded')) {
+             console.error('[Web Preview] Transcribe Error:', err);
+           }
            result = '';
         }
       }
@@ -298,8 +300,10 @@ async function startServer() {
              });
              result = response;
            }
-        } catch (err) {
-           console.error('[Web Preview] Chat Error:', err);
+        } catch (err: any) {
+           if (!err.message?.includes('429') && !err.message?.includes('Quota exceeded')) {
+             console.error('[Web Preview] Chat Error:', err);
+           }
            result = {
              candidates: [{
                content: {

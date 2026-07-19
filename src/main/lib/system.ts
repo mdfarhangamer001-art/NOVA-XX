@@ -472,9 +472,11 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         }
 
         // Proactive Memory Extraction (Background)
-        extractAndStoreMemories(apiKey, fullText).catch((err) =>
-          console.error('[Memory Engine] Extraction failed:', err)
-        )
+        extractAndStoreMemories(apiKey, fullText).catch((err: any) => {
+          if (!err.message?.includes('429') && !err.message?.includes('Quota exceeded')) {
+            console.error('[Memory Engine] Extraction failed:', err)
+          }
+        })
 
         return { candidates: [{ content: { parts: [{ text: fullText }] } }] }
       }
@@ -483,7 +485,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     async function extractAndStoreMemories(apiKey: string, text: string) {
       const ai = new GoogleGenAI({ apiKey })
       const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' })
-      const prompt = `Extract important personal facts about the operator from this text (e.g. name, preferences, habits). 
+      const prompt = `Extract all important personal facts, events, meetings, timelines, and precise details about the operator from this text. Capture all dates, durations, and details exactly (e.g. "Meeting with John on 2023-05-12", "It has been 3 days since X"). 
     Respond ONLY with a JSON array of strings: ["fact 1", "fact 2"]. If nothing important, respond [].
     Text: ${text}`
 
@@ -496,7 +498,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
           const updated = [
             ...existing,
             ...newFacts.map((f) => ({ fact: f, timestamp: Date.now() }))
-          ].slice(-50)
+          ]
           store.set('novax_memories', updated)
         }
       } catch (e) {}

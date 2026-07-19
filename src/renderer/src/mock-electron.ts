@@ -43,7 +43,11 @@ if (typeof window !== 'undefined') {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ channel, args })
-        }).catch((err) => console.error('[NOVA-X Bridge] Send failure:', err))
+        }).catch((err: any) => {
+          if (err.message !== 'Failed to fetch') {
+            console.error('[NOVA-X Bridge] Send failure:', err)
+          }
+        })
       },
       on: (channel: string, func: (...args: any[]) => void) => {
         if (!eventListeners[channel]) {
@@ -79,8 +83,10 @@ if (typeof window !== 'undefined') {
             throw new Error(data.error)
           }
           return data.result
-        } catch (err) {
-          console.error(`[NOVA-X Bridge] IPC channel ${channel} failed:`, err)
+        } catch (err: any) {
+          if (err.message !== 'Failed to fetch') {
+            console.error(`[NOVA-X Bridge] IPC channel ${channel} failed:`, err)
+          }
           throw err
         }
       }

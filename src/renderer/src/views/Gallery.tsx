@@ -49,8 +49,10 @@ const GalleryView = () => {
 
         setAllMedia(typedData)
       }
-    } catch (e) {
-      console.error('Failed to load media files.')
+    } catch (e: any) {
+      if (e.message !== 'Failed to fetch') {
+        console.error('Failed to load media files.')
+      }
     }
   }
 

@@ -26,9 +26,15 @@ export default function ClipboardView(): JSX.Element {
 
   const fetchHistory = async () => {
     if (window.electron?.ipcRenderer) {
-      const data = await window.electron.ipcRenderer.invoke('get-clipboard-history')
-      if (data) {
-        setEntries(data)
+      try {
+        const data = await window.electron.ipcRenderer.invoke('get-clipboard-history')
+        if (data) {
+          setEntries(data)
+        }
+      } catch (err: any) {
+        if (err.message !== 'Failed to fetch') {
+          console.error('Failed to fetch clipboard history:', err)
+        }
       }
     }
     setLoading(false)

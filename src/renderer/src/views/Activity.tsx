@@ -38,8 +38,10 @@ export default function ActivityView(): JSX.Element {
         if (rawLogs) {
           setLogs(rawLogs)
         }
-      } catch (err) {
-        console.error('Error fetching activity stats:', err)
+      } catch (err: any) {
+        if (err.message !== 'Failed to fetch') {
+          console.error('Error fetching activity stats:', err)
+        }
       }
     } else {
       // Browser Sandbox / Fallback Mock Data

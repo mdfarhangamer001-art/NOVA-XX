@@ -72,7 +72,7 @@ export default function MemoryView(): JSX.Element {
             <AnimatePresence mode="popLayout">
               {memories.map((item, idx) => (
                 <motion.div
-                  key={item.timestamp}
+                  key={`${item.timestamp}-${idx}`}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}

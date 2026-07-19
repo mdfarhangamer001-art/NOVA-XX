@@ -67,8 +67,10 @@ const PhoneView = ({ glassPanel = '' }: { glassPanel?: string }) => {
       try {
         const status = await window.electron.ipcRenderer.invoke('get-companion-status')
         setCompanionStatus(status)
-      } catch (e) {
-        console.error('Error fetching companion status:', e)
+      } catch (e: any) {
+        if (e.message !== 'Failed to fetch') {
+          console.error('Error fetching companion status:', e)
+        }
       }
     }
   }
