@@ -11,6 +11,7 @@
     "dev": "tsx server.ts",
     "build": "electron-vite build",
     "build:electron": "electron-vite build",
+    "start": "tsx server.ts",
     "dist:win": "electron-vite build && electron-builder --win --publish never"
   },
   "dependencies": {
