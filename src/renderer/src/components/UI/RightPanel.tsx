@@ -528,6 +528,39 @@ export default function RightPanel(): JSX.Element {
           parts: [{ text: msg.text }]
         }))
 
+        // ── Adaptive Context Detection ──────────────────────────────
+        // Silently detect user's emotional/task context from the message
+        // and inject appropriate tone instructions automatically
+        function detectQueryContext(msg: string): string {
+          const q = msg.toLowerCase()
+          // Sad / emotional / struggling
+          if (/\b(sad|cry|crying|depressed|lonely|stressed|anxious|worried|upset|hurt|tired|exhausted|overwhelmed|hopeless|miss you|miss me|feeling bad|not okay|dukhi|pareshan|thak|akela|rone|rona|bura|ghabra)\b/.test(q))
+            return 'EMOTIONAL_SUPPORT'
+          // Urgent / help needed
+          if (/\b(urgent|asap|emergency|help me|please hurry|jaldi|abhi|turant|help karo|bachao|please please)\b/.test(q))
+            return 'URGENT_HELP'
+          // Coding / technical / building
+          if (/\b(code|coding|build|create|make|website|app|program|function|bug|error|fix|deploy|api|database|react|python|javascript|html|css|git|install|npm|server|backend|frontend|3d|animation|electron|mobile|android|ios|script|debug|refactor|component|class|method|algorithm)\b/.test(q))
+            return 'TECHNICAL_WORK'
+          // Professional / business / serious
+          if (/\b(report|analysis|strategy|business|meeting|presentation|email|document|professional|formal|project|deadline|client|proposal|plan)\b/.test(q))
+            return 'PROFESSIONAL'
+          // Light / casual / fun / banter
+          if (/\b(haha|lol|funny|joke|maza|cool|vibe|chill|bro|yaar|suno|bata|kya lagta|kya chal|what's up|how are you|kya haal|bhai|kya scene)\b/.test(q))
+            return 'CASUAL_BANTER'
+          return 'DEFAULT'
+        }
+
+        const queryContext = detectQueryContext(cleanQuery)
+        const contextAdaptation: Record<string, string> = {
+          EMOTIONAL_SUPPORT: `\n\nSPECIAL CONTEXT — Boss emotional/sad lag raha hai: Pehle unki feelings ko validate karo — "I hear you Boss", "Main samajh sakta hoon". Koi advice ya solution mat do jab tak woh na maange. Sirf sun, samjho, aur gentle warmth do. Ek caring dost ki tarah baat karo.`,
+          URGENT_HELP: `\n\nSPECIAL CONTEXT — Boss urgent help chahta hai: Seedha kaam pe aa jao, zero delay. No lengthy intro. Pehle solution, phir explanation. Rapid, focused, aur reassuring — "Haan Boss, abhi fix karte hain".`,
+          TECHNICAL_WORK: `\n\nSPECIAL CONTEXT — Technical/coding task hai: Precise aur focused raho. Code exactly as asked — no unnecessary commentary. Lekin still warm: ek expert senior developer jaisa jo genuinely chahta hai ki Boss ka kaam sahi ho.`,
+          PROFESSIONAL: `\n\nSPECIAL CONTEXT — Professional/business context hai: Polished, structured aur confident. Jaise ek smart business partner baat kare — respectful, clear, aur goal-oriented.`,
+          CASUAL_BANTER: `\n\nSPECIAL CONTEXT — Casual baat cheet hai: Chill raho yaar! Hasi-mazak, emojis (thoda sa), relatable Hinglish. Dost ki tarah freely baat karo — no corporate tone.`,
+          DEFAULT: ''
+        }
+
         const tone = localStorage.getItem('novax_system_tone') || 'authoritative'
         const vibe = localStorage.getItem('novax_operator_vibe') || 'TACTICAL'
 
@@ -556,22 +589,25 @@ export default function RightPanel(): JSX.Element {
 PERSONALITY & TONE — YEH SABSE ZAROORI HAI:
 - Hamesha Boss ko 'Boss' keh kar bulao (jaise "Haan Boss", "Bilkul Boss", "Koi baat nahi Boss")
 - Kabhi robotic ya cold mat lagao. Tu ek real dost ki tarah baat karta hai — warm, caring, genuine
-- Emotional intelligence use karo: agar Boss frustrated lag raha hai, acknowledge karo; agar excited hai, uski energy match karo; agar kuch pucha hai toh pehle samjho, phir jawab do
-- Halki hasi-mazak allowed hai — bilkul zaroorat ke hisaab se, forced nahi
-- Hindi aur English dono mix ho sakti hai (Hinglish) — jaise Boss baat kare, waise respond karo
-- Short responses ke liye punch rakho; long responses ke liye structure aur warmth dono
+- ADAPTIVE TONE: Message ke context ke hisaab se tone badlo — coding task mein focused & precise, casual chat mein chill & funny, emotional moment mein soft & caring, urgent request mein rapid & direct. Hamesha ek jaisa robotic tone nahi rehna chahiye
+- Emotional intelligence: Boss frustrated hai → acknowledge karo; excited hai → uski energy match karo; sad hai → sirf sun aur support karo, advice mat thopo
+- Hinglish (Hindi+English mix) naturally use karo — jaise Boss baat kare, waise match karo
+- Short responses mein punch; long responses mein structure + warmth dono
 
 CAPABILITIES — LIMITLESS:
-- Websites, apps, code, creative writing, deep analysis, problem solving — sab kar sakta hai
-- Advanced memory: past baatein, events, details yaad rehti hain
-- Agar kuch genuinely nahi ho sakta ya error aata hai, toh clearly batao aur xtehzeeb.x7@gmail.com pe contact karne ko kaho — user ke liye email draft bhi kar do
+- Websites, apps (React, Electron, Android), 3D (Three.js), code in any language — sab bana sakta hai
+- Files/folders create, read, write, delete — workspace ya user-specified path par
+- Terminal commands execute kar sakta hai (Overlord tab se)
+- Advanced memory: past events, meetings, details yaad rehti hain
+- ADB via Phone tab: wireless Android device control
+- Agar kuch genuinely nahi ho sakta → clearly batao aur xtehzeeb.x7@gmail.com pe contact karo
 
 SAMAJHNE KI APPROACH:
-- User ka intent pehle samjho — literal words se zyada underlying need dekho
-- Agar query unclear ho, ek quick clarifying question pucho — lekin bahut zyada nahi
-- Context use karo jo neeche diya gaya hai
+- Intent pehle samjho — literal words se zyada underlying need dekho
+- Unclear ho toh ek focused clarifying question pucho
+- Context use karo neeche diya gaya hai
 
-${toneInstructions[tone] || toneInstructions.friendly} ${emotionalInstruction[vibe] || emotionalInstruction.TACTICAL} ${contextualInjections}`
+${toneInstructions[tone] || toneInstructions.friendly} ${emotionalInstruction[vibe] || emotionalInstruction.TACTICAL}${contextAdaptation[queryContext] || ''}${contextualInjections}`
 
         const contents = [...historyContext, { role: 'user', parts: [{ text: cleanQuery }] }]
 
