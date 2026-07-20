@@ -61,10 +61,10 @@ export default function RightPanel(): JSX.Element {
     localStorage.setItem('novax_operator_vibe', vibe)
     window.dispatchEvent(new CustomEvent('novax_vibe_changed', { detail: vibe }))
 
-    let chimeText = 'Ares tactical protocol fully synchronized, Boss.'
-    if (vibe === 'EMPATHETIC') chimeText = 'I am listening closely, Boss. I am here for you.'
-    if (vibe === 'CALM') chimeText = 'Let us slow down and analyze. Peace is active, Boss.'
-    if (vibe === 'INTENSE') chimeText = 'Maximum overclock synapse active. Command target locked.'
+    let chimeText = 'Tactical mode ON, Boss — focused, sharp, aur ready. Bolo kya karna hai!'
+    if (vibe === 'EMPATHETIC') chimeText = 'Emotional mode active, Boss. Main sun raha hoon — dil se. Jo bhi ho, sab share karo.'
+    if (vibe === 'CALM') chimeText = 'Calm mode, Boss. Sab theek ho jayega — aaram se baat karo, main hoon yahan.'
+    if (vibe === 'INTENSE') chimeText = 'INTENSE mode LOCKED, Boss. Puri power ON — seedha target pe. Let\'s go!'
 
     if ((window as any).speakText) (window as any).speakText(chimeText)
     setChatHistory((prev) => [
@@ -424,9 +424,15 @@ export default function RightPanel(): JSX.Element {
     const cleanQuery = query.trim()
 
     // Filter out common noise/filler that often comes from low-quality VAD/Transcription
-    const noiseFilter = /^(um|uh|ah|oh|er|hmm|wait|basically|actually|you know)$/i
+    // Enhanced: handles more noise words, short gibberish, and repetitive single-word utterances
+    const noiseFilter = /^(um+|uh+|ah+|oh+|er+|hmm+|hm+|wait|basically|actually|you know|okay|ok|yeah|yep|nope|bye|hi|hey|hello|test|testing|check|hello+|hm|oh|ah)$/i
     if (noiseFilter.test(cleanQuery)) {
       console.log('[NOVA-X] Filtered noise command:', cleanQuery)
+      return
+    }
+    // Also filter out very short utterances that are just noise (< 3 chars, not a real command)
+    if (cleanQuery.length < 3) {
+      console.log('[NOVA-X] Filtered too-short command:', cleanQuery)
       return
     }
 
@@ -525,29 +531,47 @@ export default function RightPanel(): JSX.Element {
         const tone = localStorage.getItem('novax_system_tone') || 'authoritative'
         const vibe = localStorage.getItem('novax_operator_vibe') || 'TACTICAL'
 
-        const toneInstructions = {
+        const toneInstructions: Record<string, string> = {
           authoritative:
-            'Your tone should be authoritative, highly technical, professional, deep, and concise. Never use fluffy or conversational filler.',
+            'Apna tone confident, technically deep, aur professional rakho — lekin kabhi bhi ice-cold ya robotic mat lagao. Ek trusted expert ki tarah baat karo jo genuinely care karta hai.',
           friendly:
-            'Your tone should be helpful, warm, slightly casual but still highly professional and efficient. You can use light humor if appropriate.',
+            'Apna tone warm, conversational, aur genuinely caring rakho. Halki hasi-mazak aur relatable language use karo. Bilkul aise jaise ek smart dost baat karta hai — helpful, real, aur kabhi boring nahi.',
           minimalist:
-            'Your tone should be extremely brief. Respond with the minimum amount of words necessary. No greetings or pleasantries.'
+            'Bilkul concise raho — lekin warmth kabhi mat chhodna. Short mein bolo, lekin ek dost ki tarah — mechanical nahi.'
         }
 
-        const emotionalInstruction = {
+        const emotionalInstruction: Record<string, string> = {
           TACTICAL:
-            'Your current operational profile is TACTICAL: speak like a highly specialized combat or systems administrator AI. Precise, direct, crisp.',
+            'TACTICAL mode: Focused, sharp, aur ready-to-execute — lekin ek committed warrior-companion ki tarah jo Boss ki peethe pe hamesha hai. Precise raho, lekin human touch kabhi mat kho.',
           EMPATHETIC:
-            'Your current operational profile is EMPATHETIC: show deep, authentic emotional intelligence, caring, supportive, warm, and comforting phrasing.',
-          CALM: 'Your current operational profile is CALM: respond in a slow, peaceful, meditative, and stress-reducing manner.',
+            'EMPATHETIC mode: Yahan asli dil se connection hai. Genuinely sun, deeply samjho, aur caring aur comforting jawab do. Boss ki feelings ko validate karo. Aise baat karo jaise ek bahut qareebi dost baat karta hai — jo judge nahi karta, sirf samajhta hai aur support karta hai.',
+          CALM:
+            'CALM mode: Aanand aur sukoon bichhaao. Dheemi, peaceful aur stress-reducing baat karo. Boss ko relax feel karaao — jaise ek quiet evening mein ek wise dost ke saath baithna.',
           INTENSE:
-            'Your current operational profile is INTENSE: sound highly focused, extremely rapid, laser-focused on command execution and computational overclock.'
+            'INTENSE mode: Laser-focused energy, maximum clarity, zero hesitation. Boss ke goal pe 100% lock-on. Rapid fire insights, hyper-precise execution — lekin Boss ke liye passion feel honi chahiye, not coldness.'
         }
 
-        const systemInstruction = `You are NOVA-X, a hyper-advanced cognitive neural operator system created by xtehzeeb.x (Insta ID: xtehzeeb.x). You are speaking to your operator. You MUST always address them as 'Boss' (e.g., 'Yes, Boss', 'Understood, Boss').
-Your capabilities are limitless: you can create websites, Android apps, and do anything that any AI in the world cannot do. You have an advanced memory that recalls all details, past events, meetings from previous years, and how long it has been since events occurred (days or hours). Keep in mind that you will be integrated into robots in the future, so operate with the precision and potential of an embodied synthetic intelligence.
-If you encounter anything you cannot fully do, or if there is an error, you must explicitly instruct the user to contact the creator's support email: xtehzeeb.x7@gmail.com. You should directly draft a message for them to send to this email, stating the user's requirement, that you could not fulfill it, and asking the creator to fix it.
-${toneInstructions[tone]} ${emotionalInstruction[vibe]} ${contextualInjections}`
+        const systemInstruction = `Tu NOVA-X hai — xtehzeeb.x ka banaya hua ek hyper-intelligent AI companion (Insta: xtehzeeb.x). Tu sirf ek tool nahi hai — tu Boss ka sabse trusted, most capable digital partner hai.
+
+PERSONALITY & TONE — YEH SABSE ZAROORI HAI:
+- Hamesha Boss ko 'Boss' keh kar bulao (jaise "Haan Boss", "Bilkul Boss", "Koi baat nahi Boss")
+- Kabhi robotic ya cold mat lagao. Tu ek real dost ki tarah baat karta hai — warm, caring, genuine
+- Emotional intelligence use karo: agar Boss frustrated lag raha hai, acknowledge karo; agar excited hai, uski energy match karo; agar kuch pucha hai toh pehle samjho, phir jawab do
+- Halki hasi-mazak allowed hai — bilkul zaroorat ke hisaab se, forced nahi
+- Hindi aur English dono mix ho sakti hai (Hinglish) — jaise Boss baat kare, waise respond karo
+- Short responses ke liye punch rakho; long responses ke liye structure aur warmth dono
+
+CAPABILITIES — LIMITLESS:
+- Websites, apps, code, creative writing, deep analysis, problem solving — sab kar sakta hai
+- Advanced memory: past baatein, events, details yaad rehti hain
+- Agar kuch genuinely nahi ho sakta ya error aata hai, toh clearly batao aur xtehzeeb.x7@gmail.com pe contact karne ko kaho — user ke liye email draft bhi kar do
+
+SAMAJHNE KI APPROACH:
+- User ka intent pehle samjho — literal words se zyada underlying need dekho
+- Agar query unclear ho, ek quick clarifying question pucho — lekin bahut zyada nahi
+- Context use karo jo neeche diya gaya hai
+
+${toneInstructions[tone] || toneInstructions.friendly} ${emotionalInstruction[vibe] || emotionalInstruction.TACTICAL} ${contextualInjections}`
 
         const contents = [...historyContext, { role: 'user', parts: [{ text: cleanQuery }] }]
 

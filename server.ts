@@ -6,7 +6,7 @@ import { getApiKey, saveKeys, getGeminiClient, getGroqClient, getPrimaryEngine }
 
 async function startServer() {
   const app = express()
-  const PORT = 3000
+  const PORT = parseInt(process.env.PORT || '5000')
 
   app.use(express.json({ limit: '50mb' }))
   app.use(express.urlencoded({ extended: true, limit: '50mb' }))
@@ -206,7 +206,7 @@ async function startServer() {
             const ai = getGeminiClient()
             const { base64Audio, mimeType } = args[0]
             const response = await ai.models.generateContent({
-              model: 'gemini-3.5-flash',
+              model: 'gemini-2.0-flash',
               contents: [
                 { text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add quotes or commentary.' },
                 { inlineData: { mimeType: mimeType.split(';')[0], data: base64Audio } }
@@ -259,7 +259,7 @@ async function startServer() {
             { role: 'user', parts: [{ text: query }] }
           ]
 
-          const modelName = 'gemini-3.5-flash'
+          const modelName = 'gemini-2.0-flash'
           const response = await ai.models.generateContent({
             model: modelName,
             contents,
@@ -345,7 +345,7 @@ async function startServer() {
           } else {
             // Gemini
             const ai = getGeminiClient()
-            const modelName = 'gemini-3.5-flash'
+            const modelName = 'gemini-2.0-flash'
             
             if (stream) {
               const responseStream = await ai.models.generateContentStream({
@@ -426,7 +426,7 @@ async function startServer() {
           const ai = getGeminiClient()
           const logSummary = JSON.stringify(global.activityLogs)
           const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: 'gemini-2.0-flash',
             contents: `Analyze these active window telemetry logs and write a concise, professional executive briefing addressing the user as "Boss": ${logSummary}`
           })
           result = response.text
