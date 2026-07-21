@@ -572,6 +572,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             }
           }
         } catch (finalErr: any) {
+          console.error('[NOVA-X Main] Error in providers. firstErr:', firstErr, '\nsecondErr:', secondErr, '\nfinalErr:', finalErr)
           console.log('[NOVA-X Main] Final provider check complete.')
           
           let isLimitExceeded = false

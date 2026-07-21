@@ -514,6 +514,7 @@ const agentDeclarations = [
               config: { 
                 systemInstruction,
                 tools: [{ googleSearch: {} }, { functionDeclarations: agentDeclarations }],
+                toolConfig: { includeServerSideToolInvocations: true },
                 generationConfig: {
                   temperature: 0.5,
                   maxOutputTokens: 250
@@ -571,6 +572,7 @@ const agentDeclarations = [
               config: { 
                 systemInstruction,
                 tools: [{ googleSearch: {} }, { functionDeclarations: agentDeclarations }],
+                toolConfig: { includeServerSideToolInvocations: true },
                 generationConfig: {
                   temperature: 0.5,
                   maxOutputTokens: 250
@@ -645,6 +647,7 @@ const agentDeclarations = [
             }
           }
         } catch (finalErr: any) {
+          console.error('[Web Preview] Error in providers. firstErr:', firstErr, '\nsecondErr:', secondErr, '\nfinalErr:', finalErr)
           console.log('[Web Preview] Final provider check complete.')
           
           let isLimitExceeded = false
