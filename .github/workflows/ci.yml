@@ -24,7 +24,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
 
       - name: Install System Dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -32,8 +31,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxext-dev libxrender-dev libmacaroons-dev libsodium-dev
 
-      - name: Install Dependencies
+      - name: Clean Lockfile & Install Dependencies
+        shell: bash
         run: |
+          rm -f package-lock.json
           npm install
           npm install @babel/runtime
 
