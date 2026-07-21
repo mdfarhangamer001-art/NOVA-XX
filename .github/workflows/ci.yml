@@ -41,14 +41,24 @@ jobs:
           rm -f package-lock.json
           npm install
 
-      - name: Compile & Build
-        run: npm run build
+      # OS ke hisab se Electron Exe/Installer banane ke liye:
+      - name: Compile & Build (Windows)
+        if: matrix.os == 'windows-latest'
+        run: npm run dist:win
+
+      - name: Compile & Build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: npm run dist:mac
+
+      - name: Compile & Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run dist:linux
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-assets-${{ matrix.os }}
-          path: out/
+          path: dist/
           compression-level: 0
 
   release:
