@@ -1,5 +1,5 @@
 {
-  "name": "NOVA-X",
+  "name": "nova-x",
   "version": "1.6.4",
   "description": "NOVA-X is an intelligent Voice-First Operating Layer that gives you complete authority over your digital environment. It lives on your desktop, watches your workflow, and executes your intent instantly.",
   "main": "./out/main/index.js",
