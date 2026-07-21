@@ -1,5 +1,5 @@
 {
-  "name": "nova-x",
+  "name": "NOVA-X",
   "version": "1.6.4",
   "description": "NOVA-X is an intelligent Voice-First Operating Layer that gives you complete authority over your digital environment. It lives on your desktop, watches your workflow, and executes your intent instantly.",
   "main": "./out/main/index.js",
@@ -12,7 +12,9 @@
     "build": "electron-vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "build:electron": "rm -f package-lock.json && npm install && electron-vite build",
     "start": "node dist/server.cjs",
-    "dist:win": "rm -f package-lock.json && npm install && electron-vite build && electron-builder --win --publish never"
+    "dist:win": "rm -f package-lock.json && npm install && electron-vite build && electron-builder --win --publish never",
+    "dist:mac": "rm -f package-lock.json && npm install && electron-vite build && electron-builder --mac --publish never",
+    "dist:linux": "rm -f package-lock.json && npm install && electron-vite build && electron-builder --linux --publish never"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
