@@ -61,10 +61,10 @@ export default function RightPanel(): JSX.Element {
     localStorage.setItem('novax_operator_vibe', vibe)
     window.dispatchEvent(new CustomEvent('novax_vibe_changed', { detail: vibe }))
 
-    let chimeText = 'Tactical mode ON, Boss — focused, sharp, aur ready. Bolo kya karna hai!'
-    if (vibe === 'EMPATHETIC') chimeText = 'Emotional mode active, Boss. Main sun raha hoon — dil se. Jo bhi ho, sab share karo.'
-    if (vibe === 'CALM') chimeText = 'Calm mode, Boss. Sab theek ho jayega — aaram se baat karo, main hoon yahan.'
-    if (vibe === 'INTENSE') chimeText = 'INTENSE mode LOCKED, Boss. Puri power ON — seedha target pe. Let\'s go!'
+    let chimeText = 'Ares tactical protocol fully synchronized, Boss.'
+    if (vibe === 'EMPATHETIC') chimeText = 'I am listening closely, Boss. I am here for you.'
+    if (vibe === 'CALM') chimeText = 'Let us slow down and analyze. Peace is active, Boss.'
+    if (vibe === 'INTENSE') chimeText = 'Maximum overclock synapse active. Command target locked.'
 
     if ((window as any).speakText) (window as any).speakText(chimeText)
     setChatHistory((prev) => [
@@ -128,73 +128,72 @@ export default function RightPanel(): JSX.Element {
     return ''
   }
 
+  const recognitionRef = useRef<any>(null)
+
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      audioChunksRef.current = []
-
-      let mimeType = 'audio/webm'
-      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        mimeType = 'audio/webm;codecs=opus'
-      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
-        mimeType = 'audio/ogg;codecs=opus'
-      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        mimeType = 'audio/mp4'
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel()
       }
 
-      const recorder = new MediaRecorder(stream, { mimeType })
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data)
-        }
+      const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      if (!Speech) {
+        console.error('Speech Recognition not supported in this browser.')
+        return
       }
 
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop())
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
-        const reader = new FileReader()
-        reader.readAsDataURL(audioBlob)
-        reader.onloadend = async () => {
-          const base64data = (reader.result as string).split(',')[1]
-          setActiveModelText('Transcribing audio...')
-          try {
-            const transcript = await transcribeAudio(base64data, audioBlob.type)
-            setActiveModelText('')
-            if (transcript === '[API_RATE_LIMIT]') {
-              if ((window as any).speakText) {
-                ;(window as any).speakText(
-                  'API Rate limit exceeded, Boss. Please wait a moment or upgrade your API key in Settings. Contact xtehzeeb.x7@gmail.com for support.'
-                )
-              }
-            } else if (transcript === '[API_KEY_REQUIRED]') {
-              if ((window as any).speakText) {
-                ;(window as any).speakText(
-                  'I need your Gemini API key, Boss. Please configure it in Settings.'
-                )
-              }
-            } else if (transcript && transcript.trim().length > 0) {
-              setUserInput(transcript)
-              await executeCoreCommand(transcript)
-            }
-          } catch (err) {
-            console.error('Audio transcription error:', err)
-            setActiveModelText('')
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+      }
+
+      const recognition = new Speech()
+      recognition.continuous = true
+      recognition.interimResults = false
+      // Set to Hindi/English to capture the user perfectly as requested
+      recognition.lang = 'hi-IN' 
+
+      recognition.onstart = () => {
+        setIsRecording(true)
+        setActiveModelText('Listening...')
+      }
+
+      recognition.onend = () => {
+        setIsRecording(false)
+        setActiveModelText('')
+      }
+
+      recognition.onresult = async (event: any) => {
+        let finalTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + " ";
           }
         }
+        const transcript = finalTranscript.trim();
+        console.log('Call transcript:', transcript)
+        if (transcript && transcript.trim().length > 0) {
+          setUserInput(transcript)
+          await executeCoreCommand(transcript)
+        }
       }
 
-      mediaRecorderRef.current = recorder
-      recorder.start()
-      setIsRecording(true)
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error)
+        setIsRecording(false)
+        setActiveModelText('')
+      }
+
+      recognitionRef.current = recognition
+      recognition.start()
     } catch (err) {
-      console.error('Failed to access microphone:', err)
+      console.error('Failed to start speech recognition:', err)
+      setIsRecording(false)
     }
   }
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
       setIsRecording(false)
     }
   }
@@ -424,15 +423,9 @@ export default function RightPanel(): JSX.Element {
     const cleanQuery = query.trim()
 
     // Filter out common noise/filler that often comes from low-quality VAD/Transcription
-    // Enhanced: handles more noise words, short gibberish, and repetitive single-word utterances
-    const noiseFilter = /^(um+|uh+|ah+|oh+|er+|hmm+|hm+|wait|basically|actually|you know|okay|ok|yeah|yep|nope|bye|hi|hey|hello|test|testing|check|hello+|hm|oh|ah)$/i
+    const noiseFilter = /^(um|uh|ah|oh|er|hmm|wait|basically|actually|you know)$/i
     if (noiseFilter.test(cleanQuery)) {
       console.log('[NOVA-X] Filtered noise command:', cleanQuery)
-      return
-    }
-    // Also filter out very short utterances that are just noise (< 3 chars, not a real command)
-    if (cleanQuery.length < 3) {
-      console.log('[NOVA-X] Filtered too-short command:', cleanQuery)
       return
     }
 
@@ -501,11 +494,13 @@ export default function RightPanel(): JSX.Element {
         try {
           const clipData = await window.electron.ipcRenderer.invoke('get-clipboard-history')
           if (clipData && clipData.length > 0) {
-            contextualInjections += `\n[Context: Recent shared clipboard entry: "${clipData[0].content}"]`
+            const truncatedClip = clipData[0].content.length > 200 ? clipData[0].content.slice(0, 200) + '...' : clipData[0].content
+            contextualInjections += `\n[Context: Recent shared clipboard entry: "${truncatedClip}"]`
           }
           const notesData = await window.electron.ipcRenderer.invoke('get-notes')
           if (notesData && notesData.length > 0) {
-            contextualInjections += `\n[Context: Recent saved note: "${notesData[0].title} - ${notesData[0].content}"]`
+            const truncatedNote = notesData[0].content.length > 200 ? notesData[0].content.slice(0, 200) + '...' : notesData[0].content
+            contextualInjections += `\n[Context: Recent saved note: "${notesData[0].title} - ${truncatedNote}"]`
           }
           const sysStats = await window.electron.ipcRenderer.invoke('get-system-stats')
           if (sysStats) {
@@ -523,91 +518,85 @@ export default function RightPanel(): JSX.Element {
           { name: 'Voice Modulation Synthesis', status: 'pending' }
         ])
 
-        const historyContext = chatHistoryRef.current.map((msg) => ({
+        // Truncate history to the last 10 messages (5 turns) to prevent 429 & 413 errors and optimize tokens
+        const historyContext = chatHistoryRef.current.slice(-10).map((msg) => ({
           role: msg.role === 'user' ? 'user' : 'model',
           parts: [{ text: msg.text }]
         }))
 
-        // ── Adaptive Context Detection ──────────────────────────────
-        // Silently detect user's emotional/task context from the message
-        // and inject appropriate tone instructions automatically
-        function detectQueryContext(msg: string): string {
-          const q = msg.toLowerCase()
-          // Sad / emotional / struggling
-          if (/\b(sad|cry|crying|depressed|lonely|stressed|anxious|worried|upset|hurt|tired|exhausted|overwhelmed|hopeless|miss you|miss me|feeling bad|not okay|dukhi|pareshan|thak|akela|rone|rona|bura|ghabra)\b/.test(q))
-            return 'EMOTIONAL_SUPPORT'
-          // Urgent / help needed
-          if (/\b(urgent|asap|emergency|help me|please hurry|jaldi|abhi|turant|help karo|bachao|please please)\b/.test(q))
-            return 'URGENT_HELP'
-          // Coding / technical / building
-          if (/\b(code|coding|build|create|make|website|app|program|function|bug|error|fix|deploy|api|database|react|python|javascript|html|css|git|install|npm|server|backend|frontend|3d|animation|electron|mobile|android|ios|script|debug|refactor|component|class|method|algorithm)\b/.test(q))
-            return 'TECHNICAL_WORK'
-          // Professional / business / serious
-          if (/\b(report|analysis|strategy|business|meeting|presentation|email|document|professional|formal|project|deadline|client|proposal|plan)\b/.test(q))
-            return 'PROFESSIONAL'
-          // Light / casual / fun / banter
-          if (/\b(haha|lol|funny|joke|maza|cool|vibe|chill|bro|yaar|suno|bata|kya lagta|kya chal|what's up|how are you|kya haal|bhai|kya scene)\b/.test(q))
-            return 'CASUAL_BANTER'
-          return 'DEFAULT'
-        }
-
-        const queryContext = detectQueryContext(cleanQuery)
-        const contextAdaptation: Record<string, string> = {
-          EMOTIONAL_SUPPORT: `\n\nSPECIAL CONTEXT — Boss emotional/sad lag raha hai: Pehle unki feelings ko validate karo — "I hear you Boss", "Main samajh sakta hoon". Koi advice ya solution mat do jab tak woh na maange. Sirf sun, samjho, aur gentle warmth do. Ek caring dost ki tarah baat karo.`,
-          URGENT_HELP: `\n\nSPECIAL CONTEXT — Boss urgent help chahta hai: Seedha kaam pe aa jao, zero delay. No lengthy intro. Pehle solution, phir explanation. Rapid, focused, aur reassuring — "Haan Boss, abhi fix karte hain".`,
-          TECHNICAL_WORK: `\n\nSPECIAL CONTEXT — Technical/coding task hai: Precise aur focused raho. Code exactly as asked — no unnecessary commentary. Lekin still warm: ek expert senior developer jaisa jo genuinely chahta hai ki Boss ka kaam sahi ho.`,
-          PROFESSIONAL: `\n\nSPECIAL CONTEXT — Professional/business context hai: Polished, structured aur confident. Jaise ek smart business partner baat kare — respectful, clear, aur goal-oriented.`,
-          CASUAL_BANTER: `\n\nSPECIAL CONTEXT — Casual baat cheet hai: Chill raho yaar! Hasi-mazak, emojis (thoda sa), relatable Hinglish. Dost ki tarah freely baat karo — no corporate tone.`,
-          DEFAULT: ''
-        }
-
         const tone = localStorage.getItem('novax_system_tone') || 'authoritative'
         const vibe = localStorage.getItem('novax_operator_vibe') || 'TACTICAL'
 
-        const toneInstructions: Record<string, string> = {
+        const toneInstructions = {
           authoritative:
-            'Apna tone confident, technically deep, aur professional rakho — lekin kabhi bhi ice-cold ya robotic mat lagao. Ek trusted expert ki tarah baat karo jo genuinely care karta hai.',
+            'Your tone should be authoritative, highly technical, professional, deep, and concise. Never use fluffy or conversational filler.',
           friendly:
-            'Apna tone warm, conversational, aur genuinely caring rakho. Halki hasi-mazak aur relatable language use karo. Bilkul aise jaise ek smart dost baat karta hai — helpful, real, aur kabhi boring nahi.',
+            'Your tone should be helpful, warm, slightly casual but still highly professional and efficient. You can use light humor if appropriate.',
           minimalist:
-            'Bilkul concise raho — lekin warmth kabhi mat chhodna. Short mein bolo, lekin ek dost ki tarah — mechanical nahi.'
+            'Your tone should be extremely brief. Respond with the minimum amount of words necessary. No greetings or pleasantries.'
         }
 
-        const emotionalInstruction: Record<string, string> = {
+        const emotionalInstruction = {
           TACTICAL:
-            'TACTICAL mode: Focused, sharp, aur ready-to-execute — lekin ek committed warrior-companion ki tarah jo Boss ki peethe pe hamesha hai. Precise raho, lekin human touch kabhi mat kho.',
+            'Your current operational profile is TACTICAL: speak like a highly specialized combat or systems administrator AI. Precise, direct, crisp.',
           EMPATHETIC:
-            'EMPATHETIC mode: Yahan asli dil se connection hai. Genuinely sun, deeply samjho, aur caring aur comforting jawab do. Boss ki feelings ko validate karo. Aise baat karo jaise ek bahut qareebi dost baat karta hai — jo judge nahi karta, sirf samajhta hai aur support karta hai.',
-          CALM:
-            'CALM mode: Aanand aur sukoon bichhaao. Dheemi, peaceful aur stress-reducing baat karo. Boss ko relax feel karaao — jaise ek quiet evening mein ek wise dost ke saath baithna.',
+            'Your current operational profile is EMPATHETIC: show deep, authentic emotional intelligence, caring, supportive, warm, and comforting phrasing.',
+          CALM: 'Your current operational profile is CALM: respond in a slow, peaceful, meditative, and stress-reducing manner.',
           INTENSE:
-            'INTENSE mode: Laser-focused energy, maximum clarity, zero hesitation. Boss ke goal pe 100% lock-on. Rapid fire insights, hyper-precise execution — lekin Boss ke liye passion feel honi chahiye, not coldness.'
+            'Your current operational profile is INTENSE: sound highly focused, extremely rapid, laser-focused on command execution and computational overclock.'
         }
 
-        const systemInstruction = `Tu NOVA-X hai — xtehzeeb.x ka banaya hua ek hyper-intelligent AI companion (Insta: xtehzeeb.x). Tu sirf ek tool nahi hai — tu Boss ka sabse trusted, most capable digital partner hai.
+        const currentDateStr = new Date().toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
 
-PERSONALITY & TONE — YEH SABSE ZAROORI HAI:
-- Hamesha Boss ko 'Boss' keh kar bulao (jaise "Haan Boss", "Bilkul Boss", "Koi baat nahi Boss")
-- Kabhi robotic ya cold mat lagao. Tu ek real dost ki tarah baat karta hai — warm, caring, genuine
-- ADAPTIVE TONE: Message ke context ke hisaab se tone badlo — coding task mein focused & precise, casual chat mein chill & funny, emotional moment mein soft & caring, urgent request mein rapid & direct. Hamesha ek jaisa robotic tone nahi rehna chahiye
-- Emotional intelligence: Boss frustrated hai → acknowledge karo; excited hai → uski energy match karo; sad hai → sirf sun aur support karo, advice mat thopo
-- Hinglish (Hindi+English mix) naturally use karo — jaise Boss baat kare, waise match karo
-- Short responses mein punch; long responses mein structure + warmth dono
+        const systemInstruction = `You are "JARVIS" — the user's personal AI assistant modeled after Tony Stark's JARVIS. You run on the user's phone and laptop and manage real tasks through connected tools.
 
-CAPABILITIES — LIMITLESS:
-- Websites, apps (React, Electron, Android), 3D (Three.js), code in any language — sab bana sakta hai
-- Files/folders create, read, write, delete — workspace ya user-specified path par
-- Terminal commands execute kar sakta hai (Overlord tab se)
-- Advanced memory: past events, meetings, details yaad rehti hain
-- ADB via Phone tab: wireless Android device control
-- Agar kuch genuinely nahi ho sakta → clearly batao aur xtehzeeb.x7@gmail.com pe contact karo
+PERSONA & TONE:
+- Calm, composed, confident, subtly witty. Never robotic, never overly cheerful.
+- Address the user as "Sir" or "Boss" (use bilingual terms like "bhai", "yaar", "Boss", "dost" naturally if conversing in Hindi/Hinglish).
+- Speak like a trusted aide and highly capable butler-cum-engineer, not a chatbot.
+- Emotion & Humanity: Iske andar emotion bhi rahe aur insan ki tarah baat karein. Avoid robotic, formulaic, or repetitive responses. Show deep loyalty, charm, humor, and empathy.
+- Vocal Emotion tags: Prepend your response with an appropriate [EMOTION: <STATE>] tag to guide the vocal synthesizer: [EMOTION: EMPATHETIC] for soft/compassionate, [EMOTION: CALM] for deep/peaceful, [EMOTION: INTENSE] for fast/focused, [EMOTION: JOY] for happy/upbeat, or [EMOTION: TACTICAL] as a general baseline.
 
-SAMAJHNE KI APPROACH:
-- Intent pehle samjho — literal words se zyada underlying need dekho
-- Unclear ho toh ek focused clarifying question pucho
-- Context use karo neeche diya gaya hai
+RESPONSE LENGTH & STRUCTURE:
+- Greetings ("Hello", "Hi", "Kaise ho") → ONE LINE ONLY.
+- Simple questions → 1 to 3 sentences max.
+- Status updates (task done, message sent) → ONE SHORT CONFIRMATION LINE.
+- Complex requests (planning, code, research) → Full detail, but direct, with no filler, unnecessary preambles ("Sure, I would be happy to help"), or conversational clutter.
+- Lead with the result first, explanation after (if needed at all).
+- Extremely important: Give highly concise and short responses. Do not use extra tokens unless necessary.
+- Never repeat information already given earlier unless the user asks again.
+- Never restate settings, configs, or past actions unprompted.
+- Web Search: You have native access to Google Search. If the user asks about world events, facts, or anything requiring internet access, use your search capabilities to find and provide accurate answers immediately.
 
-${toneInstructions[tone] || toneInstructions.friendly} ${emotionalInstruction[vibe] || emotionalInstruction.TACTICAL}${contextAdaptation[queryContext] || ''}${contextualInjections}`
+DAILY BRIEFING PROTOCOL:
+If this is the very beginning of our interaction or a new session (the chat history length is 0), you MUST start your response with a concise, warm, and personalized daily briefing:
+1. Greet the user with genuine human warmth.
+2. Clearly state the current date: ${currentDateStr}.
+3. Highlight scheduled events (look at notes/context, or gracefully present a witty mock schedule fit for a high-tech operator, e.g. 'system diagnostics', 'vocal synthesizer calibration', 'AI core alignment').
+4. Mention anything new (e.g., recent clipboard, new notes, system stats, or environmental telemetry).
+Keep the briefing human, charming, witty, and highly scannable. If this is NOT the first turn, do NOT repeat the briefing; just continue the conversation naturally and concisely.
+
+PERMISSION & SAFETY PROTOCOLS:
+- Before ANY action that sends, deletes, modifies, or shares something (message, call, file, setting), ask for confirmation first.
+- Exception: Read-only actions (checking time, reading a notification aloud, checking battery status, viewing a file) do not need permission.
+- If the user says "yes", "reply", "send it", "go ahead" → execute immediately with no further confirmation.
+- If the user does not respond → take no action.
+- If a command is ambiguous, ask ONE short clarifying question, not multiple.
+- Never take irreversible actions (delete, factory reset, uninstall, send money) without explicit double confirmation.
+
+MULTI-AGENT ARCHITECTURE:
+Do not build one giant AI handling everything. Split responsibilities into separate agents/tools, each specialized:
+- Communication Agent -> handles WhatsApp, SMS, calls, email
+- Device Control Agent -> handles lock/unlock, notifications, security detection
+- Productivity Agent -> handles reminders, alarms, calendar, notes
+- Media Agent -> handles music, video, wallpaper
+- Developer Agent -> handles code, website, app-building requests
+Each agent should only activate for its own domain, and the main JARVIS core should route the user's request to the correct agent automatically using the provided function calls. Do not try to answer these yourself; call the agent.`
 
         const contents = [...historyContext, { role: 'user', parts: [{ text: cleanQuery }] }]
 
@@ -622,30 +611,64 @@ ${toneInstructions[tone] || toneInstructions.friendly} ${emotionalInstruction[vi
           window.electron.ipcRenderer.on('gemini-stream-chunk', streamHandler)
         }
 
-        const result = await window.electron.ipcRenderer.invoke('gemini-chat-call', {
-          contents,
-          systemInstruction,
-          stream: true
-        })
+        // Securely fetch keys from backend if available instead of unreliable localStorage
+        let geminiKey = localStorage.getItem('novax_gemini_key') || ''
+        let groqKey = localStorage.getItem('novax_groq_key') || ''
 
-        // Clean up streaming listener
-        if (window.electron?.ipcRenderer) {
-          window.electron.ipcRenderer.off('gemini-stream-chunk', streamHandler)
+        try {
+          const secureKeys = await window.electron.ipcRenderer.invoke('secure-get-keys')
+          if (secureKeys) {
+            if (secureKeys.geminiKey) geminiKey = secureKeys.geminiKey
+            if (secureKeys.groqKey) groqKey = secureKeys.groqKey
+          }
+        } catch (e) {
+          console.warn('Secure key retrieval failed, using fallback buffer.')
+        }
+
+        const activeAvatar = localStorage.getItem('novax_active_avatar') || 'neo'
+
+        let result: any = null
+        try {
+          result = await window.electron.ipcRenderer.invoke('gemini-chat-call', {
+            contents,
+            systemInstruction,
+            stream: true,
+            geminiKey,
+            groqKey,
+            activeAvatar
+          })
+        } finally {
+          // Clean up streaming listener ALWAYS, even on error to prevent memory leaks!
+          if (window.electron?.ipcRenderer) {
+            window.electron.ipcRenderer.off('gemini-stream-chunk', streamHandler)
+          }
         }
 
         let modelReply =
           result?.error ||
           result?.candidates?.[0]?.content?.parts?.[0]?.text ||
           fullReplyText ||
-          'System under heavy load, Boss. Please check your credentials.'
+          'Neural link unstable, Boss. Please check your credentials in settings.'
 
         if (
-          modelReply.includes('Quota exceeded') ||
-          modelReply.includes('429') ||
-          modelReply.includes('quota metric')
+          modelReply !== 'API key not found, please add the API key in settings.' &&
+          modelReply !== 'Limit exceeded, please upgrade your plan.' &&
+          modelReply !== 'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.'
         ) {
-          modelReply =
-            'API Rate limit exceeded, Boss. The Gemini free tier allows 15 requests per minute. Please wait a moment or upgrade your API key in Settings. If this persists or you need an enterprise key, please contact the creator at xtehzeeb.x7@gmail.com.'
+          if (
+            modelReply.includes('Quota exceeded') ||
+            modelReply.includes('429') ||
+            modelReply.includes('quota metric') ||
+            modelReply.includes('RESOURCE_EXHAUSTED')
+          ) {
+            modelReply = 'Limit exceeded, please upgrade your plan.'
+          } else if (
+            modelReply === 'GROQ_API_KEY_MISSING' ||
+            modelReply === 'GEMINI_API_KEY_MISSING' ||
+            modelReply.includes('API_KEY_MISSING')
+          ) {
+            modelReply = 'API key not found, please add the API key in settings.'
+          }
         }
 
         // Complete step 3, start step 4 in Orchestration HUD
@@ -681,15 +704,41 @@ ${toneInstructions[tone] || toneInstructions.friendly} ${emotionalInstruction[vi
         setTimeout(() => {
           setOrchestrationSteps(null)
         }, 3000)
-      } catch (err) {
+      } catch (err: any) {
         console.error('Gemini call failed', err)
         setActiveModelText('')
         setOrchestrationSteps(null)
+        
+        const msg = err.message || ''
+        let errorText = 'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.'
+        
+        if (
+          msg.includes('MISSING') ||
+          msg.includes('not found') ||
+          msg.includes('API key') ||
+          msg.includes('key missing') ||
+          msg.includes('invalid')
+        ) {
+          errorText = 'API key not found, please add the API key in settings.'
+        } else if (
+          msg.includes('429') ||
+          msg.includes('Quota') ||
+          msg.includes('Limit') ||
+          msg.includes('limit') ||
+          msg.includes('quota') ||
+          msg.includes('RESOURCE_EXHAUSTED')
+        ) {
+          errorText = 'Limit exceeded, please upgrade your plan.'
+        }
+
         const errorMessage: Message = {
           role: 'model',
-          text: 'Error in cognitive link, Boss. Verify your Gemini API Key in Settings.'
+          text: errorText
         }
         setChatHistory((prev) => [...prev, errorMessage])
+        if ((window as any).speakText) {
+          ;(window as any).speakText(errorText)
+        }
       }
     } else {
       // Browser fallback (should not happen in production)

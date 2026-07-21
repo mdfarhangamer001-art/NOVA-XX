@@ -9,67 +9,7 @@ import Store from 'electron-store'
 
 const store = new Store()
 
-function getGeminiApiKey(): string {
-  const envKey = process.env.GEMINI_API_KEY
-  if (envKey) return envKey
-
-  // 1. Try decrypting using Electron's native safeStorage API
-  try {
-    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
-    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
-      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
-      const parsed = JSON.parse(decrypted)
-      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
-    }
-  } catch (e) {
-    // ignore safeStorage decryption error
-  }
-
-  // 2. Try unencrypted fallback
-  const secureKeys: any = store.get('secure_api_keys')
-  if (secureKeys && secureKeys.GEMINI_API_KEY) {
-    return secureKeys.GEMINI_API_KEY
-  }
-
-  // 3. Try legacy encrypted block with dynamic device-specific details
-  const decryptedKeysStr = store.get('secure_api_keys_enc') as string
-  if (decryptedKeysStr) {
-    try {
-      const crypto = require('crypto')
-      // Create a secure, dynamic, device-specific salt generation pipeline
-      const dynamicSalt =
-        os.platform() + os.arch() + os.hostname() + (os.userInfo()?.username || 'system')
-      const ENCRYPTION_KEY = crypto.scryptSync(dynamicSalt, 'salt', 32)
-      const textParts = decryptedKeysStr.split(':')
-      const iv = Buffer.from(textParts.shift()!, 'hex')
-      const encryptedText = Buffer.from(textParts.join(':'), 'hex')
-      const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
-      let decrypted = decipher.update(encryptedText)
-      decrypted = Buffer.concat([decrypted, decipher.final()])
-      const parsed = JSON.parse(decrypted.toString())
-      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
-    } catch (e) {
-      // try legacy fallback if username info failed
-      try {
-        const crypto = require('crypto')
-        const fallbackSalt = os.platform() + os.arch() + 'fallback'
-        const ENCRYPTION_KEY = crypto.scryptSync(fallbackSalt, 'salt', 32)
-        const textParts = decryptedKeysStr.split(':')
-        const iv = Buffer.from(textParts.shift()!, 'hex')
-        const encryptedText = Buffer.from(textParts.join(':'), 'hex')
-        const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
-        let decrypted = decipher.update(encryptedText)
-        decrypted = Buffer.concat([decrypted, decipher.final()])
-        const parsed = JSON.parse(decrypted.toString())
-        if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
-      } catch (err2) {
-        // ignore
-      }
-    }
-  }
-
-  return ''
-}
+import { getGeminiClient, getApiKey } from '../ai-clients'
 
 // Map the workspace root path
 const WORKSPACE_ROOT = process.cwd()
@@ -181,35 +121,28 @@ export function registerAgentHandlers(): void {
       }
     }
 
-    const apiKey = getGeminiApiKey()
+    const apiKey = getApiKey('geminiKey', process.env.GEMINI_API_KEY)
     if (!apiKey) {
       sendLog('ERROR: Gemini API Key is missing. Please set it in Settings > API Vault.')
       return { success: false, error: 'Gemini API Key is missing.' }
     }
 
     sendLog('Initializing neural agent engine...')
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
-      }
-    })
+    try {
+      const ai = getGeminiClient()
 
-    const systemInstruction = `You are the NOVA-X Coding Agent. You are a highly professional, expert developer agent.
+      const systemInstruction = `You are the NOVA-X Coding Agent. You are a highly professional, expert developer agent.
 You have native access to the workspace file-system and terminal via custom tools.
 Your goal is to fulfill the user's prompt by examining files, reading contents, writing correct modifications, and running check commands.
 Always verify code correctness and syntax integrity.
 Work carefully and step-by-step. Let the operator know exactly what you are doing.`
 
-    const tools: any[] = [
-      {
-        functionDeclarations: [listFilesTool, readFileTool, writeFileTool, runCommandTool]
-      }
-    ]
+      const tools: any[] = [
+        {
+          functionDeclarations: [listFilesTool, readFileTool, writeFileTool, runCommandTool]
+        }
+      ]
 
-    try {
       sendLog(`Task received: "${prompt}"`)
       sendLog('Analyzing task strategy and compiling toolchain...')
 
@@ -222,28 +155,43 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
       while (loopCount < maxLoops) {
         loopCount++
         sendLog(`[Step ${loopCount}] Querying Gemini neural model...`)
+        
+        const callWithRetry = async (fn: any, retries = 5, delay = 5000): Promise<any> => {
+          try {
+            return await fn()
+          } catch (err: any) {
+            if (retries > 0 && (err.message.includes('429') || err.message.includes('Quota'))) {
+              const backoff = delay * Math.pow(2, 5 - retries)
+              sendLog(`[NOVA-X Agent] Rate limit hit, retrying in ${backoff}ms... (${retries} retries left)`)
+              await new Promise(resolve => setTimeout(resolve, backoff))
+              return callWithRetry(fn, retries - 1, delay)
+            }
+            throw err
+          }
+        }
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.5-flash',
+        const response = await callWithRetry(() => ai.models.generateContent({
+          model: 'gemini-1.5-flash',
           contents: contentsHistory,
           config: {
             systemInstruction,
             tools
           }
-        })
+        }))
 
+        const result = response
         // Add model response to history
-        const modelContent = response.candidates?.[0]?.content
+        const modelContent = result.candidates?.[0]?.content
         if (modelContent) {
           contentsHistory.push(modelContent)
         }
 
-        const textResponse = response.text
+        const textResponse = result.text()
         if (textResponse) {
           sendLog(`Agent response: ${textResponse}`)
         }
 
-        const functionCalls = response.functionCalls
+        const functionCalls = result.functionCalls()
         if (!functionCalls || functionCalls.length === 0) {
           sendLog('Agent has finished the task. Terminating agent loop.')
           return { success: true, summary: textResponse || 'Task complete.' }

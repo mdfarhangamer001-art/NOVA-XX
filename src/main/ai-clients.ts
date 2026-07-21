@@ -25,10 +25,12 @@ function loadCredentials() {
       } else {
         mockKeys = data
       }
-      console.log('[AI Clients] Loaded credentials.json')
+      console.log('[AI Clients] Loaded credentials.json. Keys found:', Object.keys(mockKeys).length)
     } catch (err) {
       console.error('[AI Clients] Failed to read credentials.json:', err)
     }
+  } else {
+    console.log('[AI Clients] credentials.json does not exist at:', credentialsPath)
   }
 }
 
@@ -36,9 +38,6 @@ function loadCredentials() {
 loadCredentials()
 
 export function getApiKey(key: string, envVal?: string): string {
-  // Always reload to ensure we have the latest if something else updated it
-  loadCredentials()
-  
   if (removedKeys[key]) return ''
   if (mockKeys[key] === '') return ''
   return mockKeys[key] || envVal || ''
@@ -71,10 +70,10 @@ export function saveKeys(newKeys: any) {
   }
 }
 
-export function getGeminiClient() {
-  const apiKey = getApiKey('geminiKey', process.env.GEMINI_API_KEY)
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY_MISSING')
+export function getGeminiClient(providedKey?: string) {
+  const apiKey = providedKey || getApiKey('geminiKey', process.env.GEMINI_API_KEY)
+  if (!apiKey || apiKey.trim() === '' || apiKey.includes('YOUR_')) {
+    throw new Error('GEMINI_API_KEY_MISSING: Please configure your Gemini API key in the application settings or environment variables.')
   }
   return new GoogleGenAI({
     apiKey,
@@ -86,10 +85,62 @@ export function getGeminiClient() {
   })
 }
 
-export function getGroqClient() {
-  const apiKey = getApiKey('groqKey', process.env.GROQ_API_KEY)
-  if (!apiKey) {
-    throw new Error('GROQ_API_KEY_MISSING')
+let modelCache: Record<string, string> = {
+  chat: 'gemini-2.5-flash',
+  vision: 'gemini-2.5-flash',
+  agent: 'gemini-2.5-flash',
+  transcribe: 'gemini-2.5-flash'
+};
+
+let lastRefreshTime = 0;
+const REFRESH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+async function refreshModelCache(ai: any, task: 'chat' | 'vision' | 'agent' | 'transcribe') {
+  const now = Date.now();
+  if (now - lastRefreshTime < REFRESH_INTERVAL) {
+    return;
+  }
+  lastRefreshTime = now;
+  try {
+    const listResponse = await ai.models.list();
+    const models = listResponse.models || listResponse || [];
+    if (Array.isArray(models)) {
+      let filtered = models
+        .map((m: any) => m.name || m.id || '')
+        .filter((n: string) => n.toLowerCase().includes('gemini'));
+      
+      if (filtered.length > 0) {
+        let matches = filtered;
+        if (task === 'agent') {
+          matches = filtered.filter(n => n.includes('flash') || n.includes('pro'));
+        } else {
+          matches = filtered.filter(n => n.includes('flash'));
+        }
+        
+        if (matches.length > 0) {
+          matches.sort((a, b) => b.localeCompare(a));
+          const chosen = matches[0];
+          const finalModel = chosen.startsWith('models/') ? chosen.replace('models/', '') : chosen;
+          modelCache[task] = finalModel;
+        }
+      }
+    }
+  } catch (err) {
+    // Silently handle background refresh failures
+  }
+}
+
+export async function getGeminiModelName(ai: any, task: 'chat' | 'vision' | 'agent' | 'transcribe' = 'chat'): Promise<string> {
+  const cached = modelCache[task];
+  // Fire off background refresh so future requests are always accurate, but return immediately
+  refreshModelCache(ai, task).catch(() => {});
+  return cached || 'gemini-2.5-flash';
+}
+
+export function getGroqClient(providedKey?: string) {
+  const apiKey = providedKey || getApiKey('groqKey', process.env.GROQ_API_KEY)
+  if (!apiKey || apiKey.trim() === '' || apiKey.includes('YOUR_')) {
+    throw new Error('GROQ_API_KEY_MISSING: Please configure your Groq API key in the application settings or environment variables.')
   }
   return new Groq({ apiKey })
 }

@@ -76,7 +76,14 @@ if (typeof window !== 'undefined') {
             body: JSON.stringify({ channel, args })
           })
           if (!res.ok) {
-            throw new Error(`HTTP Error ${res.status}`)
+            let serverError = `HTTP Error ${res.status}`
+            try {
+              const errData = await res.json()
+              if (errData && errData.error) {
+                serverError = errData.error
+              }
+            } catch (_) {}
+            throw new Error(serverError)
           }
           const data = await res.json()
           if (data.error) {
@@ -114,13 +121,28 @@ if (typeof window !== 'undefined') {
         return await window.electron.ipcRenderer.invoke('iris-send-vision-frame', base64Frame)
       },
       transcribeAudio: async (base64Audio: string, mimeType: string) => {
+        let geminiKey = localStorage.getItem('novax_gemini_key') || ''
+        let groqKey = localStorage.getItem('novax_groq_key') || ''
+
+        try {
+          const secureKeys = await window.electron.ipcRenderer.invoke('secure-get-keys')
+          if (secureKeys) {
+            if (secureKeys.geminiKey) geminiKey = secureKeys.geminiKey
+            if (secureKeys.groqKey) groqKey = secureKeys.groqKey
+          }
+        } catch (e) {
+          // ignore secure key fetch failure in mock
+        }
+
         return await window.electron.ipcRenderer.invoke('iris-transcribe-audio', {
           base64Audio,
-          mimeType
+          mimeType,
+          geminiKey,
+          groqKey
         })
       },
-      getMemories: async () => {
-        return await window.electron.ipcRenderer.invoke('get-memories')
+      getMemories: async (params?: any) => {
+        return await window.electron.ipcRenderer.invoke('get-memories', params)
       },
       deleteMemory: async (index: number) => {
         return await window.electron.ipcRenderer.invoke('delete-memory', index)

@@ -1,0 +1,141 @@
+    let audioChunks: Blob[] = []
+    let isRecordingInternal = false
+
+    const threshold = 0.015
+    const silenceDelay = 1500
+
+    const stopMic = () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+        audioContextRef.current = null
+      }
+      analyserRef.current = null
+      setMicStatus('idle')
+    }
+
+    const startVAD = async () => {
+      if (stopRequestedRef.current) return
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            sampleRate: 48000,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        })
+        streamRef.current = stream
+        audioContextRef.current = new AudioContext()
+        analyserRef.current = audioContextRef.current.createAnalyser()
+        const source = audioContextRef.current.createMediaStreamSource(stream)
+        source.connect(analyserRef.current)
+        analyserRef.current.fftSize = 1024
+
+        const dataArray = new Uint8Array(analyserRef.current.fftSize)
+
+        const checkVolume = () => {
+          if (!analyserRef.current || stopRequestedRef.current) return
+          analyserRef.current.getByteTimeDomainData(dataArray)
+
+          let sumSquares = 0
+          for (let i = 0; i < dataArray.length; i++) {
+            const normalized = (dataArray[i] - 128) / 128
+            sumSquares += normalized * normalized
+          }
+          const rms = Math.sqrt(sumSquares / dataArray.length)
+
+          window.dispatchEvent(new CustomEvent('novax_mic_level', { detail: rms }))
+
+          if (rms > threshold) {
+            if (!isRecordingInternal) {
+              console.log('[NOVA-X VAD] Speech detected. Starting recording...')
+              isRecordingInternal = true
+              audioChunks = []
+              setMicStatus('listening')
+              window.dispatchEvent(
+                new CustomEvent('novax_mic_state', { detail: { status: 'listening' } })
+              )
+
+              let mimeType = 'audio/webm'
+              if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus'))
+                mimeType = 'audio/webm;codecs=opus'
+              else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus'))
+                mimeType = 'audio/ogg;codecs=opus'
+
+              mediaRecorderRef.current = new MediaRecorder(stream, { mimeType })
+              mediaRecorderRef.current.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunks.push(e.data)
+              }
+              mediaRecorderRef.current.onstop = async () => {
+                setMicStatus('transcribing')
+                window.dispatchEvent(
+                  new CustomEvent('novax_mic_state', { detail: { status: 'transcribing' } })
+                )
+                const audioBlob = new Blob(audioChunks, { type: mimeType })
+                const reader = new FileReader()
+                reader.readAsDataURL(audioBlob)
+                reader.onloadend = async () => {
+                  const base64data = (reader.result as string).split(',')[1]
+                  try {
+                    // @ts-ignore
+                    if (window.iris?.transcribeAudio) {
+                      // @ts-ignore
+                      const transcript = await window.iris.transcribeAudio(
+                        base64data,
+                        audioBlob.type
+                      )
+                      if (transcript && transcript.trim().length > 0) {
+                        // @ts-ignore
+                        if (window.triggerVoiceCommand) {
+                          window.triggerVoiceCommand(transcript)
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    console.error('[NOVA-X VAD] Transcription error:', err)
+                  } finally {
+                    setMicStatus('idle')
+                    window.dispatchEvent(
+                      new CustomEvent('novax_mic_state', { detail: { status: 'idle' } })
+                    )
+                  }
+                }
+              }
+              mediaRecorderRef.current.start()
+            }
+
+            if (silenceTimeoutRef.current) {
+              clearTimeout(silenceTimeoutRef.current)
+              silenceTimeoutRef.current = null
+            }
+          } else {
+            if (isRecordingInternal && !silenceTimeoutRef.current) {
+              silenceTimeoutRef.current = setTimeout(() => {
+                console.log('[NOVA-X VAD] Silence threshold reached. Stopping recording.')
+                if (
+                  mediaRecorderRef.current &&
+                  mediaRecorderRef.current.state !== 'inactive'
+                ) {
+                  mediaRecorderRef.current.stop()
+                }
+                isRecordingInternal = false
+              }, silenceDelay)
+            }
+          }
+          animationFrameRef.current = requestAnimationFrame(checkVolume)
+        }
+
+        checkVolume()
+      } catch (err) {
+        console.error('[NOVA-X VAD] Failed to initialize voice core:', err)
+      }

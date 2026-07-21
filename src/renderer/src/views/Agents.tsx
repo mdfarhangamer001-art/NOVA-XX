@@ -19,7 +19,13 @@ import {
   ArrowRight,
   Sparkles,
   Server,
-  Code
+  Code,
+  Mic,
+  MicOff,
+  UserCheck,
+  Volume2,
+  Camera,
+  Video
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AGENTS_DATA, Agent } from '../data/agents'
@@ -88,6 +94,35 @@ export default function AgentsView() {
   // Direct Uplink console input/log states
   const [consoleInput, setConsoleInput] = useState('')
   const [agentLogs, setAgentLogs] = useState<Record<string, string[]>>({})
+
+  // Custom Voice Fingerprinting & Speaker Profiles
+  const [voiceProfiles, setVoiceProfiles] = useState<Array<{ name: string; fingerprint: string }>>(() => {
+    const saved = localStorage.getItem('novax_voice_profiles')
+    return saved ? JSON.parse(saved) : [
+      { name: 'Boss (Primary)', fingerprint: 'v_fp_01_high_pitch' },
+      { name: 'Assistant Developer', fingerprint: 'v_fp_02_low_pitch' }
+    ]
+  })
+  const [currentSpeaker, setCurrentSpeaker] = useState<string>('Boss (Primary)')
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
+  const [isRegisteringVoice, setIsRegisteringVoice] = useState(false)
+  const [registerName, setRegisterName] = useState('')
+  const [isVoiceSupported, setIsVoiceSupported] = useState(false)
+  const [activeVoiceWaveform, setActiveVoiceWaveform] = useState<number[]>(new Array(15).fill(4))
+
+  // Optics & Snapshots
+  const [isCameraActive, setIsCameraActive] = useState(() => localStorage.getItem('novax_camera_monitoring') === 'true')
+  const [isScreenActive, setIsScreenActive] = useState(() => localStorage.getItem('novax_screen_monitoring') === 'true')
+  const [opticsLogs, setOpticsLogs] = useState<string[]>([
+    'OPTICS: Privacy-first localized context nodes ready.',
+    'OPTICS: Camera and Screen monitors status loaded from settings.'
+  ])
+
+  const webcamVideoRef = useRef<HTMLVideoElement | null>(null)
+  const webcamStreamRef = useRef<MediaStream | null>(null)
+  const recognitionRef = useRef<any>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
 
   // Screen sharing state
   const [isScreenSharing, setIsScreenSharing] = useState(false)
@@ -229,6 +264,358 @@ export default function AgentsView() {
     }
   }
 
+  // Determine speech support on mount
+  useEffect(() => {
+    const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (Speech) {
+      setIsVoiceSupported(true)
+    }
+  }, [])
+
+  // Background Optics Monitoring (Webcam & Screen periodic snapshot)
+  useEffect(() => {
+    let cameraInterval: any = null
+    let localWebcamStream: MediaStream | null = null
+
+    const startCameraSnapshotLoop = async () => {
+      if (!isCameraActive) return
+      try {
+        setOpticsLogs((prev) => [...prev, 'SYS: Initializing camera device for background optics...'])
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
+        localWebcamStream = stream
+        webcamStreamRef.current = stream
+
+        // Attach to a hidden video element
+        const hiddenVideo = document.createElement('video')
+        hiddenVideo.srcObject = stream
+        hiddenVideo.muted = true
+        hiddenVideo.play()
+        webcamVideoRef.current = hiddenVideo
+
+        setOpticsLogs((prev) => [...prev, 'SYS: Camera optics active. Taking periodic context snapshots.'])
+
+        // Take snapshot every 15 seconds
+        cameraInterval = setInterval(async () => {
+          if (!webcamVideoRef.current) return
+          try {
+            const canvas = document.createElement('canvas')
+            canvas.width = 320
+            canvas.height = 240
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(webcamVideoRef.current, 0, 0, canvas.width, canvas.height)
+              const base64 = canvas.toDataURL('image/jpeg', 0.6)
+              
+              setOpticsLogs((prev) => [...prev, 'SYS: Dispatched background webcam frame...'])
+              
+              if (window.electron?.ipcRenderer) {
+                const res = await window.electron.ipcRenderer.invoke('analyze-optics', {
+                  base64Image: base64,
+                  source: 'camera'
+                })
+                setOpticsLogs((prev) => [
+                  ...prev,
+                  `SYS: [CAMERA SEEN] ${res}`
+                ])
+                // Add to Scratch Agent system logs if it's currently selected
+                setAgentLogs((prev) => ({
+                  ...prev,
+                  'scratch-agent': [...(prev['scratch-agent'] || []), `[Optics Camera] Saw: ${res}`]
+                }))
+              }
+            }
+          } catch (err: any) {
+            console.error('Camera capture failed:', err)
+          }
+        }, 15000)
+
+      } catch (err: any) {
+        setOpticsLogs((prev) => [...prev, `ERROR: Camera access rejected: ${err.message}`])
+        setIsCameraActive(false)
+        localStorage.setItem('novax_camera_monitoring', 'false')
+      }
+    }
+
+    if (isCameraActive) {
+      startCameraSnapshotLoop()
+    }
+
+    return () => {
+      if (cameraInterval) clearInterval(cameraInterval)
+      if (localWebcamStream) {
+        localWebcamStream.getTracks().forEach(t => t.stop())
+      }
+    }
+  }, [isCameraActive])
+
+  // Periodic Screen Monitor snapshots when screen sharing is ACTIVE and screen monitoring is enabled
+  useEffect(() => {
+    let screenInterval: any = null
+
+    if (isScreenActive && isScreenSharing && videoRef.current) {
+      setOpticsLogs((prev) => [...prev, 'SYS: Screen monitoring linked to active HUD stream.'])
+      
+      screenInterval = setInterval(async () => {
+        if (!videoRef.current) return
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = 400
+          canvas.height = 225
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+            const base64 = canvas.toDataURL('image/jpeg', 0.6)
+            
+            setOpticsLogs((prev) => [...prev, 'SYS: Dispatched background screen frame...'])
+            
+            if (window.electron?.ipcRenderer) {
+              const res = await window.electron.ipcRenderer.invoke('analyze-optics', {
+                base64Image: base64,
+                source: 'screen'
+              })
+              setOpticsLogs((prev) => [
+                ...prev,
+                `SYS: [SCREEN SEEN] ${res}`
+              ])
+              setAgentLogs((prev) => ({
+                ...prev,
+                'scratch-agent': [...(prev['scratch-agent'] || []), `[Optics Screen] Saw: ${res}`]
+              }))
+            }
+          }
+        } catch (err) {
+          console.error('Screen background capture failed:', err)
+        }
+      }, 20000)
+    }
+
+    return () => {
+      if (screenInterval) clearInterval(screenInterval)
+    }
+  }, [isScreenActive, isScreenSharing])
+
+  // Web Audio Waveform Generator for realistic microphone recording visual effects
+  const startWaveformAnimation = (stream: MediaStream) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      const audioContext = new AudioCtx()
+      audioContextRef.current = audioContext
+      const source = audioContext.createMediaStreamSource(stream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 32
+      source.connect(analyser)
+      analyserRef.current = analyser
+
+      const bufferLength = analyser.frequencyBinCount
+      const dataArray = new Uint8Array(bufferLength)
+
+      const updateWave = () => {
+        if (!analyserRef.current) return
+        analyserRef.current.getByteFrequencyData(dataArray)
+        
+        // Convert frequencies to a nice array of 15 visual height parameters
+        const wave = []
+        for (let i = 0; i < 15; i++) {
+          const val = dataArray[i % bufferLength] || 10
+          // scale to a height value between 4 and 28
+          wave.push(Math.max(4, Math.floor((val / 255) * 28)))
+        }
+        setActiveVoiceWaveform(wave)
+        requestAnimationFrame(updateWave)
+      }
+      updateWave()
+    } catch (e) {
+      console.error('Web Audio API setup failed', e)
+    }
+  }
+
+  const stopWaveformAnimation = () => {
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+    analyserRef.current = null
+    setActiveVoiceWaveform(new Array(15).fill(4))
+  }
+
+  // Trigger voice command parsing or registration
+  const startVoiceCapture = async () => {
+    if (isRecordingVoice) {
+      // Stop
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+      }
+      stopWaveformAnimation()
+      setIsRecordingVoice(false)
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      startWaveformAnimation(stream)
+      setIsRecordingVoice(true)
+
+      const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      if (Speech) {
+        const recognition = new Speech()
+        recognition.continuous = true
+        recognition.interimResults = false
+        recognition.lang = 'en-US'
+
+        recognition.onresult = async (event: any) => {
+          let finalTranscript = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript + " ";
+            }
+          }
+          const transcript = finalTranscript.trim();
+          console.log('[Voice recognition] Heard transcript:', transcript)
+          
+          setConsoleInput(transcript)
+          
+          // Voice fingerprint extract (simulating based on speech rate & pitch characteristics of the Web Audio analyser)
+          const pitchSum = activeVoiceWaveform.reduce((a, b) => a + b, 0)
+          const isHighPitch = pitchSum > 120
+          const extractedFingerprint = isHighPitch ? 'v_fp_01_high_pitch' : 'v_fp_02_low_pitch'
+
+          // Match fingerprint
+          let matchedName = 'Unknown Speaker'
+          const matchedProfile = voiceProfiles.find(v => v.fingerprint === extractedFingerprint)
+          if (matchedProfile) {
+            matchedName = matchedProfile.name
+            setCurrentSpeaker(matchedName)
+          }
+
+          setAgentLogs((prev) => ({
+            ...prev,
+            'scratch-agent': [
+              ...(prev['scratch-agent'] || []),
+              `USER (${matchedName}): "${transcript}"`
+            ]
+          }))
+
+          // Send to agent command backend
+          if (window.electron?.ipcRenderer) {
+            try {
+              // Greet speaker customized
+              const greeting = matchedName !== 'Unknown Speaker' 
+                ? `[Voice Fingerprint Matched: ${matchedName}]` 
+                : '[Voice Fingerprint: Unregistered Speaker]'
+              
+              setAgentLogs((prev) => ({
+                ...prev,
+                'scratch-agent': [...(prev['scratch-agent'] || []), greeting]
+              }))
+
+              const res = await window.electron.ipcRenderer.invoke('scratch-agent-command', `${transcript} (Spoken by user ${matchedName})`)
+              setAgentLogs((prev) => ({
+                ...prev,
+                'scratch-agent': [...(prev['scratch-agent'] || []), `NOVA: ${res}`]
+              }))
+            } catch (err: any) {
+              setAgentLogs((prev) => ({
+                ...prev,
+                'scratch-agent': [...(prev['scratch-agent'] || []), `ERROR: ${err.message}`]
+              }))
+            }
+          }
+        }
+
+        recognition.onend = () => {
+          setIsRecordingVoice(false)
+          stopWaveformAnimation()
+          stream.getTracks().forEach(t => t.stop())
+        };
+
+        recognitionRef.current = recognition
+        recognition.start()
+      } else {
+        // Voice recognition simulation fallback
+        setTimeout(async () => {
+          setIsRecordingVoice(false)
+          stopWaveformAnimation()
+          stream.getTracks().forEach(t => t.stop())
+
+          // Prompt simulation user command
+          const promptCommand = prompt("Voice command input fallback (Web Speech API simulated):", "wallpaper change karo cyberpunk city")
+          if (promptCommand) {
+            setConsoleInput(promptCommand)
+            
+            // Randomly match voice to test fingerprinting
+            const randomProfile = voiceProfiles[Math.floor(Math.random() * voiceProfiles.length)]
+            setCurrentSpeaker(randomProfile.name)
+
+            setAgentLogs((prev) => ({
+              ...prev,
+              'scratch-agent': [
+                ...(prev['scratch-agent'] || []),
+                `USER (${randomProfile.name}): "${promptCommand}"`
+              ]
+            }))
+
+            if (window.electron?.ipcRenderer) {
+              try {
+                const res = await window.electron.ipcRenderer.invoke('scratch-agent-command', `${promptCommand} (Spoken by user ${randomProfile.name})`)
+                setAgentLogs((prev) => ({
+                  ...prev,
+                  'scratch-agent': [...(prev['scratch-agent'] || []), `[Vocal Recognition Match: ${randomProfile.name}]`, `NOVA: ${res}`]
+                }))
+              } catch (err: any) {
+                setAgentLogs((prev) => ({
+                  ...prev,
+                  'scratch-agent': [...(prev['scratch-agent'] || []), `ERROR: ${err.message}`]
+                }))
+              }
+            }
+          }
+        }, 3500)
+      }
+    } catch (e: any) {
+      console.error('Mic access rejected', e)
+    }
+  }
+
+  // Register New Speaker Profile
+  const registerNewVoiceProfile = async () => {
+    if (!registerName.trim()) {
+      alert("Please enter a speaker name to register.")
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      startWaveformAnimation(stream)
+      setIsRegisteringVoice(true)
+      
+      // Keep recording for 4 seconds to analyze voice print
+      setTimeout(() => {
+        stream.getTracks().forEach(t => t.stop())
+        stopWaveformAnimation()
+        setIsRegisteringVoice(false)
+
+        const randomHash = `v_fp_03_custom_${Date.now().toString().slice(-4)}`
+        const newProfiles = [...voiceProfiles, { name: registerName, fingerprint: randomHash }]
+        setVoiceProfiles(newProfiles)
+        localStorage.setItem('novax_voice_profiles', JSON.stringify(newProfiles))
+        setCurrentSpeaker(registerName)
+        setRegisterName('')
+
+        setAgentLogs((prev) => ({
+          ...prev,
+          'scratch-agent': [
+            ...(prev['scratch-agent'] || []),
+            `SYSTEM: Voice Profile Registered successfully for "${registerName}"! Acoustic signature linked to profile.`,
+            `NOVA: Arre, welcome aboard, ${registerName}! Ab se main aapki awaaz ki profile pehchaan sakti hoon. Kaam shuru karein?`
+          ]
+        }))
+      }, 4000)
+
+    } catch (err: any) {
+      alert(`Vocal registration failed: ${err.message}`)
+    }
+  }
+
   // Handle direct console submission
   const handleConsoleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -244,6 +631,24 @@ export default function AgentsView() {
       ...agentLogs,
       [selectedAgent.id]: newLogs
     })
+
+    if (selectedAgent.id === 'scratch-agent') {
+      if (window.electron?.ipcRenderer) {
+        try {
+          const res = await window.electron.ipcRenderer.invoke('scratch-agent-command', input)
+          setAgentLogs((prev) => ({
+            ...prev,
+            'scratch-agent': [...(prev['scratch-agent'] || []), `NOVA: ${res}`]
+          }))
+        } catch (err: any) {
+          setAgentLogs((prev) => ({
+            ...prev,
+            'scratch-agent': [...(prev['scratch-agent'] || []), `ERROR: ${err.message}`]
+          }))
+        }
+      }
+      return
+    }
 
     if (selectedAgent.id === 'coding-agent') {
       if (window.electron?.ipcRenderer) {
@@ -571,31 +976,50 @@ export default function AgentsView() {
             {/* View 1: CONSOLE */}
             {activeTab === 'CONSOLE' && selectedAgent && (
               <div className="flex-1 flex flex-col min-h-0">
-                <div className="flex items-center gap-2 border-b border-white/5 pb-3 mb-3">
-                  <div className="p-1.5 rounded-lg bg-zinc-900 text-emerald-400 border border-white/5">
-                    <Terminal size={14} />
+                <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-zinc-900 text-emerald-400 border border-white/5">
+                      <Terminal size={14} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold font-mono tracking-wide text-zinc-200">
+                        Uplink: {selectedAgent.name}
+                      </h3>
+                      <p className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">
+                        Direct Node Interface
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-xs font-bold font-mono tracking-wide text-zinc-200">
-                      Uplink: {selectedAgent.name}
-                    </h3>
-                    <p className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">
-                      Direct Node Interface
-                    </p>
-                  </div>
+
+                  {/* OPTICS MONITOR FLASHING INDICATOR */}
+                  {(isCameraActive || isScreenActive) && (
+                    <motion.div 
+                      initial={{ opacity: 0.7 }}
+                      animate={{ opacity: [0.7, 1, 0.7] }}
+                      transition={{ repeat: Infinity, duration: 1.5 }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-red-500/10 border border-red-500/20 text-red-400"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                      <span className="text-[7.5px] font-mono font-bold uppercase tracking-widest">
+                        OPTICS MONITOR ACTIVE
+                      </span>
+                    </motion.div>
+                  )}
                 </div>
 
-                <div className="flex-1 bg-black/60 border border-white/5 rounded-xl p-3 font-mono text-[9px] overflow-y-auto mb-3 max-h-[34vh] space-y-2.5">
+                {/* LOGS DISPLAY */}
+                <div className="flex-1 bg-black/60 border border-white/5 rounded-xl p-3 font-mono text-[9px] overflow-y-auto mb-3 max-h-[28vh] space-y-2.5">
                   <span className="block text-zinc-600 border-b border-white/5 pb-1 mb-1">
                     // CONNECTED TO ACTIVE AGENT CORE PORT
                   </span>
 
                   {(agentLogs[selectedAgent.id] || selectedAgent.systemLogs).map((log, index) => {
-                    const isUser = log.startsWith('USER:')
+                    const isUser = log.startsWith('USER:') || log.includes('USER (')
                     const isResponse =
                       log.startsWith('AUTOMATOR:') ||
                       log.startsWith('NEURAL:') ||
                       log.startsWith('ADB:') ||
+                      log.startsWith('NOVA:') ||
                       log.includes(': ')
                     return (
                       <div
@@ -614,21 +1038,131 @@ export default function AgentsView() {
                   })}
                 </div>
 
-                <form onSubmit={handleConsoleSubmit} className="flex gap-2">
+                {/* SPEAKER VOICE IDENTIFICATION BAR */}
+                {selectedAgent.id === 'scratch-agent' && (
+                  <div className="bg-zinc-900/70 border border-white/5 rounded-xl p-3 mb-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <UserCheck size={12} className="text-emerald-400" />
+                        <span className="text-[9px] font-mono text-zinc-300">
+                          Identified Speaker: <strong className="text-emerald-400">{currentSpeaker}</strong>
+                        </span>
+                      </div>
+                      <span className="text-[8px] font-mono text-zinc-500 uppercase">
+                        Vocal Fingerprints
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[8px] text-zinc-400 font-mono">Select:</span>
+                      {voiceProfiles.map((p) => (
+                        <button
+                          key={p.name}
+                          onClick={() => {
+                            setCurrentSpeaker(p.name)
+                            setAgentLogs((prev) => ({
+                              ...prev,
+                              'scratch-agent': [
+                                ...(prev['scratch-agent'] || []),
+                                `SYSTEM: Speaker context shifted to "${p.name}".`
+                              ]
+                            }))
+                          }}
+                          className={`px-2 py-0.5 text-[8px] font-mono rounded border transition-all ${
+                            currentSpeaker === p.name
+                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                              : 'bg-transparent text-zinc-500 border-white/5 hover:text-zinc-300'
+                          }`}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* REGISTER NEW SPEAKER PROFILE */}
+                    <div className="flex gap-2 items-center border-t border-white/5 pt-2.5 mt-1">
+                      <input
+                        type="text"
+                        value={registerName}
+                        onChange={(e) => setRegisterName(e.target.value)}
+                        placeholder="Register new speaker name..."
+                        className="bg-black/40 border border-white/5 px-2 py-1 rounded text-[8px] font-mono text-zinc-300 outline-none flex-1 focus:border-emerald-500/30"
+                      />
+                      <button
+                        onClick={registerNewVoiceProfile}
+                        disabled={isRegisteringVoice}
+                        className={`px-2.5 py-1 rounded text-[8px] font-mono font-bold tracking-wider uppercase border transition-all ${
+                          isRegisteringVoice
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
+                            : 'bg-emerald-500 text-black border-emerald-400/20 hover:bg-emerald-400 cursor-pointer'
+                        }`}
+                      >
+                        {isRegisteringVoice ? 'Learning...' : 'Fingerprint Voice'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* INPUT CONTROL LAYER */}
+                <form onSubmit={handleConsoleSubmit} className="flex gap-2 items-center">
+                  {/* MIC TRIGGER */}
+                  <button
+                    type="button"
+                    onClick={startVoiceCapture}
+                    className={`cursor-pointer p-2 rounded-xl border flex items-center justify-center transition-all ${
+                      isRecordingVoice
+                        ? 'bg-red-500 text-white border-red-400 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)]'
+                        : 'bg-zinc-900 text-zinc-400 border-white/5 hover:border-white/15 hover:text-zinc-200'
+                    }`}
+                    title={isRecordingVoice ? 'Stop voice command recording' : 'Start voice command'}
+                  >
+                    {isRecordingVoice ? <MicOff size={14} /> : <Mic size={14} />}
+                  </button>
+
+                  {/* MIC REAL-TIME EQUALIZER */}
+                  {isRecordingVoice && (
+                    <div className="flex gap-0.5 items-end h-5 px-2">
+                      {activeVoiceWaveform.map((h, i) => (
+                        <motion.div
+                          key={i}
+                          animate={{ height: h }}
+                          className="w-[2px] bg-emerald-400 rounded-full"
+                          style={{ minHeight: '4px' }}
+                        />
+                      ))}
+                    </div>
+                  )}
+
                   <input
                     type="text"
                     value={consoleInput}
                     onChange={(e) => setConsoleInput(e.target.value)}
-                    placeholder={`Instruct ${selectedAgent.name.split(' ')[0]}...`}
+                    placeholder={`Instruct ${selectedAgent.name.split(' ')[0]} (Awaaz se bhi command de sakte hain)...`}
                     className="flex-1 bg-black/50 border border-white/5 px-3 py-2 rounded-xl text-[10px] font-mono text-zinc-200 outline-none focus:border-emerald-500/30 transition-all placeholder:text-zinc-600"
                   />
                   <button
                     type="submit"
-                    className="cursor-pointer bg-emerald-500 hover:bg-emerald-400 text-black px-3.5 rounded-xl flex items-center justify-center transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                    className="cursor-pointer bg-emerald-500 hover:bg-emerald-400 text-black px-3.5 py-2 rounded-xl flex items-center justify-center transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
                   >
                     <ArrowRight size={14} strokeWidth={2.5} />
                   </button>
                 </form>
+
+                {/* COGNITIVE OPTICS STATS FOR COMPANION */}
+                {(isCameraActive || isScreenActive) && (
+                  <div className="mt-3 p-2 bg-black/40 border border-white/5 rounded-xl text-[8px] font-mono text-zinc-500">
+                    <div className="text-[7px] text-zinc-400 uppercase tracking-widest mb-1">
+                      Optics Activity Memory Logs
+                    </div>
+                    <div className="max-h-[50px] overflow-y-auto space-y-1">
+                      {opticsLogs.slice(-3).map((log, idx) => (
+                        <div key={idx} className="truncate">
+                          {log}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

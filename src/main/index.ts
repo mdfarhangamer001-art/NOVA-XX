@@ -1,5 +1,14 @@
 import dotenv from 'dotenv'
 dotenv.config()
+
+process.on('uncaughtException', (err) => {
+  console.error('[NOVA-X Global Crash UncaughtException]:', err)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[NOVA-X Global Crash UnhandledRejection] at:', promise, 'reason:', reason)
+})
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import {

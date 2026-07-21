@@ -18,6 +18,9 @@ const IndexRoot = (): JSX.Element => {
   const animationFrameRef = useRef<number | null>(null)
   const silenceTimeoutRef = useRef<any>(null)
   const stopRequestedRef = useRef(false)
+  const recognitionRef = useRef<any>(null)
+
+
 
   // Expose speaking state setter globally
   useEffect(() => {
@@ -70,33 +73,55 @@ const IndexRoot = (): JSX.Element => {
     ;(window as any).speakText = (text: string) => {
       if (!window.speechSynthesis) return
       window.speechSynthesis.cancel()
-      const utterance = new SpeechSynthesisUtterance(text)
 
-      const vibe = localStorage.getItem('novax_operator_vibe') || 'TACTICAL'
-      let rate = 1.05
-      let pitch = 0.95
-      if (vibe === 'EMPATHETIC') {
-        rate = 0.92
-        pitch = 1.05
-      } else if (vibe === 'CALM') {
-        rate = 0.85
-        pitch = 0.88
-      } else if (vibe === 'INTENSE') {
-        rate = 1.2
-        pitch = 1.08
+      // Detect emotion tag (e.g. [EMOTION: EXCITED])
+      let detectedEmotion = '';
+      const emotionRegex = /\[EMOTION:\s*([A-Z_]+)\]/i;
+      const match = text.match(emotionRegex);
+      if (match) {
+        detectedEmotion = match[1].toUpperCase();
       }
 
-      utterance.rate = rate
-      utterance.pitch = pitch
+      // Strip all emotion tags from the spoken text
+      const cleanText = text.replace(/\[EMOTION:\s*[A-Z_]+\]/gi, '').trim();
+      const utterance = new SpeechSynthesisUtterance(cleanText)
+
+      const vibe = detectedEmotion || localStorage.getItem('novax_operator_vibe') || 'TACTICAL'
+      let rate = 0.92
+      let pitch = 0.95
+      if (vibe === 'EMPATHETIC' || vibe === 'SAD' || vibe === 'SOFT') {
+        rate = 0.88
+        pitch = 1.08
+      } else if (vibe === 'CALM' || vibe === 'SERENE') {
+        rate = 0.82
+        pitch = 0.90
+      } else if (vibe === 'INTENSE' || vibe === 'FAST') {
+        rate = 1.12
+        pitch = 1.12
+      } else if (vibe === 'EXCITED' || vibe === 'JOY' || vibe === 'HAPPY') {
+        rate = 1.05
+        pitch = 1.18
+      }
+
+      // Snappy default fast speech rate with speed configuration support
+      const speedMultiplier = parseFloat(localStorage.getItem('novax_speech_speed') || '1.0')
+      const pitchMultiplier = parseFloat(localStorage.getItem('novax_speech_pitch') || '1.0')
+      utterance.rate = Math.min(2.0, Math.max(0.1, rate * speedMultiplier))
+      utterance.pitch = Math.min(2.0, Math.max(0.5, pitch * pitchMultiplier))
       const voices = window.speechSynthesis.getVoices()
-      const voice =
-        voices.find(
-          (v) =>
-            v.name.includes('Female') ||
-            v.name.includes('Zira') ||
-            v.name.includes('Samantha') ||
-            (v.lang === 'en-US' && v.name.includes('Google'))
-        ) || voices[0]
+      const savedVoiceURI = localStorage.getItem('novax_speech_voice_uri')
+      let voice = voices.find((v) => v.voiceURI === savedVoiceURI)
+
+      if (!voice) {
+        voice =
+          voices.find(
+            (v) =>
+              v.name.includes('Female') ||
+              v.name.includes('Zira') ||
+              v.name.includes('Samantha') ||
+              (v.lang === 'en-US' && v.name.includes('Google'))
+          ) || voices[0]
+      }
       if (voice) utterance.voice = voice
 
       utterance.onstart = () => {
@@ -123,153 +148,86 @@ const IndexRoot = (): JSX.Element => {
     }
   }, [])
 
-  // Modern VAD-based Voice Recognition Core
+  // Web Speech API Voice Recognition Core
   useEffect(() => {
-    let audioChunks: Blob[] = []
-    let isRecordingInternal = false
-
-    const threshold = 0.015
-    const silenceDelay = 1500
-
-    const stopMic = () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
-      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop()
+    if (!isConnected || isMuted) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
       }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-        audioContextRef.current = null
-      }
-      analyserRef.current = null
-      setMicStatus('idle')
+      setMicStatus('idle');
+      return;
     }
 
-    const startVAD = async () => {
-      if (stopRequestedRef.current) return
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        streamRef.current = stream
-        audioContextRef.current = new AudioContext()
-        analyserRef.current = audioContextRef.current.createAnalyser()
-        const source = audioContextRef.current.createMediaStreamSource(stream)
-        source.connect(analyserRef.current)
-        analyserRef.current.fftSize = 1024
+    const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Speech) {
+      console.warn("Speech Recognition not supported.");
+      return;
+    }
 
-        const dataArray = new Uint8Array(analyserRef.current.fftSize)
+    const recognition = new Speech();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    // Set lang to hi-IN to match user's Hindi / Hinglish request
+    recognition.lang = 'hi-IN';
 
-        const checkVolume = () => {
-          if (!analyserRef.current || stopRequestedRef.current) return
-          analyserRef.current.getByteTimeDomainData(dataArray)
+    recognition.onstart = () => {
+      setMicStatus('listening');
+      window.dispatchEvent(
+        new CustomEvent('novax_mic_state', { detail: { status: 'listening' } })
+      );
+    };
 
-          let sumSquares = 0
-          for (let i = 0; i < dataArray.length; i++) {
-            const normalized = (dataArray[i] - 128) / 128
-            sumSquares += normalized * normalized
-          }
-          const rms = Math.sqrt(sumSquares / dataArray.length)
-
-          window.dispatchEvent(new CustomEvent('novax_mic_level', { detail: rms }))
-
-          if (rms > threshold) {
-            if (!isRecordingInternal) {
-              console.log('[NOVA-X VAD] Speech detected. Starting recording...')
-              isRecordingInternal = true
-              audioChunks = []
-              setMicStatus('listening')
-              window.dispatchEvent(
-                new CustomEvent('novax_mic_state', { detail: { status: 'listening' } })
-              )
-
-              let mimeType = 'audio/webm'
-              if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus'))
-                mimeType = 'audio/webm;codecs=opus'
-              else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus'))
-                mimeType = 'audio/ogg;codecs=opus'
-
-              mediaRecorderRef.current = new MediaRecorder(stream, { mimeType })
-              mediaRecorderRef.current.ondataavailable = (e) => {
-                if (e.data.size > 0) audioChunks.push(e.data)
-              }
-              mediaRecorderRef.current.onstop = async () => {
-                setMicStatus('transcribing')
-                window.dispatchEvent(
-                  new CustomEvent('novax_mic_state', { detail: { status: 'transcribing' } })
-                )
-                const audioBlob = new Blob(audioChunks, { type: mimeType })
-                const reader = new FileReader()
-                reader.readAsDataURL(audioBlob)
-                reader.onloadend = async () => {
-                  const base64data = (reader.result as string).split(',')[1]
-                  try {
-                    // @ts-ignore
-                    if (window.iris?.transcribeAudio) {
-                      // @ts-ignore
-                      const transcript = await window.iris.transcribeAudio(
-                        base64data,
-                        audioBlob.type
-                      )
-                      if (transcript && transcript.trim().length > 0) {
-                        // @ts-ignore
-                        if (window.triggerVoiceCommand) window.triggerVoiceCommand(transcript)
-                      }
-                    }
-                  } catch (err) {
-                    console.error('[NOVA-X VAD] Transcription error:', err)
-                  } finally {
-                    setMicStatus('idle')
-                    window.dispatchEvent(
-                      new CustomEvent('novax_mic_state', { detail: { status: 'idle' } })
-                    )
-                  }
-                }
-              }
-              mediaRecorderRef.current.start()
-            }
-
-            if (silenceTimeoutRef.current) {
-              clearTimeout(silenceTimeoutRef.current)
-              silenceTimeoutRef.current = null
-            }
-          } else {
-            if (isRecordingInternal && !silenceTimeoutRef.current) {
-              silenceTimeoutRef.current = setTimeout(() => {
-                console.log('[NOVA-X VAD] Silence threshold reached. Stopping recording.')
-                if (
-                  mediaRecorderRef.current &&
-                  mediaRecorderRef.current.state !== 'inactive'
-                ) {
-                  mediaRecorderRef.current.stop()
-                }
-                isRecordingInternal = false
-              }, silenceDelay)
-            }
-          }
-          animationFrameRef.current = requestAnimationFrame(checkVolume)
+    recognition.onresult = (event: any) => {
+      let finalTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + " ";
         }
-
-        checkVolume()
-      } catch (err) {
-        console.error('[NOVA-X VAD] Failed to initialize voice core:', err)
       }
-    }
+      const transcript = finalTranscript.trim();
+      
+      if (transcript && transcript.length > 0) {
+        console.log('[Web Speech API] Final Transcript:', transcript);
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+        }
+        if ((window as any).triggerVoiceCommand) {
+          (window as any).triggerVoiceCommand(transcript);
+        }
+      }
+    };
 
-    const shouldBeRunning = isConnected && !isMuted && !isSpeaking
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setMicStatus('idle');
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+         // Auto-restart logic if desired could go here
+      }
+    };
 
-    if (shouldBeRunning) {
-      startVAD()
-    } else {
-      stopMic()
-    }
+    recognition.onend = () => {
+       // If it ended automatically but the call is still connected and not muted, we restart it.
+       // The user requested a push-to-talk style toggle, so if isMuted is false (mic ON), we keep listening.
+       if (!isMuted && isConnected) {
+          recognition.start();
+       } else {
+          setMicStatus('idle');
+       }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
 
     return () => {
-      stopMic()
-    }
-  }, [isConnected, isMuted, isSpeaking, activeLang])
+      if (recognitionRef.current) {
+        recognitionRef.current.onend = null; // Prevent restart loop
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      setMicStatus('idle');
+    };
+  }, [isConnected, isMuted])
 
   return (
     <div className="flex flex-col h-screen w-screen bg-transparent overflow-hidden relative border border-emerald-500/20 rounded-xl">

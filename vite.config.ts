@@ -14,7 +14,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     host: '0.0.0.0',
-    port: parseInt(process.env.PORT || '5000'),
+    port: 3000,
     allowedHosts: 'all'
   },
   build: {

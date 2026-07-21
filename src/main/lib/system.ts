@@ -10,7 +10,9 @@ import http from 'http'
 import crypto from 'crypto'
 import { WebSocketServer } from 'ws'
 import Store from 'electron-store'
-import { GoogleGenAI } from '@google/genai'
+import { getGeminiClient, getGroqClient, saveKeys, getGeminiModelName } from '../ai-clients'
+import { processAgentCommand } from './agent-brain'
+import { analyzeVision } from './optics'
 
 const store = new Store()
 
@@ -421,87 +423,253 @@ function getGeminiApiKeyLocal(): string {
 export default function registerSystemHandlers(ipcMain: IpcMain) {
   console.log('[NOVA-X Main] registerSystemHandlers starting registration...')
   try {
+    ipcMain.removeHandler('scratch-agent-command')
+    ipcMain.handle('scratch-agent-command', async (_event, prompt: string) => {
+      return await processAgentCommand(prompt)
+    })
+
+    ipcMain.removeHandler('analyze-optics')
+    ipcMain.handle('analyze-optics', async (_event, { base64Image, source }: { base64Image: string; source: 'camera' | 'screen' }) => {
+      return await analyzeVision(base64Image, source)
+    })
+
     ipcMain.removeHandler('gemini-chat-call')
     ipcMain.handle(
       'gemini-chat-call',
       async (event, payload: { contents: any[]; systemInstruction: string; stream?: boolean }) => {
-        const apiKey = getGeminiApiKeyLocal()
-        if (!apiKey) {
-          throw new Error('Gemini API key is not configured in NOVA-X settings.')
+        const { contents, systemInstruction, stream } = payload
+
+        const resolvedGeminiKey = getApiKey('geminiKey', process.env.GEMINI_API_KEY)
+        const resolvedGroqKey = getApiKey('groqKey', process.env.GROQ_API_KEY)
+        const primary = getPrimaryEngine() || 'gemini'
+        const webContents = event.sender
+
+        const runGroq = async () => {
+          if (!resolvedGroqKey || resolvedGroqKey.trim() === '' || resolvedGroqKey.includes('YOUR_')) {
+            throw new Error('GROQ_API_KEY_MISSING')
+          }
+          const groq = getGroqClient(resolvedGroqKey)
+          const messages = [
+            { role: 'system', content: systemInstruction },
+            ...contents.map((c: any) => ({
+              role: c.role === 'model' ? 'assistant' : (c.role === 'assistant' ? 'assistant' : 'user'),
+              content: c.parts?.map((p: any) => p.text || '').join(' ') || ''
+            }))
+          ]
+
+          let groqFullText = ''
+          if (stream) {
+            const chatStream = await groq.chat.completions.create({
+              model: 'llama-3.1-8b-instant',
+              messages,
+              stream: true
+            })
+            for await (const chunk of chatStream) {
+              const delta = chunk.choices[0]?.delta?.content || ''
+              if (delta) {
+                groqFullText += delta
+                webContents.send('gemini-stream-chunk', delta)
+              }
+            }
+          } else {
+            const completion = await groq.chat.completions.create({
+              model: 'llama-3.1-8b-instant',
+              messages
+            })
+            groqFullText = completion.choices[0]?.message?.content || ''
+          }
+          return { candidates: [{ content: { parts: [{ text: groqFullText }] } }] }
         }
 
-        const { contents, systemInstruction, stream } = payload
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build'
+        const runGemini = async () => {
+          if (!resolvedGeminiKey || resolvedGeminiKey.trim() === '' || resolvedGeminiKey.includes('YOUR_')) {
+            throw new Error('GEMINI_API_KEY_MISSING')
+          }
+          const ai = getGeminiClient(resolvedGeminiKey)
+          const dynamicModel = await getGeminiModelName(ai, 'chat')
+
+          // Memory Augmentation
+          const memories = (store.get('novax_memories', []) as any[]).slice(-8)
+          if (memories.length > 0) {
+            const memoryContext = `[RELEVANT MEMORIES]: ${memories.map((m) => m.fact).join('; ')}`
+            const lastPart = contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1]
+            if (typeof lastPart === 'string') {
+              contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1] = lastPart + `\n\n${memoryContext}`
+            } else if (lastPart && (lastPart as any).text) {
+              (lastPart as any).text += `\n\n${memoryContext}`
             }
           }
-        })
 
-        const model = ai.getGenerativeModel({
-          model: 'gemini-3.5-flash',
-          systemInstruction,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024
+          let fullText = ''
+          if (stream) {
+            const responseStream = await ai.models.generateContentStream({
+              model: dynamicModel,
+              contents,
+              config: { 
+                systemInstruction,
+                tools: [{ googleSearch: {} }],
+                generationConfig: {
+                  temperature: 0.5,
+                  maxOutputTokens: 250
+                }
+              }
+            })
+            
+            for await (const chunk of responseStream) {
+              const chunkText = chunk.text || ''
+              fullText += chunkText
+              webContents.send('gemini-stream-chunk', chunkText)
+            }
+          } else {
+            const response = await ai.models.generateContent({
+              model: dynamicModel,
+              contents,
+              config: { 
+                systemInstruction,
+                tools: [{ googleSearch: {} }],
+                generationConfig: {
+                  temperature: 0.5,
+                  maxOutputTokens: 250
+                }
+              }
+            })
+            fullText = response.text || ''
           }
-        })
 
-        // Memory Augmentation: Include facts if available
-        const memories = store.get('novax_memories', []) as any[]
-        if (memories.length > 0) {
-          const memoryContext = `[RELEVANT MEMORIES]: ${memories.map((m) => m.fact).join('; ')}`
-          contents[contents.length - 1].parts.push({ text: `\n\n${memoryContext}` })
+          extractAndStoreMemories(fullText).catch(() => {})
+          return { candidates: [{ content: { parts: [{ text: fullText }] } }] }
         }
 
-        let fullText = ''
-        if (stream) {
-          const result = await model.generateContentStream({ contents })
-          const webContents = event.sender
+        let firstErr: any = null
+        let secondErr: any = null
 
-          for await (const chunk of result.stream) {
-            const chunkText = chunk.text()
-            fullText += chunkText
-            webContents.send('gemini-stream-chunk', chunkText)
+        try {
+          if (primary === 'groq') {
+            try {
+              return await runGroq()
+            } catch (groqErr: any) {
+              firstErr = groqErr
+              console.log('[NOVA-X Main] Primary provider check complete.')
+              try {
+                return await runGemini()
+              } catch (geminiErr: any) {
+                secondErr = geminiErr
+                throw geminiErr
+              }
+            }
+          } else {
+            try {
+              return await runGemini()
+            } catch (geminiErr: any) {
+              firstErr = geminiErr
+              console.log('[NOVA-X Main] Primary provider check complete.')
+              try {
+                return await runGroq()
+              } catch (groqErr: any) {
+                secondErr = groqErr
+                throw groqErr
+              }
+            }
           }
-        } else {
-          const response = await model.generateContent({ contents })
-          fullText = response.response.text()
+        } catch (finalErr: any) {
+          console.log('[NOVA-X Main] Final provider check complete.')
+          
+          let isLimitExceeded = false
+          let isKeyMissing = false
+
+          const getErrorText = (err: any) => {
+            if (!err) return ''
+            try {
+              const msg = err.message || ''
+              const str = String(err)
+              const json = typeof err === 'object' ? JSON.stringify(err) : ''
+              return `${msg} ${str} ${json}`.toLowerCase()
+            } catch (_) {
+              return String(err).toLowerCase()
+            }
+          }
+
+          const primaryErrorText = getErrorText(firstErr)
+          const fallbackErrorText = getErrorText(secondErr)
+          const finalErrorText = getErrorText(finalErr)
+
+          const isLimit = (text: string) => {
+            return (
+              text.includes('429') ||
+              text.includes('quota') ||
+              text.includes('limit') ||
+              text.includes('resource_exhausted') ||
+              text.includes('rate_limit') ||
+              text.includes('too many requests')
+            )
+          }
+
+          const isKey = (text: string) => {
+            return (
+              text.includes('missing') ||
+              text.includes('not found') ||
+              text.includes('api_key') ||
+              text.includes('key missing') ||
+              text.includes('invalid') ||
+              text.includes('credentials')
+            )
+          }
+
+          if (firstErr) {
+            if (isLimit(primaryErrorText)) {
+              isLimitExceeded = true
+            } else if (isKey(primaryErrorText)) {
+              isKeyMissing = true
+            }
+          }
+
+          if (!isLimitExceeded && !isKeyMissing) {
+            const combinedText = `${primaryErrorText} ${fallbackErrorText} ${finalErrorText}`
+            if (isLimit(combinedText)) {
+              isLimitExceeded = true
+            } else if (isKey(combinedText)) {
+              isKeyMissing = true
+            }
+          }
+
+          if (isLimitExceeded) {
+            return { error: 'Limit exceeded, please upgrade your plan.' }
+          } else if (isKeyMissing) {
+            return { error: 'API key not found, please add the API key in settings.' }
+          } else {
+            return { error: 'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.' }
+          }
         }
-
-        // Proactive Memory Extraction (Background)
-        extractAndStoreMemories(apiKey, fullText).catch((err: any) => {
-          if (!err.message?.includes('429') && !err.message?.includes('Quota exceeded')) {
-            console.error('[Memory Engine] Extraction failed:', err)
-          }
-        })
-
-        return { candidates: [{ content: { parts: [{ text: fullText }] } }] }
       }
     )
 
-    async function extractAndStoreMemories(apiKey: string, text: string) {
-      const ai = new GoogleGenAI({ apiKey })
-      const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' })
-      const prompt = `Extract all important personal facts, events, meetings, timelines, and precise details about the operator from this text. Capture all dates, durations, and details exactly (e.g. "Meeting with John on 2023-05-12", "It has been 3 days since X"). 
-    Respond ONLY with a JSON array of strings: ["fact 1", "fact 2"]. If nothing important, respond [].
-    Text: ${text}`
-
+    async function extractAndStoreMemories(text: string) {
       try {
-        const res = await model.generateContent(prompt)
-        const content = res.response.text().trim()
-        const newFacts = JSON.parse(content.match(/\[.*\]/s)?.[0] || '[]')
+        const ai = getGeminiClient()
+        const dynamicModel = await getGeminiModelName(ai, 'chat')
+        const prompt = `Extract all important personal facts, events, meetings, timelines, and precise details about the operator from this text. Capture all dates, durations, and details exactly (e.g. "Meeting with John on 2023-05-12", "It has been 3 days since X"). 
+      Respond ONLY with a JSON array of strings: ["fact 1", "fact 2"]. If nothing important, respond [].
+      Text: ${text}`
+
+        const res = await ai.models.generateContent({
+          model: dynamicModel,
+          contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        })
+        const content = (res.text || '').trim()
+        const match = content.match(/\[.*\]/s)
+        const newFacts = JSON.parse(match ? match[0] : '[]')
+        
         if (Array.isArray(newFacts) && newFacts.length > 0) {
           const existing = store.get('novax_memories', []) as any[]
           const updated = [
             ...existing,
             ...newFacts.map((f) => ({ fact: f, timestamp: Date.now() }))
           ]
-          store.set('novax_memories', updated)
+          store.set('novax_memories', updated.slice(-200)) // Keep last 200 memories
         }
-      } catch (e) {}
+      } catch (e) {
+        // Silent fail for background process
+      }
     }
 
     ipcMain.handle('launch-app', async (_event, appName: string) => {
@@ -625,48 +793,68 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     ipcMain.handle(
       'iris-transcribe-audio',
       async (_event, payload: { base64Audio: string; mimeType: string }) => {
-        const apiKey = getGeminiApiKeyLocal()
-        if (!apiKey) {
-          throw new Error('Gemini API key required for transcription.')
-        }
-
         let { base64Audio, mimeType } = payload
-        mimeType = mimeType.split(';')[0] // Clean mimetype for Gemini
-
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build'
-            }
-          }
-        })
+        mimeType = mimeType.split(';')[0]
 
         try {
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
-            contents: [
-              {
-                role: 'user',
-                parts: [
+          // Attempt Groq First (Priority)
+          const groq = getGroqClient()
+          if (groq) {
+            const buffer = Buffer.from(base64Audio, 'base64')
+            const tmpFile = path.join(os.tmpdir(), `audio_${Date.now()}.webm`)
+            fs.writeFileSync(tmpFile, buffer)
+
+            const transcription = await groq.audio.transcriptions.create({
+              file: fs.createReadStream(tmpFile),
+              model: 'whisper-large-v3',
+              response_format: 'text',
+              prompt: 'hello, JARVIS, how can I help you, Boss? Kaise ho yaar. Main jo bol raha hoon use dhyan se suno. Text to speech accuracy 100% honi chahiye. hindi hinglish english', language: 'hi'
+            })
+            fs.unlinkSync(tmpFile)
+            return typeof transcription === 'string' ? transcription : (transcription as any).text
+          } else {
+            throw new Error('GROQ_API_KEY_MISSING')
+          }
+        } catch (groqErr: any) {
+          console.log('[NOVA-X Main] Audio processing handoff.')
+          try {
+            const ai = getGeminiClient()
+            const dynamicModel = await getGeminiModelName(ai, 'transcribe')
+            
+            const callWithRetry = async (fn: any, retries = 5, delay = 1000): Promise<any> => {
+              try {
+                return await fn()
+              } catch (err: any) {
+                if (retries > 0 && (err.message.includes('429') || err.message.includes('Quota'))) {
+                  const backoff = delay * Math.pow(2, 5 - retries) + Math.random() * 500
+                  console.log(`[NOVA-X Main] Rate limit handling active. Retries remaining: ${retries}`)
+                  await new Promise(resolve => setTimeout(resolve, backoff))
+                  return callWithRetry(fn, retries - 1, delay)
+                }
+                throw err
+              }
+            }
+
+            const response = await callWithRetry(() => ai.models.generateContent({
+                model: dynamicModel,
+                contents: [
                   {
-                    text: 'Precisely transcribe the spoken audio. Respond with ONLY the transcribed text. Do not add any commentary, explanations, or quotes.'
+                    text: 'Precisely transcribe the spoken audio. The user is speaking to their JARVIS AI Assistant. They will likely speak in English, Hindi, or Hinglish (Hindi written in the Roman script or mixed with English). Be extremely precise and accurate with spelling. For example, transcribe "hello" as "hello" and NOT "alo" or "aló". Respond with ONLY the exact literal transcribed text. Do NOT add any notes, punctuation commentary, quotes, preamble, or explanations.'
                   },
                   { inlineData: { mimeType, data: base64Audio } }
                 ]
-              }
-            ]
-          })
+              }))
 
-          return response.text?.trim() || ''
-        } catch (err: any) {
-          if (err.message?.includes('429') || err.message?.includes('Quota exceeded')) {
-            return '[API_RATE_LIMIT]'
-          } else if (err.message?.includes('required')) {
-            return '[API_KEY_REQUIRED]'
+            return (response.text || '').trim()
+          } catch (geminiErr: any) {
+            console.log('[NOVA-X Main] Audio processing completed.')
+            if (geminiErr.message?.includes('429') || geminiErr.message?.includes('Quota exceeded')) {
+              return '[API_RATE_LIMIT]'
+            } else if (geminiErr.message?.includes('required')) {
+              return '[API_KEY_REQUIRED]'
+            }
+            return `[ERROR] Transcription failure`
           }
-          console.error('[Web Preview] Transcribe Error:', err)
-          throw err
         }
       }
     )
@@ -700,6 +888,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     // API Vault Store Handlers
     ipcMain.removeHandler('secure-save-keys')
     ipcMain.handle('secure-save-keys', (_event, keys: any) => {
+      saveKeys(keys)
       try {
         if (keys.primaryEngine) {
           store.set('primary_engine', keys.primaryEngine)
@@ -990,7 +1179,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             if (modelOutput) {
               model = modelOutput.trim().toUpperCase()
             }
-          } catch (e) {}
+          } catch (e) {
+            // ignore
+          }
 
           const history: any[] = (store.get('adb_history') as any[]) || []
           const alreadyExists = history.some((d: any) => d.ip === detectedSerial)
@@ -1300,10 +1491,27 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     ${formattedLogs}`
 
       try {
-        const ai = new GoogleGenAI({ apiKey })
-        const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' })
-        const res = await model.generateContent(prompt)
-        return res.response.text().trim()
+        const ai = getGeminiClient()
+        const dynamicModel = await getGeminiModelName(ai, 'chat')
+        
+        const callWithRetry = async (fn: any, retries = 2, delay = 2000): Promise<any> => {
+          try {
+            return await fn()
+          } catch (err: any) {
+            if (retries > 0 && (err.message.includes('429') || err.message.includes('Quota'))) {
+              console.warn(`[NOVA-X Main] Rate limit hit, retrying in ${delay}ms... (${retries} retries left)`)
+              await new Promise(resolve => setTimeout(resolve, delay))
+              return callWithRetry(fn, retries - 1, delay * 2)
+            }
+            throw err
+          }
+        }
+
+        const res = await callWithRetry(() => ai.models.generateContent({
+          model: dynamicModel,
+          contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        }))
+        return (res.text || '').trim()
       } catch (e: any) {
         return `Failed to compile telemetry briefing: ${e.message}`
       }
@@ -1338,7 +1546,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             JSON.stringify({ type: 'auth_fail', error: 'Unpaired by operator.' })
           )
           activeCompanionWs.close()
-        } catch (e) {}
+        } catch (e) {
+          // ignore
+        }
         activeCompanionWs = null
       }
       companionConnectedDeviceIp = ''
@@ -1369,7 +1579,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       if (activeCompanionWs) {
         try {
           activeCompanionWs.send(JSON.stringify({ type: 'reply', text }))
-        } catch (e) {}
+        } catch (e) {
+          // ignore
+        }
       }
       return { success: true }
     })
@@ -1461,7 +1673,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
                     status = 'WARNING'
                     desc = 'Active error logging channels identified. Nominal debug load.'
                   }
-                } catch (err) {}
+                } catch (err) {
+                  // ignore
+                }
 
                 if (filesToScan.length < 50) {
                   filesToScan.push({
@@ -1592,7 +1806,9 @@ function startCompanionServer() {
   if (companionServer) {
     try {
       companionServer.close()
-    } catch (e) {}
+    } catch (e) {
+      // ignore
+    }
   }
 
   companionPin = Math.floor(100000 + Math.random() * 900000).toString()

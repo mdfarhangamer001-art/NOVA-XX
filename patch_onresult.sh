@@ -1,0 +1,2 @@
+#!/bin/bash
+sed -i 's/const transcript = event.results\[0\]\[0\].transcript/let finalTranscript = "";\n        for (let i = event.resultIndex; i < event.results.length; ++i) {\n          if (event.results[i].isFinal) {\n            finalTranscript += event.results[i][0].transcript + " ";\n          }\n        }\n        const transcript = finalTranscript.trim();/g' src/renderer/src/components/UI/RightPanel.tsx

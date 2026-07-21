@@ -50,6 +50,7 @@ import {
 } from 'lucide-react'
 import RightPanel from '@renderer/components/UI/RightPanel'
 import AICore from '@renderer/components/UI/AICoreSphere'
+import VRMAvatar from '@renderer/components/UI/VRMAvatar'
 import { getSystemStatus, SystemStats } from '@renderer/services/system-info'
 
 // 4 Custom Futuristic Neural Voices
@@ -208,10 +209,10 @@ export default function Dashboard({
 
   // 3D Core customization states
   const [coreType, setCoreType] = useState<
-    'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis'
+    'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'avatar'
   >(
     (localStorage.getItem('novax_core_type') as
-      'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis') || 'quantum'
+      'quantum' | 'cube' | 'matrix' | 'nebula' | 'eva' | 'jarvis' | 'avatar') || 'quantum'
   )
   const [coreSize, setCoreSize] = useState<number>(
     parseFloat(localStorage.getItem('novax_core_size') || '0.8')
@@ -1195,6 +1196,19 @@ export default function Dashboard({
               >
                 Jarvis grid
               </button>
+              <button
+                onClick={() => {
+                  setCoreType('avatar')
+                  localStorage.setItem('novax_core_type', 'avatar')
+                }}
+                className={`px-2 py-1 text-[7px] font-mono tracking-wider uppercase rounded-lg border transition-all cursor-pointer shrink-0 ${
+                  coreType === 'avatar'
+                    ? 'bg-[#00f3ff]/10 text-[#00f3ff] border-[#00f3ff]/20 shadow-[0_0_8px_rgba(0,243,255,0.1)]'
+                    : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/5'
+                }`}
+              >
+                3D Avatar
+              </button>
 
               <div className="h-4 w-px bg-white/10 mx-1 shrink-0" />
 
@@ -1217,12 +1231,27 @@ export default function Dashboard({
             </div>
 
             {/* Embedded 3D Core with dynamic type and size scale properties */}
-            <AICore
-              isConnected={isConnected}
-              isSpeaking={isSpeaking}
-              coreType={coreType}
-              coreSize={coreSize}
-            />
+            {coreType === 'avatar' ? (
+              <div className="w-full h-full p-4 relative z-10 flex flex-col justify-end">
+                <VRMAvatar
+                  isSpeaking={isSpeaking}
+                  isConnected={isConnected}
+                  isProcessing={micStatus === 'transcribing'}
+                  activeAvatar={
+                    activeVoice.toLowerCase().includes('ares') ? 'ares' :
+                    activeVoice.toLowerCase().includes('iris') ? 'iris' :
+                    activeVoice.toLowerCase().includes('luna') ? 'luna' : 'neo'
+                  }
+                />
+              </div>
+            ) : (
+              <AICore
+                isConnected={isConnected}
+                isSpeaking={isSpeaking}
+                coreType={coreType}
+                coreSize={coreSize}
+              />
+            )}
 
             {/* FLANKING DOCK LEFT (Optics mode switch) */}
             <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20 bg-zinc-950/80 backdrop-blur-2xl border border-white/10 p-1.5 rounded-2xl shadow-2xl">

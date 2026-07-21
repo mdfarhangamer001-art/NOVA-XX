@@ -6,67 +6,7 @@ import Store from 'electron-store'
 
 const store = new Store()
 
-function getGeminiApiKey(): string {
-  const envKey = process.env.GEMINI_API_KEY
-  if (envKey) return envKey
-
-  // 1. Try decrypting using Electron's native safeStorage API
-  try {
-    const encryptedBase64 = store.get('secure_api_keys_encrypted') as string
-    if (encryptedBase64 && safeStorage && safeStorage.isEncryptionAvailable()) {
-      const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'))
-      const parsed = JSON.parse(decrypted)
-      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
-    }
-  } catch (e) {
-    // ignore safeStorage decryption error
-  }
-
-  // 2. Try unencrypted fallback
-  const secureKeys: any = store.get('secure_api_keys')
-  if (secureKeys && secureKeys.GEMINI_API_KEY) {
-    return secureKeys.GEMINI_API_KEY
-  }
-
-  // 3. Try legacy encrypted block with dynamic device-specific details
-  const decryptedKeysStr = store.get('secure_api_keys_enc') as string
-  if (decryptedKeysStr) {
-    try {
-      const crypto = require('crypto')
-      // Create a secure, dynamic, device-specific salt generation pipeline
-      const dynamicSalt =
-        os.platform() + os.arch() + os.hostname() + (os.userInfo()?.username || 'system')
-      const ENCRYPTION_KEY = crypto.scryptSync(dynamicSalt, 'salt', 32)
-      const textParts = decryptedKeysStr.split(':')
-      const iv = Buffer.from(textParts.shift()!, 'hex')
-      const encryptedText = Buffer.from(textParts.join(':'), 'hex')
-      const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
-      let decrypted = decipher.update(encryptedText)
-      decrypted = Buffer.concat([decrypted, decipher.final()])
-      const parsed = JSON.parse(decrypted.toString())
-      if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
-    } catch (e) {
-      // try legacy fallback if username info failed
-      try {
-        const crypto = require('crypto')
-        const dynamicSaltFallback = os.platform() + os.arch() + os.hostname() + 'fallback'
-        const ENCRYPTION_KEY = crypto.scryptSync(dynamicSaltFallback, 'salt', 32)
-        const textParts = decryptedKeysStr.split(':')
-        const iv = Buffer.from(textParts.shift()!, 'hex')
-        const encryptedText = Buffer.from(textParts.join(':'), 'hex')
-        const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv)
-        let decrypted = decipher.update(encryptedText)
-        decrypted = Buffer.concat([decrypted, decipher.final()])
-        const parsed = JSON.parse(decrypted.toString())
-        if (parsed.GEMINI_API_KEY) return parsed.GEMINI_API_KEY
-      } catch (err2) {
-        // ignore
-      }
-    }
-  }
-
-  return ''
-}
+import { getGeminiClient } from '../ai-clients'
 
 let lastCallTime = 0
 let lastResult: any = null
@@ -81,19 +21,7 @@ export function registerVisionHandlers(): void {
       return { ...lastResult, throttled: true }
     }
     try {
-      const apiKey = getGeminiApiKey()
-      if (!apiKey) {
-        throw new Error('Gemini API Key is missing. Please set it in Settings > NOVA-X Vault.')
-      }
-
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
-          }
-        }
-      })
+      const ai = getGeminiClient()
 
       // Strip data URL scheme prefix if present
       let rawBase64 = base64Frame
@@ -118,7 +46,7 @@ export function registerVisionHandlers(): void {
               mimeType: mimeType
             }
           },
-          "analyze screen workflow. Identify the active application, detect text and code components, check if there are any visual anomalies, and summarize the user's workflow context."
+          { text: "analyze screen workflow. Identify the active application, detect text and code components, check if there are any visual anomalies, and summarize the user's workflow context." }
         ]
       })
 

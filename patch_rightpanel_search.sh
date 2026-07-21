@@ -1,0 +1,2 @@
+#!/bin/bash
+sed -i 's/- Never restate settings, configs, or past actions unprompted./- Never restate settings, configs, or past actions unprompted.\n- Web Search: You have native access to Google Search. If the user asks about world events, facts, or anything requiring internet access, use your search capabilities to find and provide accurate answers immediately./' src/renderer/src/components/UI/RightPanel.tsx

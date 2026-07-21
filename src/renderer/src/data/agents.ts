@@ -12,6 +12,21 @@ export interface Agent {
 export const AGENTS_DATA: Agent[] = [
   // ==================== DYNAMIC MASTER AGENTS ====================
   {
+    id: 'scratch-agent',
+    name: 'Nova Scratch Agent',
+    category: 'Automation',
+    role: 'A from-scratch built agent system with native tool execution.',
+    description:
+      'This agent was built from the ground up to handle system commands like changing wallpaper, opening apps, and managing files using direct Gemini function calling.',
+    status: 'ACTIVE',
+    metrics: { cpu: 0.5, ram: 64, latency: 5 },
+    systemLogs: [
+      'SYSTEM: Scratch Agent initialized.',
+      'UPLINK: Connected to custom tool execution layer.',
+      'Ready for Boss\'s instructions...'
+    ]
+  },
+  {
     id: 'coding-agent',
     name: 'NOVA-X Coding Agent',
     category: 'DevOps',
