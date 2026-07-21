@@ -1,4 +1,4 @@
-name: CI Build & Release
+Name: CI Build & Release
 
 on:
   push:
@@ -28,6 +28,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
       - name: Install System Dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -35,51 +36,43 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxext-dev libxrender-dev libmacaroons-dev libsodium-dev
 
-      - name: Clean Lockfile & Install Dependencies
-        shell: bash
-        run: |
-          rm -f package-lock.json
-          npm install
-          npm install @babel/runtime
+      - name: Install Dependencies
+        run: npm ci
 
       - name: Compile & Build
         run: npm run build
 
-      - name: Verify Build
-        run: ls -la out
-        shell: bash
+      # हर OS (Windows, Mac, Linux) से जनरेट हुई फाइलों को अलग नाम से सेव करना
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-assets-${{ matrix.os }}
+          path: out/
 
   release:
     name: Create GitHub Release
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      # तीनों OS के बनाए गए सभी बिल्ड फ़ाइलों को 'release-assets' फोल्डर में डाउनलोड करना
+      - name: Download All Build Artifacts
+        uses: actions/download-artifact@v4
         with:
-          node-version: '22.x'
-
-      - name: Clean Lockfile & Install Dependencies
-        shell: bash
-        run: |
-          rm -f package-lock.json
-          npm install
-          npm install @babel/runtime
-
-      - name: Build Output
-        run: npm run build
+          pattern: build-assets-*
+          path: release-assets
+          merge-multiple: true
 
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          files: out/*
-          tag_name: release-${{ github.run_number }}
-          name: Automatic Release v${{ github.run_number }}
+          files: release-assets/*
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('release-{0}', github.run_number) }}
+          name: Automatic Release ${{ github.ref_name }}
           draft: false
           prerelease: false
         env:
