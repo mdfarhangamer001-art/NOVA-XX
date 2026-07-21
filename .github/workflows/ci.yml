@@ -36,6 +36,7 @@ jobs:
           sudo apt-get install -y libx11-dev libxext-dev libxrender-dev libmacaroons-dev libsodium-dev
 
       - name: Remove Old Lockfile & Install Clean Dependencies
+        shell: bash
         run: |
           rm -f package-lock.json
           npm install
