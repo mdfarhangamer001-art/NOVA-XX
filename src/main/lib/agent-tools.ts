@@ -1,9 +1,9 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import fs from 'fs';
-import path from 'path';
+import { exec } from 'child_process'
+import { promisify } from 'util'
+import fs from 'fs'
+import path from 'path'
 
-const execAsync = promisify(exec);
+const execAsync = promisify(exec)
 
 export const tools = [
   {
@@ -28,7 +28,8 @@ export const tools = [
       properties: {
         appName: {
           type: 'STRING',
-          description: 'The name of the application to open (e.g., "notepad", "calculator", "chrome").'
+          description:
+            'The name of the application to open (e.g., "notepad", "calculator", "chrome").'
         }
       },
       required: ['appName']
@@ -52,49 +53,54 @@ export const tools = [
       required: ['folderPath', 'folderName']
     }
   }
-];
+]
 
 export async function executeTool(name: string, args: any): Promise<string> {
-  console.log(`[Agent Tools] Executing ${name} with args:`, args);
+  console.log(`[Agent Tools] Executing ${name} with args:`, args)
 
   switch (name) {
     case 'change_wallpaper':
       try {
-        const wallpaperDir = path.join(process.cwd(), 'gallery');
+        const wallpaperDir = path.join(process.cwd(), 'gallery')
         if (!fs.existsSync(wallpaperDir)) {
-          fs.mkdirSync(wallpaperDir, { recursive: true });
+          fs.mkdirSync(wallpaperDir, { recursive: true })
         }
-        const wallpaperPath = path.join(wallpaperDir, 'active_wallpaper.txt');
-        fs.writeFileSync(wallpaperPath, `Active Theme Wallpaper: ${args.description} set at ${new Date().toISOString()}`, 'utf8');
-        console.log(`Setting wallpaper to: ${args.description}`);
-        return `Successfully set system wallpaper to ${args.description}.`;
+        const wallpaperPath = path.join(wallpaperDir, 'active_wallpaper.txt')
+        fs.writeFileSync(
+          wallpaperPath,
+          `Active Theme Wallpaper: ${args.description} set at ${new Date().toISOString()}`,
+          'utf8'
+        )
+        console.log(`Setting wallpaper to: ${args.description}`)
+        return `Successfully set system wallpaper to ${args.description}.`
       } catch (err: any) {
-        return `Failed to change wallpaper: ${err.message}`;
+        return `Failed to change wallpaper: ${err.message}`
       }
 
     case 'open_app':
       try {
         // Platform specific app opening
-        const command = process.platform === 'win32' ? `start ${args.appName}` : `open -a "${args.appName}"`;
-        await execAsync(command);
-        return `Successfully opened ${args.appName}.`;
+        const command =
+          process.platform === 'win32' ? `start ${args.appName}` : `open -a "${args.appName}"`
+        await execAsync(command)
+        return `Successfully opened ${args.appName}.`
       } catch (err: any) {
-        return `Failed to open app ${args.appName}: ${err.message}`;
+        return `Failed to open app ${args.appName}: ${err.message}`
       }
 
     case 'create_folder':
       try {
-        const fullPath = path.join(args.folderPath, args.folderName);
+        const fullPath = path.join(args.folderPath, args.folderName)
         if (!fs.existsSync(fullPath)) {
-          fs.mkdirSync(fullPath, { recursive: true });
-          return `Successfully created folder: ${fullPath}`;
+          fs.mkdirSync(fullPath, { recursive: true })
+          return `Successfully created folder: ${fullPath}`
         }
-        return `Folder already exists: ${fullPath}`;
+        return `Folder already exists: ${fullPath}`
       } catch (err: any) {
-        return `Failed to create folder: ${err.message}`;
+        return `Failed to create folder: ${err.message}`
       }
 
     default:
-      throw new Error(`Tool ${name} not found.`);
+      throw new Error(`Tool ${name} not found.`)
   }
 }

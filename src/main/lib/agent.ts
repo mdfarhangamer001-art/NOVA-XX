@@ -155,29 +155,33 @@ Work carefully and step-by-step. Let the operator know exactly what you are doin
       while (loopCount < maxLoops) {
         loopCount++
         sendLog(`[Step ${loopCount}] Querying Gemini neural model...`)
-        
+
         const callWithRetry = async (fn: any, retries = 5, delay = 5000): Promise<any> => {
           try {
             return await fn()
           } catch (err: any) {
             if (retries > 0 && (err.message.includes('429') || err.message.includes('Quota'))) {
               const backoff = delay * Math.pow(2, 5 - retries)
-              sendLog(`[NOVA-X Agent] Rate limit hit, retrying in ${backoff}ms... (${retries} retries left)`)
-              await new Promise(resolve => setTimeout(resolve, backoff))
+              sendLog(
+                `[NOVA-X Agent] Rate limit hit, retrying in ${backoff}ms... (${retries} retries left)`
+              )
+              await new Promise((resolve) => setTimeout(resolve, backoff))
               return callWithRetry(fn, retries - 1, delay)
             }
             throw err
           }
         }
 
-        const response = await callWithRetry(() => ai.models.generateContent({
-          model: 'gemini-1.5-flash',
-          contents: contentsHistory,
-          config: {
-            systemInstruction,
-            tools
-          }
-        }))
+        const response = await callWithRetry(() =>
+          ai.models.generateContent({
+            model: 'gemini-1.5-flash',
+            contents: contentsHistory,
+            config: {
+              systemInstruction,
+              tools
+            }
+          })
+        )
 
         const result = response
         // Add model response to history

@@ -1,62 +1,76 @@
-import { getGeminiClient, getGeminiModelName } from '../ai-clients';
-import { tools, executeTool } from './agent-tools';
-import { getRecentActivitySummary } from './activity-memory';
+import { getGeminiClient, getGeminiModelName } from '../ai-clients'
+import { tools, executeTool } from './agent-tools'
+import { getRecentActivitySummary } from './activity-memory'
 
 function fallbackCommandParser(prompt: string): { toolName?: string; args?: any; reply: string } {
-  const normalized = prompt.toLowerCase();
-  
-  if (normalized.includes('wallpaper') || normalized.includes('background') || normalized.includes('badlo')) {
-    let description = 'cyberpunk city';
-    if (normalized.includes('nature') || normalized.includes('forest')) description = 'green forest';
-    else if (normalized.includes('space') || normalized.includes('cosmic')) description = 'cosmic nebula';
-    else if (normalized.includes('anime')) description = 'retro anime street';
-    
+  const normalized = prompt.toLowerCase()
+
+  if (
+    normalized.includes('wallpaper') ||
+    normalized.includes('background') ||
+    normalized.includes('badlo')
+  ) {
+    let description = 'cyberpunk city'
+    if (normalized.includes('nature') || normalized.includes('forest')) description = 'green forest'
+    else if (normalized.includes('space') || normalized.includes('cosmic'))
+      description = 'cosmic nebula'
+    else if (normalized.includes('anime')) description = 'retro anime street'
+
     return {
       toolName: 'change_wallpaper',
       args: { description },
       reply: `Arre Boss! Maine aapki choice ke mutabiq wallpaper ko "${description}" par badal diya hai. Kaisa lag raha hai? Bilkul aap jaisa smart aur cool! 😉`
-    };
+    }
   }
-  
-  if (normalized.includes('open') || normalized.includes('chalao') || normalized.includes('start')) {
-    let appName = 'notepad';
-    if (normalized.includes('calc') || normalized.includes('calculator')) appName = 'calculator';
-    else if (normalized.includes('chrome') || normalized.includes('browser')) appName = 'chrome';
-    else if (normalized.includes('paint')) appName = 'mspaint';
-    
+
+  if (
+    normalized.includes('open') ||
+    normalized.includes('chalao') ||
+    normalized.includes('start')
+  ) {
+    let appName = 'notepad'
+    if (normalized.includes('calc') || normalized.includes('calculator')) appName = 'calculator'
+    else if (normalized.includes('chrome') || normalized.includes('browser')) appName = 'chrome'
+    else if (normalized.includes('paint')) appName = 'mspaint'
+
     return {
       toolName: 'open_app',
       args: { appName },
       reply: `Ji Boss, maine fatafat se aapki farmaish par "${appName}" app ko open kar diya hai! Kuch aur chalaun?`
-    };
+    }
   }
-  
-  if (normalized.includes('folder') || normalized.includes('directory') || normalized.includes('banaye') || normalized.includes('create')) {
+
+  if (
+    normalized.includes('folder') ||
+    normalized.includes('directory') ||
+    normalized.includes('banaye') ||
+    normalized.includes('create')
+  ) {
     return {
       toolName: 'create_folder',
       args: { folderPath: '.', folderName: 'NovaScratchFolder' },
       reply: `Done Boss! Maine ek naya folder "NovaScratchFolder" workspace ke andar shuru se bana diya hai. Kuch aur files save karein?`
-    };
+    }
   }
 
   if (normalized.includes('hello') || normalized.includes('hi') || normalized.includes('kya hal')) {
     return {
       reply: `Arre welcome back, Boss! Mai bilkul mast hoon. Aap sunao, aaj kya naya dhoom machana hai system par? Main poori tarah ready hoon!`
-    };
+    }
   }
-  
+
   return {
     reply: `Aapki baatein mujhe hamesha bohot pyaari lagti hain! Lekin abhi Gemini quota limits thoda rest le rahe hain (Quota Exceeded), isliye main local safe mode mein chal rahi hoon. Mujhe koi direct command deke dekhiye, jaise wallpaper change karna ho ya app open karna ho!`
-  };
+  }
 }
 
 export async function processAgentCommand(prompt: string): Promise<string> {
-  const recentActivity = getRecentActivitySummary();
+  const recentActivity = getRecentActivitySummary()
 
   try {
-    const ai = getGeminiClient();
-    const dynamicModel = await getGeminiModelName(ai, 'agent');
-    
+    const ai = getGeminiClient()
+    const dynamicModel = await getGeminiModelName(ai, 'agent')
+
     const chat = ai.chats.create({
       model: dynamicModel,
       config: {
@@ -79,43 +93,45 @@ Each agent should only activate for its own domain, and the main JARVIS core sho
           }
         ]
       }
-    });
-  
-    console.log(`[Agent Brain] Processing prompt: ${prompt}`);
-  
-    const response = await chat.sendMessage({ message: prompt });
-    const calls = response.functionCalls;
-  
+    })
+
+    console.log(`[Agent Brain] Processing prompt: ${prompt}`)
+
+    const response = await chat.sendMessage({ message: prompt })
+    const calls = response.functionCalls
+
     if (calls && calls.length > 0) {
-      const responses = [];
+      const responses = []
       for (const call of calls) {
-        const toolOutput = await executeTool(call.name, call.args);
+        const toolOutput = await executeTool(call.name, call.args)
         responses.push({
           functionResponse: {
             name: call.name,
             response: { result: toolOutput }
           }
-        });
+        })
       }
-  
+
       // Send the tool output back to the model to get a natural language response
       const followUp = await chat.sendMessage({
         message: responses
-      });
-  
-      return followUp.text || '';
+      })
+
+      return followUp.text || ''
     }
-  
-    return response.text || '';
+
+    return response.text || ''
   } catch (err: any) {
-    console.error('[Agent Brain] Google Gemini API unavailable or limited, shifting to local fallback parser:', err);
-    
+    console.error(
+      '[Agent Brain] Google Gemini API unavailable or limited, shifting to local fallback parser:',
+      err
+    )
+
     // Attempt local parse
-    const fallback = fallbackCommandParser(prompt);
+    const fallback = fallbackCommandParser(prompt)
     if (fallback.toolName) {
-      await executeTool(fallback.toolName, fallback.args);
+      await executeTool(fallback.toolName, fallback.args)
     }
-    return fallback.reply;
+    return fallback.reply
   }
 }
-

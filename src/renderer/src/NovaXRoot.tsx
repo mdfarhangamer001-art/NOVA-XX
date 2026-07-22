@@ -20,8 +20,6 @@ const IndexRoot = (): JSX.Element => {
   const stopRequestedRef = useRef(false)
   const recognitionRef = useRef<any>(null)
 
-
-
   // Expose speaking state setter globally
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -75,15 +73,15 @@ const IndexRoot = (): JSX.Element => {
       window.speechSynthesis.cancel()
 
       // Detect emotion tag (e.g. [EMOTION: EXCITED])
-      let detectedEmotion = '';
-      const emotionRegex = /\[EMOTION:\s*([A-Z_]+)\]/i;
-      const match = text.match(emotionRegex);
+      let detectedEmotion = ''
+      const emotionRegex = /\[EMOTION:\s*([A-Z_]+)\]/i
+      const match = text.match(emotionRegex)
       if (match) {
-        detectedEmotion = match[1].toUpperCase();
+        detectedEmotion = match[1].toUpperCase()
       }
 
       // Strip all emotion tags from the spoken text
-      const cleanText = text.replace(/\[EMOTION:\s*[A-Z_]+\]/gi, '').trim();
+      const cleanText = text.replace(/\[EMOTION:\s*[A-Z_]+\]/gi, '').trim()
       const utterance = new SpeechSynthesisUtterance(cleanText)
 
       const vibe = detectedEmotion || localStorage.getItem('novax_operator_vibe') || 'TACTICAL'
@@ -94,7 +92,7 @@ const IndexRoot = (): JSX.Element => {
         pitch = 1.08
       } else if (vibe === 'CALM' || vibe === 'SERENE') {
         rate = 0.82
-        pitch = 0.90
+        pitch = 0.9
       } else if (vibe === 'INTENSE' || vibe === 'FAST') {
         rate = 1.12
         pitch = 1.12
@@ -152,81 +150,79 @@ const IndexRoot = (): JSX.Element => {
   useEffect(() => {
     if (!isConnected || isMuted) {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
+        recognitionRef.current.stop()
+        recognitionRef.current = null
       }
-      setMicStatus('idle');
-      return;
+      setMicStatus('idle')
+      return
     }
 
-    const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!Speech) {
-      console.warn("Speech Recognition not supported.");
-      return;
+      console.warn('Speech Recognition not supported.')
+      return
     }
 
-    const recognition = new Speech();
-    recognition.continuous = true;
-    recognition.interimResults = false;
+    const recognition = new Speech()
+    recognition.continuous = true
+    recognition.interimResults = false
     // Set lang to hi-IN to match user's Hindi / Hinglish request
-    recognition.lang = 'hi-IN';
+    recognition.lang = 'hi-IN'
 
     recognition.onstart = () => {
-      setMicStatus('listening');
-      window.dispatchEvent(
-        new CustomEvent('novax_mic_state', { detail: { status: 'listening' } })
-      );
-    };
+      setMicStatus('listening')
+      window.dispatchEvent(new CustomEvent('novax_mic_state', { detail: { status: 'listening' } }))
+    }
 
     recognition.onresult = (event: any) => {
-      let finalTranscript = "";
+      let finalTranscript = ''
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript + " ";
+          finalTranscript += event.results[i][0].transcript + ' '
         }
       }
-      const transcript = finalTranscript.trim();
-      
+      const transcript = finalTranscript.trim()
+
       if (transcript && transcript.length > 0) {
-        console.log('[Web Speech API] Final Transcript:', transcript);
+        console.log('[Web Speech API] Final Transcript:', transcript)
         if (window.speechSynthesis) {
-          window.speechSynthesis.cancel();
+          window.speechSynthesis.cancel()
         }
         if ((window as any).triggerVoiceCommand) {
-          (window as any).triggerVoiceCommand(transcript);
+          ;(window as any).triggerVoiceCommand(transcript)
         }
       }
-    };
+    }
 
     recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      setMicStatus('idle');
+      console.error('Speech recognition error:', event.error)
+      setMicStatus('idle')
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
-         // Auto-restart logic if desired could go here
+        // Auto-restart logic if desired could go here
       }
-    };
+    }
 
     recognition.onend = () => {
-       // If it ended automatically but the call is still connected and not muted, we restart it.
-       // The user requested a push-to-talk style toggle, so if isMuted is false (mic ON), we keep listening.
-       if (!isMuted && isConnected) {
-          recognition.start();
-       } else {
-          setMicStatus('idle');
-       }
-    };
+      // If it ended automatically but the call is still connected and not muted, we restart it.
+      // The user requested a push-to-talk style toggle, so if isMuted is false (mic ON), we keep listening.
+      if (!isMuted && isConnected) {
+        recognition.start()
+      } else {
+        setMicStatus('idle')
+      }
+    }
 
-    recognitionRef.current = recognition;
-    recognition.start();
+    recognitionRef.current = recognition
+    recognition.start()
 
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.onend = null; // Prevent restart loop
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
+        recognitionRef.current.onend = null // Prevent restart loop
+        recognitionRef.current.stop()
+        recognitionRef.current = null
       }
-      setMicStatus('idle');
-    };
+      setMicStatus('idle')
+    }
   }, [isConnected, isMuted])
 
   return (

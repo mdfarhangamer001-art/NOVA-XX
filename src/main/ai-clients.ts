@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from '@google/genai'
 import Groq from 'groq-sdk'
 import fs from 'fs'
@@ -45,8 +44,8 @@ export function getApiKey(key: string, envVal?: string): string {
 
 export function saveKeys(newKeys: any) {
   mockKeys = { ...mockKeys, ...newKeys }
-  
-  Object.keys(newKeys).forEach(key => {
+
+  Object.keys(newKeys).forEach((key) => {
     if (newKeys[key] === '') {
       removedKeys[key] = true
     } else if (newKeys[key]) {
@@ -59,11 +58,19 @@ export function saveKeys(newKeys: any) {
   }
 
   try {
-    fs.writeFileSync(credentialsPath, JSON.stringify({
-      keys: mockKeys,
-      removed: removedKeys,
-      primaryEngine: primaryEngine
-    }, null, 2), 'utf8')
+    fs.writeFileSync(
+      credentialsPath,
+      JSON.stringify(
+        {
+          keys: mockKeys,
+          removed: removedKeys,
+          primaryEngine: primaryEngine
+        },
+        null,
+        2
+      ),
+      'utf8'
+    )
     console.log('[AI Clients] Keys saved to credentials.json')
   } catch (err) {
     console.error('[AI Clients] Failed to save keys:', err)
@@ -73,7 +80,9 @@ export function saveKeys(newKeys: any) {
 export function getGeminiClient(providedKey?: string) {
   const apiKey = providedKey || getApiKey('geminiKey', process.env.GEMINI_API_KEY)
   if (!apiKey || apiKey.trim() === '' || apiKey.includes('YOUR_')) {
-    throw new Error('GEMINI_API_KEY_MISSING: Please configure your Gemini API key in the application settings or environment variables.')
+    throw new Error(
+      'GEMINI_API_KEY_MISSING: Please configure your Gemini API key in the application settings or environment variables.'
+    )
   }
   return new GoogleGenAI({
     apiKey,
@@ -90,38 +99,38 @@ let modelCache: Record<string, string> = {
   vision: 'gemini-2.5-flash',
   agent: 'gemini-2.5-flash',
   transcribe: 'gemini-2.5-flash'
-};
+}
 
-let lastRefreshTime = 0;
-const REFRESH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+let lastRefreshTime = 0
+const REFRESH_INTERVAL = 24 * 60 * 60 * 1000 // 24 hours
 
 async function refreshModelCache(ai: any, task: 'chat' | 'vision' | 'agent' | 'transcribe') {
-  const now = Date.now();
+  const now = Date.now()
   if (now - lastRefreshTime < REFRESH_INTERVAL) {
-    return;
+    return
   }
-  lastRefreshTime = now;
+  lastRefreshTime = now
   try {
-    const listResponse = await ai.models.list();
-    const models = listResponse.models || listResponse || [];
+    const listResponse = await ai.models.list()
+    const models = listResponse.models || listResponse || []
     if (Array.isArray(models)) {
       let filtered = models
         .map((m: any) => m.name || m.id || '')
-        .filter((n: string) => n.toLowerCase().includes('gemini'));
-      
+        .filter((n: string) => n.toLowerCase().includes('gemini'))
+
       if (filtered.length > 0) {
-        let matches = filtered;
+        let matches = filtered
         if (task === 'agent') {
-          matches = filtered.filter(n => n.includes('flash') || n.includes('pro'));
+          matches = filtered.filter((n) => n.includes('flash') || n.includes('pro'))
         } else {
-          matches = filtered.filter(n => n.includes('flash'));
+          matches = filtered.filter((n) => n.includes('flash'))
         }
-        
+
         if (matches.length > 0) {
-          matches.sort((a, b) => b.localeCompare(a));
-          const chosen = matches[0];
-          const finalModel = chosen.startsWith('models/') ? chosen.replace('models/', '') : chosen;
-          modelCache[task] = finalModel;
+          matches.sort((a, b) => b.localeCompare(a))
+          const chosen = matches[0]
+          const finalModel = chosen.startsWith('models/') ? chosen.replace('models/', '') : chosen
+          modelCache[task] = finalModel
         }
       }
     }
@@ -130,17 +139,22 @@ async function refreshModelCache(ai: any, task: 'chat' | 'vision' | 'agent' | 't
   }
 }
 
-export async function getGeminiModelName(ai: any, task: 'chat' | 'vision' | 'agent' | 'transcribe' = 'chat'): Promise<string> {
-  const cached = modelCache[task];
+export async function getGeminiModelName(
+  ai: any,
+  task: 'chat' | 'vision' | 'agent' | 'transcribe' = 'chat'
+): Promise<string> {
+  const cached = modelCache[task]
   // Fire off background refresh so future requests are always accurate, but return immediately
-  refreshModelCache(ai, task).catch(() => {});
-  return cached || 'gemini-2.5-flash';
+  refreshModelCache(ai, task).catch(() => {})
+  return cached || 'gemini-2.5-flash'
 }
 
 export function getGroqClient(providedKey?: string) {
   const apiKey = providedKey || getApiKey('groqKey', process.env.GROQ_API_KEY)
   if (!apiKey || apiKey.trim() === '' || apiKey.includes('YOUR_')) {
-    throw new Error('GROQ_API_KEY_MISSING: Please configure your Groq API key in the application settings or environment variables.')
+    throw new Error(
+      'GROQ_API_KEY_MISSING: Please configure your Groq API key in the application settings or environment variables.'
+    )
   }
   return new Groq({ apiKey })
 }

@@ -26,12 +26,13 @@ export default function VRMAvatar({
 
   // Character config mapping
   const charConfig = useMemo(() => {
-    const configs: Record<string, { color: string; glow: string; name: string; emotion: string }> = {
-      neo: { color: '#00f3ff', glow: '#0044ff', name: 'NEO (Supportive)', emotion: 'neutral' },
-      ares: { color: '#ff003c', glow: '#550000', name: 'ARES (Tactical)', emotion: 'focused' },
-      iris: { color: '#39ff14', glow: '#003300', name: 'IRIS (Analytical)', emotion: 'happy' },
-      luna: { color: '#ffea00', glow: '#ff5500', name: 'LUNA (Playful)', emotion: 'excited' }
-    }
+    const configs: Record<string, { color: string; glow: string; name: string; emotion: string }> =
+      {
+        neo: { color: '#00f3ff', glow: '#0044ff', name: 'NEO (Supportive)', emotion: 'neutral' },
+        ares: { color: '#ff003c', glow: '#550000', name: 'ARES (Tactical)', emotion: 'focused' },
+        iris: { color: '#39ff14', glow: '#003300', name: 'IRIS (Analytical)', emotion: 'happy' },
+        luna: { color: '#ffea00', glow: '#ff5500', name: 'LUNA (Playful)', emotion: 'excited' }
+      }
     return configs[activeAvatar] || configs.neo
   }, [activeAvatar])
 
@@ -75,9 +76,14 @@ export default function VRMAvatar({
           vrmInstance.scene.rotation.y = Math.PI
           vrmInstance.scene.scale.set(1.2, 1.2, 1.2)
           setIsLoading(false)
-          console.log('[AIRI VRM Stage] Avatar successfully initialized and cached on stage lifecycle.', vrmInstance)
+          console.log(
+            '[AIRI VRM Stage] Avatar successfully initialized and cached on stage lifecycle.',
+            vrmInstance
+          )
         } else {
-          setLoadingError('Loaded file is not a valid VRM model. Falling back to procedurally rendered AI companion.')
+          setLoadingError(
+            'Loaded file is not a valid VRM model. Falling back to procedurally rendered AI companion.'
+          )
           setIsLoading(false)
         }
       },
@@ -96,9 +102,10 @@ export default function VRMAvatar({
 
   // Handle preset model loading triggers
   const loadPreset = (preset: 'boy' | 'girl') => {
-    const url = preset === 'girl' 
-      ? 'https://pixiv.github.io/three-vrm/packages/three-vrm/examples/models/VRM1_Self_Introduce.vrm'
-      : 'https://vrm.dev/assets/models/vrm_m_1.0_sample.vrm'
+    const url =
+      preset === 'girl'
+        ? 'https://pixiv.github.io/three-vrm/packages/three-vrm/examples/models/VRM1_Self_Introduce.vrm'
+        : 'https://vrm.dev/assets/models/vrm_m_1.0_sample.vrm'
     setVrmUrl(url)
     loadVRMModel(url)
   }
@@ -110,10 +117,17 @@ export default function VRMAvatar({
         {isLoading && (
           <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 text-center">
             <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin mb-3" />
-            <div className="text-sm font-semibold text-zinc-200">Initializing Cyber Companion Stage</div>
-            <div className="text-xs text-zinc-500 mt-1 uppercase font-mono">Stage Loading {loadingProgress}%</div>
+            <div className="text-sm font-semibold text-zinc-200">
+              Initializing Cyber Companion Stage
+            </div>
+            <div className="text-xs text-zinc-500 mt-1 uppercase font-mono">
+              Stage Loading {loadingProgress}%
+            </div>
             <div className="w-48 bg-zinc-800 h-1 rounded-full mt-3 overflow-hidden">
-              <div className="bg-emerald-400 h-full transition-all duration-300" style={{ width: `${loadingProgress}%` }}></div>
+              <div
+                className="bg-emerald-400 h-full transition-all duration-300"
+                style={{ width: `${loadingProgress}%` }}
+              ></div>
             </div>
           </div>
         )}
@@ -135,11 +149,11 @@ export default function VRMAvatar({
 
         {/* 3D Canvas element wrapper */}
         <div className="w-full h-full">
-          <SceneRenderer 
-            vrm={vrm} 
-            isSpeaking={isSpeaking} 
-            isConnected={isConnected} 
-            isProcessing={isProcessing} 
+          <SceneRenderer
+            vrm={vrm}
+            isSpeaking={isSpeaking}
+            isConnected={isConnected}
+            isProcessing={isProcessing}
             activeAvatar={activeAvatar}
             charConfig={charConfig}
           />
@@ -206,11 +220,11 @@ function SceneRenderer({
       {/* Embedded canvas with absolute positions to prevent ref resizing conflicts */}
       <div className="absolute inset-0">
         <canvas className="w-full h-full" id="vrm-three-stage" />
-        <CanvasWithScene 
-          vrm={vrm} 
-          isSpeaking={isSpeaking} 
-          isConnected={isConnected} 
-          isProcessing={isProcessing} 
+        <CanvasWithScene
+          vrm={vrm}
+          isSpeaking={isSpeaking}
+          isConnected={isConnected}
+          isProcessing={isProcessing}
           activeAvatar={activeAvatar}
           charConfig={charConfig}
         />
@@ -275,11 +289,23 @@ function CanvasWithContext({
       <ambientLight intensity={0.7} />
       <directionalLight position={[1, 3, 2]} intensity={1.5} castShadow />
       <pointLight position={[-1, -2, -1]} intensity={0.5} color={charConfig.color} />
-      
+
       {vrm ? (
-        <VRMRenderer vrm={vrm} isSpeaking={isSpeaking} isConnected={isConnected} isProcessing={isProcessing} charConfig={charConfig} />
+        <VRMRenderer
+          vrm={vrm}
+          isSpeaking={isSpeaking}
+          isConnected={isConnected}
+          isProcessing={isProcessing}
+          charConfig={charConfig}
+        />
       ) : (
-        <ProceduralHoloRenderer isSpeaking={isSpeaking} isConnected={isConnected} isProcessing={isProcessing} activeAvatar={activeAvatar} charConfig={charConfig} />
+        <ProceduralHoloRenderer
+          isSpeaking={isSpeaking}
+          isConnected={isConnected}
+          isProcessing={isProcessing}
+          activeAvatar={activeAvatar}
+          charConfig={charConfig}
+        />
       )}
     </R3FCanvas>
   )
@@ -302,7 +328,7 @@ function VRMRenderer({
   charConfig: any
 }) {
   const { scene } = useThree()
-  
+
   // Attach loaded VRM scene to React Three Fiber tree
   useEffect(() => {
     scene.add(vrm.scene)
@@ -371,9 +397,9 @@ function VRMRenderer({
     // 4. Look-At mouse tracking logic (AIRI implementation pattern)
     if (vrm.lookAt) {
       // Slight smooth rotation vector
-      const targetRotationX = (state.pointer.y * 0.15)
-      const targetRotationY = (state.pointer.x * 0.22)
-      
+      const targetRotationX = state.pointer.y * 0.15
+      const targetRotationY = state.pointer.x * 0.22
+
       const head = vrm.humanoid?.getNormalizedBoneNode('head')
       if (head) {
         head.rotation.x += (targetRotationX - head.rotation.x) * 0.15
@@ -453,7 +479,7 @@ function ProceduralHoloRenderer({
     if (ringRef.current) {
       ringRef.current.rotation.z -= delta * 0.4
       ringRef.current.rotation.x = Math.sin(t * 0.8) * 0.15
-      
+
       let targetScale = isConnected ? 1.0 : 0.8
       if (isSpeaking) {
         targetScale = 1.1 + Math.abs(Math.sin(t * 12) * 0.08)
@@ -493,11 +519,7 @@ function ProceduralHoloRenderer({
       {/* Cyber Visor Screen */}
       <mesh position={[0, 0.04, 0.38]}>
         <boxGeometry args={[0.62, 0.24, 0.1]} />
-        <meshStandardMaterial
-          color="#020408"
-          roughness={0.0}
-          metalness={1.0}
-        />
+        <meshStandardMaterial color="#020408" roughness={0.0} metalness={1.0} />
       </mesh>
 
       {/* Eyes mapping to character state */}

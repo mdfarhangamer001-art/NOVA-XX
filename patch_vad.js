@@ -1,12 +1,12 @@
-const fs = require('fs');
-const file = 'src/renderer/src/NovaXRoot.tsx';
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const file = 'src/renderer/src/NovaXRoot.tsx'
+let content = fs.readFileSync(file, 'utf8')
 
-const targetStart = "  // Modern VAD-based Voice Recognition Core\n  useEffect(() => {";
-const targetEnd = "\n  }, [isConnected, isMuted, isSpeaking])";
+const targetStart = '  // Modern VAD-based Voice Recognition Core\n  useEffect(() => {'
+const targetEnd = '\n  }, [isConnected, isMuted, isSpeaking])'
 
-const startIndex = content.indexOf(targetStart);
-const endIndex = content.indexOf(targetEnd) + targetEnd.length;
+const startIndex = content.indexOf(targetStart)
+const endIndex = content.indexOf(targetEnd) + targetEnd.length
 
 const newImplementation = `  // Web Speech API Voice Recognition Core
   useEffect(() => {
@@ -84,12 +84,12 @@ const newImplementation = `  // Web Speech API Voice Recognition Core
       }
       setMicStatus('idle');
     };
-  }, [isConnected, isMuted, isSpeaking]);`;
+  }, [isConnected, isMuted, isSpeaking]);`
 
 if (startIndex !== -1 && endIndex !== -1) {
-  content = content.substring(0, startIndex) + newImplementation + content.substring(endIndex);
-  fs.writeFileSync(file, content);
-  console.log("Successfully patched NovaXRoot.tsx");
+  content = content.substring(0, startIndex) + newImplementation + content.substring(endIndex)
+  fs.writeFileSync(file, content)
+  console.log('Successfully patched NovaXRoot.tsx')
 } else {
-  console.log("Failed to find target block in NovaXRoot.tsx");
+  console.log('Failed to find target block in NovaXRoot.tsx')
 }

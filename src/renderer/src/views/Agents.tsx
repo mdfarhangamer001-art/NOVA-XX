@@ -96,13 +96,17 @@ export default function AgentsView() {
   const [agentLogs, setAgentLogs] = useState<Record<string, string[]>>({})
 
   // Custom Voice Fingerprinting & Speaker Profiles
-  const [voiceProfiles, setVoiceProfiles] = useState<Array<{ name: string; fingerprint: string }>>(() => {
-    const saved = localStorage.getItem('novax_voice_profiles')
-    return saved ? JSON.parse(saved) : [
-      { name: 'Boss (Primary)', fingerprint: 'v_fp_01_high_pitch' },
-      { name: 'Assistant Developer', fingerprint: 'v_fp_02_low_pitch' }
-    ]
-  })
+  const [voiceProfiles, setVoiceProfiles] = useState<Array<{ name: string; fingerprint: string }>>(
+    () => {
+      const saved = localStorage.getItem('novax_voice_profiles')
+      return saved
+        ? JSON.parse(saved)
+        : [
+            { name: 'Boss (Primary)', fingerprint: 'v_fp_01_high_pitch' },
+            { name: 'Assistant Developer', fingerprint: 'v_fp_02_low_pitch' }
+          ]
+    }
+  )
   const [currentSpeaker, setCurrentSpeaker] = useState<string>('Boss (Primary)')
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [isRegisteringVoice, setIsRegisteringVoice] = useState(false)
@@ -111,8 +115,12 @@ export default function AgentsView() {
   const [activeVoiceWaveform, setActiveVoiceWaveform] = useState<number[]>(new Array(15).fill(4))
 
   // Optics & Snapshots
-  const [isCameraActive, setIsCameraActive] = useState(() => localStorage.getItem('novax_camera_monitoring') === 'true')
-  const [isScreenActive, setIsScreenActive] = useState(() => localStorage.getItem('novax_screen_monitoring') === 'true')
+  const [isCameraActive, setIsCameraActive] = useState(
+    () => localStorage.getItem('novax_camera_monitoring') === 'true'
+  )
+  const [isScreenActive, setIsScreenActive] = useState(
+    () => localStorage.getItem('novax_screen_monitoring') === 'true'
+  )
   const [opticsLogs, setOpticsLogs] = useState<string[]>([
     'OPTICS: Privacy-first localized context nodes ready.',
     'OPTICS: Camera and Screen monitors status loaded from settings.'
@@ -280,8 +288,13 @@ export default function AgentsView() {
     const startCameraSnapshotLoop = async () => {
       if (!isCameraActive) return
       try {
-        setOpticsLogs((prev) => [...prev, 'SYS: Initializing camera device for background optics...'])
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
+        setOpticsLogs((prev) => [
+          ...prev,
+          'SYS: Initializing camera device for background optics...'
+        ])
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 320, height: 240 }
+        })
         localWebcamStream = stream
         webcamStreamRef.current = stream
 
@@ -292,7 +305,10 @@ export default function AgentsView() {
         hiddenVideo.play()
         webcamVideoRef.current = hiddenVideo
 
-        setOpticsLogs((prev) => [...prev, 'SYS: Camera optics active. Taking periodic context snapshots.'])
+        setOpticsLogs((prev) => [
+          ...prev,
+          'SYS: Camera optics active. Taking periodic context snapshots.'
+        ])
 
         // Take snapshot every 15 seconds
         cameraInterval = setInterval(async () => {
@@ -305,18 +321,15 @@ export default function AgentsView() {
             if (ctx) {
               ctx.drawImage(webcamVideoRef.current, 0, 0, canvas.width, canvas.height)
               const base64 = canvas.toDataURL('image/jpeg', 0.6)
-              
+
               setOpticsLogs((prev) => [...prev, 'SYS: Dispatched background webcam frame...'])
-              
+
               if (window.electron?.ipcRenderer) {
                 const res = await window.electron.ipcRenderer.invoke('analyze-optics', {
                   base64Image: base64,
                   source: 'camera'
                 })
-                setOpticsLogs((prev) => [
-                  ...prev,
-                  `SYS: [CAMERA SEEN] ${res}`
-                ])
+                setOpticsLogs((prev) => [...prev, `SYS: [CAMERA SEEN] ${res}`])
                 // Add to Scratch Agent system logs if it's currently selected
                 setAgentLogs((prev) => ({
                   ...prev,
@@ -328,7 +341,6 @@ export default function AgentsView() {
             console.error('Camera capture failed:', err)
           }
         }, 15000)
-
       } catch (err: any) {
         setOpticsLogs((prev) => [...prev, `ERROR: Camera access rejected: ${err.message}`])
         setIsCameraActive(false)
@@ -343,7 +355,7 @@ export default function AgentsView() {
     return () => {
       if (cameraInterval) clearInterval(cameraInterval)
       if (localWebcamStream) {
-        localWebcamStream.getTracks().forEach(t => t.stop())
+        localWebcamStream.getTracks().forEach((t) => t.stop())
       }
     }
   }, [isCameraActive])
@@ -354,7 +366,7 @@ export default function AgentsView() {
 
     if (isScreenActive && isScreenSharing && videoRef.current) {
       setOpticsLogs((prev) => [...prev, 'SYS: Screen monitoring linked to active HUD stream.'])
-      
+
       screenInterval = setInterval(async () => {
         if (!videoRef.current) return
         try {
@@ -365,18 +377,15 @@ export default function AgentsView() {
           if (ctx) {
             ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
             const base64 = canvas.toDataURL('image/jpeg', 0.6)
-            
+
             setOpticsLogs((prev) => [...prev, 'SYS: Dispatched background screen frame...'])
-            
+
             if (window.electron?.ipcRenderer) {
               const res = await window.electron.ipcRenderer.invoke('analyze-optics', {
                 base64Image: base64,
                 source: 'screen'
               })
-              setOpticsLogs((prev) => [
-                ...prev,
-                `SYS: [SCREEN SEEN] ${res}`
-              ])
+              setOpticsLogs((prev) => [...prev, `SYS: [SCREEN SEEN] ${res}`])
               setAgentLogs((prev) => ({
                 ...prev,
                 'scratch-agent': [...(prev['scratch-agent'] || []), `[Optics Screen] Saw: ${res}`]
@@ -412,7 +421,7 @@ export default function AgentsView() {
       const updateWave = () => {
         if (!analyserRef.current) return
         analyserRef.current.getByteFrequencyData(dataArray)
-        
+
         // Convert frequencies to a nice array of 15 visual height parameters
         const wave = []
         for (let i = 0; i < 15; i++) {
@@ -463,17 +472,17 @@ export default function AgentsView() {
         recognition.lang = 'en-US'
 
         recognition.onresult = async (event: any) => {
-          let finalTranscript = "";
+          let finalTranscript = ''
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript + " ";
+              finalTranscript += event.results[i][0].transcript + ' '
             }
           }
-          const transcript = finalTranscript.trim();
+          const transcript = finalTranscript.trim()
           console.log('[Voice recognition] Heard transcript:', transcript)
-          
+
           setConsoleInput(transcript)
-          
+
           // Voice fingerprint extract (simulating based on speech rate & pitch characteristics of the Web Audio analyser)
           const pitchSum = activeVoiceWaveform.reduce((a, b) => a + b, 0)
           const isHighPitch = pitchSum > 120
@@ -481,7 +490,7 @@ export default function AgentsView() {
 
           // Match fingerprint
           let matchedName = 'Unknown Speaker'
-          const matchedProfile = voiceProfiles.find(v => v.fingerprint === extractedFingerprint)
+          const matchedProfile = voiceProfiles.find((v) => v.fingerprint === extractedFingerprint)
           if (matchedProfile) {
             matchedName = matchedProfile.name
             setCurrentSpeaker(matchedName)
@@ -499,16 +508,20 @@ export default function AgentsView() {
           if (window.electron?.ipcRenderer) {
             try {
               // Greet speaker customized
-              const greeting = matchedName !== 'Unknown Speaker' 
-                ? `[Voice Fingerprint Matched: ${matchedName}]` 
-                : '[Voice Fingerprint: Unregistered Speaker]'
-              
+              const greeting =
+                matchedName !== 'Unknown Speaker'
+                  ? `[Voice Fingerprint Matched: ${matchedName}]`
+                  : '[Voice Fingerprint: Unregistered Speaker]'
+
               setAgentLogs((prev) => ({
                 ...prev,
                 'scratch-agent': [...(prev['scratch-agent'] || []), greeting]
               }))
 
-              const res = await window.electron.ipcRenderer.invoke('scratch-agent-command', `${transcript} (Spoken by user ${matchedName})`)
+              const res = await window.electron.ipcRenderer.invoke(
+                'scratch-agent-command',
+                `${transcript} (Spoken by user ${matchedName})`
+              )
               setAgentLogs((prev) => ({
                 ...prev,
                 'scratch-agent': [...(prev['scratch-agent'] || []), `NOVA: ${res}`]
@@ -525,8 +538,8 @@ export default function AgentsView() {
         recognition.onend = () => {
           setIsRecordingVoice(false)
           stopWaveformAnimation()
-          stream.getTracks().forEach(t => t.stop())
-        };
+          stream.getTracks().forEach((t) => t.stop())
+        }
 
         recognitionRef.current = recognition
         recognition.start()
@@ -535,13 +548,16 @@ export default function AgentsView() {
         setTimeout(async () => {
           setIsRecordingVoice(false)
           stopWaveformAnimation()
-          stream.getTracks().forEach(t => t.stop())
+          stream.getTracks().forEach((t) => t.stop())
 
           // Prompt simulation user command
-          const promptCommand = prompt("Voice command input fallback (Web Speech API simulated):", "wallpaper change karo cyberpunk city")
+          const promptCommand = prompt(
+            'Voice command input fallback (Web Speech API simulated):',
+            'wallpaper change karo cyberpunk city'
+          )
           if (promptCommand) {
             setConsoleInput(promptCommand)
-            
+
             // Randomly match voice to test fingerprinting
             const randomProfile = voiceProfiles[Math.floor(Math.random() * voiceProfiles.length)]
             setCurrentSpeaker(randomProfile.name)
@@ -556,10 +572,17 @@ export default function AgentsView() {
 
             if (window.electron?.ipcRenderer) {
               try {
-                const res = await window.electron.ipcRenderer.invoke('scratch-agent-command', `${promptCommand} (Spoken by user ${randomProfile.name})`)
+                const res = await window.electron.ipcRenderer.invoke(
+                  'scratch-agent-command',
+                  `${promptCommand} (Spoken by user ${randomProfile.name})`
+                )
                 setAgentLogs((prev) => ({
                   ...prev,
-                  'scratch-agent': [...(prev['scratch-agent'] || []), `[Vocal Recognition Match: ${randomProfile.name}]`, `NOVA: ${res}`]
+                  'scratch-agent': [
+                    ...(prev['scratch-agent'] || []),
+                    `[Vocal Recognition Match: ${randomProfile.name}]`,
+                    `NOVA: ${res}`
+                  ]
                 }))
               } catch (err: any) {
                 setAgentLogs((prev) => ({
@@ -579,7 +602,7 @@ export default function AgentsView() {
   // Register New Speaker Profile
   const registerNewVoiceProfile = async () => {
     if (!registerName.trim()) {
-      alert("Please enter a speaker name to register.")
+      alert('Please enter a speaker name to register.')
       return
     }
 
@@ -587,10 +610,10 @@ export default function AgentsView() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       startWaveformAnimation(stream)
       setIsRegisteringVoice(true)
-      
+
       // Keep recording for 4 seconds to analyze voice print
       setTimeout(() => {
-        stream.getTracks().forEach(t => t.stop())
+        stream.getTracks().forEach((t) => t.stop())
         stopWaveformAnimation()
         setIsRegisteringVoice(false)
 
@@ -610,7 +633,6 @@ export default function AgentsView() {
           ]
         }))
       }, 4000)
-
     } catch (err: any) {
       alert(`Vocal registration failed: ${err.message}`)
     }
@@ -993,7 +1015,7 @@ export default function AgentsView() {
 
                   {/* OPTICS MONITOR FLASHING INDICATOR */}
                   {(isCameraActive || isScreenActive) && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0.7 }}
                       animate={{ opacity: [0.7, 1, 0.7] }}
                       transition={{ repeat: Infinity, duration: 1.5 }}
@@ -1045,7 +1067,8 @@ export default function AgentsView() {
                       <div className="flex items-center gap-2">
                         <UserCheck size={12} className="text-emerald-400" />
                         <span className="text-[9px] font-mono text-zinc-300">
-                          Identified Speaker: <strong className="text-emerald-400">{currentSpeaker}</strong>
+                          Identified Speaker:{' '}
+                          <strong className="text-emerald-400">{currentSpeaker}</strong>
                         </span>
                       </div>
                       <span className="text-[8px] font-mono text-zinc-500 uppercase">
@@ -1114,7 +1137,9 @@ export default function AgentsView() {
                         ? 'bg-red-500 text-white border-red-400 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)]'
                         : 'bg-zinc-900 text-zinc-400 border-white/5 hover:border-white/15 hover:text-zinc-200'
                     }`}
-                    title={isRecordingVoice ? 'Stop voice command recording' : 'Start voice command'}
+                    title={
+                      isRecordingVoice ? 'Stop voice command recording' : 'Start voice command'
+                    }
                   >
                     {isRecordingVoice ? <MicOff size={14} /> : <Mic size={14} />}
                   </button>

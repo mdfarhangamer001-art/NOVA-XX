@@ -1,8 +1,9 @@
-const fs = require('fs');
-const file = 'src/renderer/src/views/Settings.tsx';
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const file = 'src/renderer/src/views/Settings.tsx'
+let content = fs.readFileSync(file, 'utf8')
 
-const target1 = "const updateVoices = () => {\n      setAvailableVoices(window.speechSynthesis.getVoices())\n    }";
+const target1 =
+  'const updateVoices = () => {\n      setAvailableVoices(window.speechSynthesis.getVoices())\n    }'
 const replacement1 = `const updateVoices = () => {
       const allVoices = window.speechSynthesis.getVoices();
       
@@ -20,7 +21,7 @@ const replacement1 = `const updateVoices = () => {
       addVoice(['Google US English Male', 'Alex', 'Fred'], 'Marcus (Deep & Confident Male)');
 
       setAvailableVoices(premiumVoices);
-    }`;
+    }`
 
-content = content.replace(target1, replacement1);
-fs.writeFileSync(file, content);
+content = content.replace(target1, replacement1)
+fs.writeFileSync(file, content)

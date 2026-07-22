@@ -150,7 +150,7 @@ export default function RightPanel(): JSX.Element {
       recognition.continuous = true
       recognition.interimResults = false
       // Set to Hindi/English to capture the user perfectly as requested
-      recognition.lang = 'hi-IN' 
+      recognition.lang = 'hi-IN'
 
       recognition.onstart = () => {
         setIsRecording(true)
@@ -163,13 +163,13 @@ export default function RightPanel(): JSX.Element {
       }
 
       recognition.onresult = async (event: any) => {
-        let finalTranscript = "";
+        let finalTranscript = ''
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript + " ";
+            finalTranscript += event.results[i][0].transcript + ' '
           }
         }
-        const transcript = finalTranscript.trim();
+        const transcript = finalTranscript.trim()
         console.log('Call transcript:', transcript)
         if (transcript && transcript.trim().length > 0) {
           setUserInput(transcript)
@@ -295,12 +295,22 @@ export default function RightPanel(): JSX.Element {
     // 1. YouTube Actions
     if (q.includes('youtube') || q.includes('yt ') || q.endsWith(' yt')) {
       let songOrQuery = ''
-      const searchMatch = query.match(/(?:youtube|yt)\s+(?:pe|par|per|on|for)?\s*(?:search|chalao|play|suno|kholo|dikhao)?\s*(.+)/i) ||
-                          query.match(/(?:play|chalao|suno|search)\s+(.+?)\s+(?:on|pe|par|in)?\s*(?:youtube|yt)/i)
-      if (searchMatch && searchMatch[1] && !/^(kholo|kholen|open|chalao|start)$/i.test(searchMatch[1].trim())) {
+      const searchMatch =
+        query.match(
+          /(?:youtube|yt)\s+(?:pe|par|per|on|for)?\s*(?:search|chalao|play|suno|kholo|dikhao)?\s*(.+)/i
+        ) ||
+        query.match(/(?:play|chalao|suno|search)\s+(.+?)\s+(?:on|pe|par|in)?\s*(?:youtube|yt)/i)
+      if (
+        searchMatch &&
+        searchMatch[1] &&
+        !/^(kholo|kholen|open|chalao|start)$/i.test(searchMatch[1].trim())
+      ) {
         songOrQuery = searchMatch[1]
           .replace(/^(pe|par|on|for|search|chalao|play|suno|kholo|dikhao)\s+/i, '')
-          .replace(/\s+(pe|par|on|for|search|chalao|play|suno|kholo|dikhao|kholen|open|start|song|gaana|video)$/i, '')
+          .replace(
+            /\s+(pe|par|on|for|search|chalao|play|suno|kholo|dikhao|kholen|open|start|song|gaana|video)$/i,
+            ''
+          )
           .trim()
       }
 
@@ -321,8 +331,17 @@ export default function RightPanel(): JSX.Element {
     }
 
     // 2. Google Search & Web Actions
-    if (q.includes('google') || q.startsWith('search ') || q.includes('search karo') || q.includes('dhoondo') || q.includes('khojo')) {
-      let searchQuery = query.replace(/^(google|search|google pe|google par)\s+/i, '').replace(/\s+(search karo|dhoondo|khojo|kholo)$/i, '').trim()
+    if (
+      q.includes('google') ||
+      q.startsWith('search ') ||
+      q.includes('search karo') ||
+      q.includes('dhoondo') ||
+      q.includes('khojo')
+    ) {
+      let searchQuery = query
+        .replace(/^(google|search|google pe|google par)\s+/i, '')
+        .replace(/\s+(search karo|dhoondo|khojo|kholo)$/i, '')
+        .trim()
       if (searchQuery && searchQuery !== 'google') {
         const url = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`
         window.open(url, '_blank')
@@ -344,7 +363,10 @@ export default function RightPanel(): JSX.Element {
       window.open('https://web.whatsapp.com', '_blank')
       return { handled: true, reply: `WhatsApp Web real mein open kar diya hai, Boss!` }
     }
-    if (q.includes('gmail') || (q.includes('email') && (q.includes('kholo') || q.includes('open')))) {
+    if (
+      q.includes('gmail') ||
+      (q.includes('email') && (q.includes('kholo') || q.includes('open')))
+    ) {
       window.open('https://mail.google.com', '_blank')
       return { handled: true, reply: `Gmail real mein open kar diya hai, Boss!` }
     }
@@ -374,7 +396,12 @@ export default function RightPanel(): JSX.Element {
     }
 
     // 4. System Terminal Commands Execution
-    if (q.startsWith('run command ') || q.startsWith('execute ') || q.startsWith('cmd ') || q.startsWith('terminal ')) {
+    if (
+      q.startsWith('run command ') ||
+      q.startsWith('execute ') ||
+      q.startsWith('cmd ') ||
+      q.startsWith('terminal ')
+    ) {
       const cmd = query.replace(/^(run command|execute|cmd|terminal)\s+/i, '').trim()
       try {
         if (window.electron?.ipcRenderer) {
@@ -400,8 +427,9 @@ export default function RightPanel(): JSX.Element {
     }
 
     // 5. Open / Launch App General Handler
-    const openAppMatch = query.match(/^(?:open|launch|start|kholo|chalao)\s+(.+)/i) ||
-                         query.match(/(.+)\s+(?:kholo|kholen|chalao|open karo|start karo)$/i)
+    const openAppMatch =
+      query.match(/^(?:open|launch|start|kholo|chalao)\s+(.+)/i) ||
+      query.match(/(.+)\s+(?:kholo|kholen|chalao|open karo|start karo)$/i)
     if (openAppMatch) {
       const appName = openAppMatch[1].replace(/^(app|system|the)\s+/i, '').trim()
       if (appName && appName.length > 1) {
@@ -456,11 +484,16 @@ export default function RightPanel(): JSX.Element {
     if (q.includes('lock screen') || q.includes('lock my pc') || q.includes('lock computer')) {
       try {
         if (window.electron?.ipcRenderer) {
-          const res = await window.electron.ipcRenderer.invoke('execute-system-action', { action: 'lock-screen' })
+          const res = await window.electron.ipcRenderer.invoke('execute-system-action', {
+            action: 'lock-screen'
+          })
           if (res?.success) {
             return { handled: true, reply: 'Workstation screen real mein lock kar diya hai, Boss.' }
           } else {
-            return { handled: true, reply: `Workstation screen lock failed: ${res?.error || 'IPC error'}` }
+            return {
+              handled: true,
+              reply: `Workstation screen lock failed: ${res?.error || 'IPC error'}`
+            }
           }
         }
       } catch (err: any) {
@@ -475,11 +508,20 @@ export default function RightPanel(): JSX.Element {
         const vol = parseInt(match[1])
         try {
           if (window.electron?.ipcRenderer) {
-            const res = await window.electron.ipcRenderer.invoke('execute-system-action', { action: 'set-volume', data: { volume: vol } })
+            const res = await window.electron.ipcRenderer.invoke('execute-system-action', {
+              action: 'set-volume',
+              data: { volume: vol }
+            })
             if (res?.success) {
-              return { handled: true, reply: `Master volume real mein ${vol}% par calibrate ho gaya hai, Boss.` }
+              return {
+                handled: true,
+                reply: `Master volume real mein ${vol}% par calibrate ho gaya hai, Boss.`
+              }
             } else {
-              return { handled: true, reply: `Volume calibration failed: ${res?.error || 'IPC error'}` }
+              return {
+                handled: true,
+                reply: `Volume calibration failed: ${res?.error || 'IPC error'}`
+              }
             }
           }
         } catch (err: any) {
@@ -576,12 +618,18 @@ export default function RightPanel(): JSX.Element {
         try {
           const clipData = await window.electron.ipcRenderer.invoke('get-clipboard-history')
           if (clipData && clipData.length > 0) {
-            const truncatedClip = clipData[0].content.length > 200 ? clipData[0].content.slice(0, 200) + '...' : clipData[0].content
+            const truncatedClip =
+              clipData[0].content.length > 200
+                ? clipData[0].content.slice(0, 200) + '...'
+                : clipData[0].content
             contextualInjections += `\n[Context: Recent shared clipboard entry: "${truncatedClip}"]`
           }
           const notesData = await window.electron.ipcRenderer.invoke('get-notes')
           if (notesData && notesData.length > 0) {
-            const truncatedNote = notesData[0].content.length > 200 ? notesData[0].content.slice(0, 200) + '...' : notesData[0].content
+            const truncatedNote =
+              notesData[0].content.length > 200
+                ? notesData[0].content.slice(0, 200) + '...'
+                : notesData[0].content
             contextualInjections += `\n[Context: Recent saved note: "${notesData[0].title} - ${truncatedNote}"]`
           }
           const sysStats = await window.electron.ipcRenderer.invoke('get-system-stats')
@@ -735,7 +783,8 @@ Each agent should only activate for its own domain, and the main JARVIS core sho
         if (
           modelReply !== 'API key not found, please add the API key in settings.' &&
           modelReply !== 'Limit exceeded, please upgrade your plan.' &&
-          modelReply !== 'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.'
+          modelReply !==
+            'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.'
         ) {
           if (
             modelReply.includes('Quota exceeded') ||
@@ -790,10 +839,11 @@ Each agent should only activate for its own domain, and the main JARVIS core sho
         console.error('Gemini call failed', err)
         setActiveModelText('')
         setOrchestrationSteps(null)
-        
+
         const msg = err.message || ''
-        let errorText = 'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.'
-        
+        let errorText =
+          'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.'
+
         if (
           msg.includes('MISSING') ||
           msg.includes('not found') ||

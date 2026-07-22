@@ -429,9 +429,15 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
     })
 
     ipcMain.removeHandler('analyze-optics')
-    ipcMain.handle('analyze-optics', async (_event, { base64Image, source }: { base64Image: string; source: 'camera' | 'screen' }) => {
-      return await analyzeVision(base64Image, source)
-    })
+    ipcMain.handle(
+      'analyze-optics',
+      async (
+        _event,
+        { base64Image, source }: { base64Image: string; source: 'camera' | 'screen' }
+      ) => {
+        return await analyzeVision(base64Image, source)
+      }
+    )
 
     ipcMain.removeHandler('gemini-chat-call')
     ipcMain.handle(
@@ -445,14 +451,19 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         const webContents = event.sender
 
         const runGroq = async () => {
-          if (!resolvedGroqKey || resolvedGroqKey.trim() === '' || resolvedGroqKey.includes('YOUR_')) {
+          if (
+            !resolvedGroqKey ||
+            resolvedGroqKey.trim() === '' ||
+            resolvedGroqKey.includes('YOUR_')
+          ) {
             throw new Error('GROQ_API_KEY_MISSING')
           }
           const groq = getGroqClient(resolvedGroqKey)
           const messages = [
             { role: 'system', content: systemInstruction },
             ...contents.map((c: any) => ({
-              role: c.role === 'model' ? 'assistant' : (c.role === 'assistant' ? 'assistant' : 'user'),
+              role:
+                c.role === 'model' ? 'assistant' : c.role === 'assistant' ? 'assistant' : 'user',
               content: c.parts?.map((p: any) => p.text || '').join(' ') || ''
             }))
           ]
@@ -482,7 +493,11 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         }
 
         const runGemini = async () => {
-          if (!resolvedGeminiKey || resolvedGeminiKey.trim() === '' || resolvedGeminiKey.includes('YOUR_')) {
+          if (
+            !resolvedGeminiKey ||
+            resolvedGeminiKey.trim() === '' ||
+            resolvedGeminiKey.includes('YOUR_')
+          ) {
             throw new Error('GEMINI_API_KEY_MISSING')
           }
           const ai = getGeminiClient(resolvedGeminiKey)
@@ -492,11 +507,13 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
           const memories = (store.get('novax_memories', []) as any[]).slice(-8)
           if (memories.length > 0) {
             const memoryContext = `[RELEVANT MEMORIES]: ${memories.map((m) => m.fact).join('; ')}`
-            const lastPart = contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1]
+            const lastPart =
+              contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1]
             if (typeof lastPart === 'string') {
-              contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1] = lastPart + `\n\n${memoryContext}`
+              contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1] =
+                lastPart + `\n\n${memoryContext}`
             } else if (lastPart && (lastPart as any).text) {
-              (lastPart as any).text += `\n\n${memoryContext}`
+              ;(lastPart as any).text += `\n\n${memoryContext}`
             }
           }
 
@@ -505,7 +522,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             const responseStream = await ai.models.generateContentStream({
               model: dynamicModel,
               contents,
-              config: { 
+              config: {
                 systemInstruction,
                 tools: [{ googleSearch: {} }],
                 generationConfig: {
@@ -514,7 +531,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
                 }
               }
             })
-            
+
             for await (const chunk of responseStream) {
               const chunkText = chunk.text || ''
               fullText += chunkText
@@ -524,7 +541,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             const response = await ai.models.generateContent({
               model: dynamicModel,
               contents,
-              config: { 
+              config: {
                 systemInstruction,
                 tools: [{ googleSearch: {} }],
                 generationConfig: {
@@ -572,9 +589,16 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
             }
           }
         } catch (finalErr: any) {
-          console.error('[NOVA-X Main] Error in providers. firstErr:', firstErr, '\nsecondErr:', secondErr, '\nfinalErr:', finalErr)
+          console.error(
+            '[NOVA-X Main] Error in providers. firstErr:',
+            firstErr,
+            '\nsecondErr:',
+            secondErr,
+            '\nfinalErr:',
+            finalErr
+          )
           console.log('[NOVA-X Main] Final provider check complete.')
-          
+
           let isLimitExceeded = false
           let isKeyMissing = false
 
@@ -638,7 +662,10 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
           } else if (isKeyMissing) {
             return { error: 'API key not found, please add the API key in settings.' }
           } else {
-            return { error: 'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.' }
+            return {
+              error:
+                'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.'
+            }
           }
         }
       }
@@ -659,7 +686,7 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
         const content = (res.text || '').trim()
         const match = content.match(/\[.*\]/s)
         const newFacts = JSON.parse(match ? match[0] : '[]')
-        
+
         if (Array.isArray(newFacts) && newFacts.length > 0) {
           const existing = store.get('novax_memories', []) as any[]
           const updated = [
@@ -809,7 +836,9 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
               file: fs.createReadStream(tmpFile),
               model: 'whisper-large-v3',
               response_format: 'text',
-              prompt: 'hello, JARVIS, how can I help you, Boss? Kaise ho yaar. Main jo bol raha hoon use dhyan se suno. Text to speech accuracy 100% honi chahiye. hindi hinglish english', language: 'hi'
+              prompt:
+                'hello, JARVIS, how can I help you, Boss? Kaise ho yaar. Main jo bol raha hoon use dhyan se suno. Text to speech accuracy 100% honi chahiye. hindi hinglish english',
+              language: 'hi'
             })
             fs.unlinkSync(tmpFile)
             return typeof transcription === 'string' ? transcription : (transcription as any).text
@@ -821,22 +850,25 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
           try {
             const ai = getGeminiClient()
             const dynamicModel = await getGeminiModelName(ai, 'transcribe')
-            
+
             const callWithRetry = async (fn: any, retries = 5, delay = 1000): Promise<any> => {
               try {
                 return await fn()
               } catch (err: any) {
                 if (retries > 0 && (err.message.includes('429') || err.message.includes('Quota'))) {
                   const backoff = delay * Math.pow(2, 5 - retries) + Math.random() * 500
-                  console.log(`[NOVA-X Main] Rate limit handling active. Retries remaining: ${retries}`)
-                  await new Promise(resolve => setTimeout(resolve, backoff))
+                  console.log(
+                    `[NOVA-X Main] Rate limit handling active. Retries remaining: ${retries}`
+                  )
+                  await new Promise((resolve) => setTimeout(resolve, backoff))
                   return callWithRetry(fn, retries - 1, delay)
                 }
                 throw err
               }
             }
 
-            const response = await callWithRetry(() => ai.models.generateContent({
+            const response = await callWithRetry(() =>
+              ai.models.generateContent({
                 model: dynamicModel,
                 contents: [
                   {
@@ -844,12 +876,16 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
                   },
                   { inlineData: { mimeType, data: base64Audio } }
                 ]
-              }))
+              })
+            )
 
             return (response.text || '').trim()
           } catch (geminiErr: any) {
             console.log('[NOVA-X Main] Audio processing completed.')
-            if (geminiErr.message?.includes('429') || geminiErr.message?.includes('Quota exceeded')) {
+            if (
+              geminiErr.message?.includes('429') ||
+              geminiErr.message?.includes('Quota exceeded')
+            ) {
               return '[API_RATE_LIMIT]'
             } else if (geminiErr.message?.includes('required')) {
               return '[API_KEY_REQUIRED]'
@@ -1494,24 +1530,28 @@ export default function registerSystemHandlers(ipcMain: IpcMain) {
       try {
         const ai = getGeminiClient()
         const dynamicModel = await getGeminiModelName(ai, 'chat')
-        
+
         const callWithRetry = async (fn: any, retries = 2, delay = 2000): Promise<any> => {
           try {
             return await fn()
           } catch (err: any) {
             if (retries > 0 && (err.message.includes('429') || err.message.includes('Quota'))) {
-              console.warn(`[NOVA-X Main] Rate limit hit, retrying in ${delay}ms... (${retries} retries left)`)
-              await new Promise(resolve => setTimeout(resolve, delay))
+              console.warn(
+                `[NOVA-X Main] Rate limit hit, retrying in ${delay}ms... (${retries} retries left)`
+              )
+              await new Promise((resolve) => setTimeout(resolve, delay))
               return callWithRetry(fn, retries - 1, delay * 2)
             }
             throw err
           }
         }
 
-        const res = await callWithRetry(() => ai.models.generateContent({
-          model: dynamicModel,
-          contents: [{ role: 'user', parts: [{ text: prompt }] }]
-        }))
+        const res = await callWithRetry(() =>
+          ai.models.generateContent({
+            model: dynamicModel,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+          })
+        )
         return (res.text || '').trim()
       } catch (e: any) {
         return `Failed to compile telemetry briefing: ${e.message}`

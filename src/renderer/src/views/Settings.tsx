@@ -54,9 +54,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   const [openrouterKey, setOpenrouterKey] = useState(
     () => localStorage.getItem('novax_openrouter_key') || ''
   )
-  const [customKey, setCustomKey] = useState(
-    () => localStorage.getItem('novax_custom_key') || ''
-  )
+  const [customKey, setCustomKey] = useState(() => localStorage.getItem('novax_custom_key') || '')
   const [primaryEngine, setPrimaryEngine] = useState<'gemini' | 'groq'>(
     () => (localStorage.getItem('novax_primary_engine') as 'gemini' | 'groq') || 'gemini'
   )
@@ -69,7 +67,9 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   const [screenMonitoring, setScreenMonitoring] = useState(
     () => localStorage.getItem('novax_screen_monitoring') === 'true'
   )
-  const [selectedProvider, setSelectedProvider] = useState<'gemini' | 'openai' | 'groq' | 'hf' | 'tavily' | 'openrouter'>('gemini')
+  const [selectedProvider, setSelectedProvider] = useState<
+    'gemini' | 'openai' | 'groq' | 'hf' | 'tavily' | 'openrouter'
+  >('gemini')
   const [quickKeyInput, setQuickKeyInput] = useState('')
   const [activeAvatar, setActiveAvatarState] = useState<string>(
     () => localStorage.getItem('novax_active_avatar') || 'neo'
@@ -77,12 +77,30 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
 
   const handleQuickKeySave = () => {
     if (!quickKeyInput) return
-    if (selectedProvider === 'gemini') { setGeminiKey(quickKeyInput); saveSingleKey('geminiKey', quickKeyInput); }
-    if (selectedProvider === 'openai') { setOpenaiKey(quickKeyInput); saveSingleKey('openaiKey', quickKeyInput); }
-    if (selectedProvider === 'groq') { setGroqKey(quickKeyInput); saveSingleKey('groqKey', quickKeyInput); }
-    if (selectedProvider === 'hf') { setHfKey(quickKeyInput); saveSingleKey('hfKey', quickKeyInput); }
-    if (selectedProvider === 'tavily') { setTavilyKey(quickKeyInput); saveSingleKey('tavilyKey', quickKeyInput); }
-    if (selectedProvider === 'openrouter') { setOpenRouterKey(quickKeyInput); saveSingleKey('openrouterKey', quickKeyInput); }
+    if (selectedProvider === 'gemini') {
+      setGeminiKey(quickKeyInput)
+      saveSingleKey('geminiKey', quickKeyInput)
+    }
+    if (selectedProvider === 'openai') {
+      setOpenaiKey(quickKeyInput)
+      saveSingleKey('openaiKey', quickKeyInput)
+    }
+    if (selectedProvider === 'groq') {
+      setGroqKey(quickKeyInput)
+      saveSingleKey('groqKey', quickKeyInput)
+    }
+    if (selectedProvider === 'hf') {
+      setHfKey(quickKeyInput)
+      saveSingleKey('hfKey', quickKeyInput)
+    }
+    if (selectedProvider === 'tavily') {
+      setTavilyKey(quickKeyInput)
+      saveSingleKey('tavilyKey', quickKeyInput)
+    }
+    if (selectedProvider === 'openrouter') {
+      setOpenRouterKey(quickKeyInput)
+      saveSingleKey('openrouterKey', quickKeyInput)
+    }
     setQuickKeyInput('')
   }
 
@@ -119,22 +137,25 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   useEffect(() => {
     if (!window.speechSynthesis) return
     const updateVoices = () => {
-      const allVoices = window.speechSynthesis.getVoices();
-      
-      const premiumVoices = [];
+      const allVoices = window.speechSynthesis.getVoices()
+
+      const premiumVoices = []
       const addVoice = (keywords, customName) => {
-         const voice = allVoices.find(v => keywords.some(k => v.name.includes(k)));
-         if (voice) {
-            premiumVoices.push({ ...voice, customName });
-         }
-      };
+        const voice = allVoices.find((v) => keywords.some((k) => v.name.includes(k)))
+        if (voice) {
+          premiumVoices.push({ ...voice, customName })
+        }
+      }
 
-      addVoice(['Google UK English Female', 'Samantha', 'Karen', 'Tessa'], 'Aria (Warm & Clear Female)');
-      addVoice(['Google US English Female', 'Victoria', 'Moira'], 'Elena (Natural Female)');
-      addVoice(['Google UK English Male', 'Daniel', 'Rishi'], 'Arthur (JARVIS-style Male)');
-      addVoice(['Google US English Male', 'Alex', 'Fred'], 'Marcus (Deep & Confident Male)');
+      addVoice(
+        ['Google UK English Female', 'Samantha', 'Karen', 'Tessa'],
+        'Aria (Warm & Clear Female)'
+      )
+      addVoice(['Google US English Female', 'Victoria', 'Moira'], 'Elena (Natural Female)')
+      addVoice(['Google UK English Male', 'Daniel', 'Rishi'], 'Arthur (JARVIS-style Male)')
+      addVoice(['Google US English Male', 'Alex', 'Fred'], 'Marcus (Deep & Confident Male)')
 
-      setAvailableVoices(premiumVoices);
+      setAvailableVoices(premiumVoices)
     }
     updateVoices()
     window.speechSynthesis.onvoiceschanged = updateVoices
@@ -179,7 +200,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   }, [])
 
   const saveSingleKey = async (
-    keyType: 'geminiKey' | 'openaiKey' | 'groqKey' | 'hfKey' | 'tavilyKey' | 'openrouterKey' | 'customKey',
+    keyType:
+      'geminiKey' | 'openaiKey' | 'groqKey' | 'hfKey' | 'tavilyKey' | 'openrouterKey' | 'customKey',
     value: string
   ): Promise<void> => {
     if (window.electron?.ipcRenderer) {
@@ -196,7 +218,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
   }
 
   const removeSingleKey = async (
-    keyType: 'geminiKey' | 'openaiKey' | 'groqKey' | 'hfKey' | 'tavilyKey' | 'openrouterKey' | 'customKey'
+    keyType:
+      'geminiKey' | 'openaiKey' | 'groqKey' | 'hfKey' | 'tavilyKey' | 'openrouterKey' | 'customKey'
   ): Promise<void> => {
     if (window.confirm(`Are you sure you want to remove this API key?`)) {
       if (keyType === 'geminiKey') setGeminiKey('')
@@ -504,7 +527,7 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                       <Zap size={16} /> Ultra-Fast API Linking
                     </h3>
                     <div className="flex flex-col sm:flex-row gap-3">
-                      <select 
+                      <select
                         value={selectedProvider}
                         onChange={(e: any) => setSelectedProvider(e.target.value)}
                         className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-zinc-300 outline-none focus:border-emerald-500/50 min-w-[150px] appearance-none cursor-pointer"
@@ -533,7 +556,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                       </div>
                     </div>
                     <p className="text-[9px] text-zinc-600 mt-3 font-mono italic">
-                      // Link your preferred synaptic engine instantly. Detailed management available below.
+                      // Link your preferred synaptic engine instantly. Detailed management
+                      available below.
                     </p>
                   </div>
 
@@ -793,8 +817,16 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                       <label className={labelClass}>Primary Processing Engine</label>
                       <div className="flex gap-3 mt-3">
                         {[
-                          { id: 'gemini', label: 'Gemini (Flash)', desc: 'Multimodal / High Quality' },
-                          { id: 'groq', label: 'Groq (Llama 3)', desc: 'Fastest Voice / Low Latency' }
+                          {
+                            id: 'gemini',
+                            label: 'Gemini (Flash)',
+                            desc: 'Multimodal / High Quality'
+                          },
+                          {
+                            id: 'groq',
+                            label: 'Groq (Llama 3)',
+                            desc: 'Fastest Voice / Low Latency'
+                          }
                         ].map((engine) => (
                           <button
                             key={engine.id}
@@ -839,51 +871,94 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                     </div>
 
                     <div className="md:col-span-2 mt-4 pt-6 border-t border-white/5 text-left">
-                      <label className={labelClass}>Character & Avatar Selector (&quot;Omni-cat&quot; Style)</label>
+                      <label className={labelClass}>
+                        Character & Avatar Selector (&quot;Omni-cat&quot; Style)
+                      </label>
                       <p className="text-[10px] text-zinc-500 mt-1 font-mono italic mb-3">
-                        Choose your primary assistant character. Selecting an avatar aligns their cognitive voice, narrative style, and character traits.
+                        Choose your primary assistant character. Selecting an avatar aligns their
+                        cognitive voice, narrative style, and character traits.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
                         {[
-                          { id: 'neo', name: 'NEO', gender: 'Boy', role: 'Warm & Calming', desc: 'Calm, friendly, and deeply supportive. Speaks with an empathetic and clear cadence.', color: 'border-[#00f3ff]/20 bg-zinc-900/40 hover:border-[#00f3ff]/40' },
-                          { id: 'ares', name: 'ARES', gender: 'Boy', role: 'Tactical & Precise', desc: 'Confident, professional, and tactical. Speaks with authoritative precision.', color: 'border-red-500/20 bg-zinc-900/40 hover:border-red-500/40' },
-                          { id: 'iris', name: 'IRIS', gender: 'Girl', role: 'Smart & Analytical', desc: 'Analytical, strategic, and highly structured. Excellent for complex operations.', color: 'border-indigo-500/20 bg-zinc-900/40 hover:border-indigo-500/40' },
-                          { id: 'luna', name: 'LUNA', gender: 'Girl', role: 'Playful & Lively', desc: 'Creative, energetic, and witty. Speaks with spontaneous and friendly passion.', color: 'border-pink-500/20 bg-zinc-900/40 hover:border-pink-500/40' }
+                          {
+                            id: 'neo',
+                            name: 'NEO',
+                            gender: 'Boy',
+                            role: 'Warm & Calming',
+                            desc: 'Calm, friendly, and deeply supportive. Speaks with an empathetic and clear cadence.',
+                            color: 'border-[#00f3ff]/20 bg-zinc-900/40 hover:border-[#00f3ff]/40'
+                          },
+                          {
+                            id: 'ares',
+                            name: 'ARES',
+                            gender: 'Boy',
+                            role: 'Tactical & Precise',
+                            desc: 'Confident, professional, and tactical. Speaks with authoritative precision.',
+                            color: 'border-red-500/20 bg-zinc-900/40 hover:border-red-500/40'
+                          },
+                          {
+                            id: 'iris',
+                            name: 'IRIS',
+                            gender: 'Girl',
+                            role: 'Smart & Analytical',
+                            desc: 'Analytical, strategic, and highly structured. Excellent for complex operations.',
+                            color: 'border-indigo-500/20 bg-zinc-900/40 hover:border-indigo-500/40'
+                          },
+                          {
+                            id: 'luna',
+                            name: 'LUNA',
+                            gender: 'Girl',
+                            role: 'Playful & Lively',
+                            desc: 'Creative, energetic, and witty. Speaks with spontaneous and friendly passion.',
+                            color: 'border-pink-500/20 bg-zinc-900/40 hover:border-pink-500/40'
+                          }
                         ].map((avatar) => {
-                          const isActive = activeAvatar === avatar.id;
+                          const isActive = activeAvatar === avatar.id
                           return (
                             <button
                               key={avatar.id}
                               type="button"
                               onClick={() => {
-                                setActiveAvatarState(avatar.id);
-                                localStorage.setItem('novax_active_avatar', avatar.id);
-                                if (avatar.id === 'neo') handleSpeechSpeedChange(1.0);
-                                if (avatar.id === 'ares') handleSpeechSpeedChange(1.1);
-                                if (avatar.id === 'iris') handleSpeechSpeedChange(1.05);
-                                if (avatar.id === 'luna') handleSpeechSpeedChange(1.15);
+                                setActiveAvatarState(avatar.id)
+                                localStorage.setItem('novax_active_avatar', avatar.id)
+                                if (avatar.id === 'neo') handleSpeechSpeedChange(1.0)
+                                if (avatar.id === 'ares') handleSpeechSpeedChange(1.1)
+                                if (avatar.id === 'iris') handleSpeechSpeedChange(1.05)
+                                if (avatar.id === 'luna') handleSpeechSpeedChange(1.15)
                               }}
                               className={`p-4 rounded-xl text-left border transition-all duration-300 relative cursor-pointer ${avatar.color} ${
-                                isActive 
-                                  ? 'bg-emerald-500/10 border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
+                                isActive
+                                  ? 'bg-emerald-500/10 border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
                                   : 'hover:bg-white/5'
                               }`}
                             >
                               <div className="flex justify-between items-center mb-1">
-                                <span className={`text-xs font-bold ${isActive ? 'text-emerald-400' : 'text-zinc-300'}`}>{avatar.name}</span>
-                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono uppercase font-bold ${
-                                  avatar.gender === 'Boy' 
-                                    ? 'bg-blue-500/20 text-blue-400' 
-                                    : 'bg-pink-500/20 text-pink-400'
-                                }`}>{avatar.gender}</span>
+                                <span
+                                  className={`text-xs font-bold ${isActive ? 'text-emerald-400' : 'text-zinc-300'}`}
+                                >
+                                  {avatar.name}
+                                </span>
+                                <span
+                                  className={`text-[9px] px-2 py-0.5 rounded-full font-mono uppercase font-bold ${
+                                    avatar.gender === 'Boy'
+                                      ? 'bg-blue-500/20 text-blue-400'
+                                      : 'bg-pink-500/20 text-pink-400'
+                                  }`}
+                                >
+                                  {avatar.gender}
+                                </span>
                               </div>
-                              <div className="text-[10px] text-zinc-400 font-medium mb-2 font-mono uppercase">{avatar.role}</div>
-                              <p className="text-[11px] text-zinc-500 leading-snug line-clamp-3">{avatar.desc}</p>
+                              <div className="text-[10px] text-zinc-400 font-medium mb-2 font-mono uppercase">
+                                {avatar.role}
+                              </div>
+                              <p className="text-[11px] text-zinc-500 leading-snug line-clamp-3">
+                                {avatar.desc}
+                              </p>
                               {isActive && (
                                 <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                               )}
                             </button>
-                          );
+                          )
                         })}
                       </div>
                     </div>
@@ -980,7 +1055,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                           Vocal Synthesis & JARVIS Voice Controls
                         </span>
                         <span className="text-[11px] text-zinc-400">
-                          Configure the vocal speed, tone pitch, and speech engine voice for JARVIS's audio outputs.
+                          Configure the vocal speed, tone pitch, and speech engine voice for
+                          JARVIS's audio outputs.
                         </span>
                       </div>
 
@@ -1032,7 +1108,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                           Speech Pitch
                         </span>
                         <span className="text-[10px] text-zinc-400">
-                          Adjust the frequency pitch of JARVIS's voice output. Values below 1.0 make it deeper and more robotic.
+                          Adjust the frequency pitch of JARVIS's voice output. Values below 1.0 make
+                          it deeper and more robotic.
                         </span>
                       </div>
                       <div className="flex items-center gap-4">
@@ -1056,7 +1133,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                           System Voice Engine (Web Speech API)
                         </span>
                         <span className="text-[10px] text-zinc-400">
-                          Select an active text-to-speech voice registered with your operating system's Web Speech API.
+                          Select an active text-to-speech voice registered with your operating
+                          system's Web Speech API.
                         </span>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
@@ -1075,7 +1153,9 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                         <button
                           onClick={() => {
                             if (typeof (window as any).speakText === 'function') {
-                              ;(window as any).speakText('All systems fully operational, Sir. Voice transmission test complete.')
+                              ;(window as any).speakText(
+                                'All systems fully operational, Sir. Voice transmission test complete.'
+                              )
                             }
                           }}
                           className="cursor-pointer px-4 py-2 bg-[#00f3ff]/10 hover:bg-[#00f3ff]/20 text-[#00f3ff] border border-[#00f3ff]/20 rounded-xl font-mono text-[10px] font-bold tracking-wider uppercase transition-all shrink-0"
@@ -1131,65 +1211,85 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
 
                   <div className="flex flex-col gap-6 text-left">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                      Enable persistent environment awareness using your system's hardware. 
-                      NOVA can use your camera and screen snapshots to understand context, 
-                      providing more relevant and human-like assistance. 
+                      Enable persistent environment awareness using your system's hardware. NOVA can
+                      use your camera and screen snapshots to understand context, providing more
+                      relevant and human-like assistance.
                       <strong> All processing is private and data is kept local.</strong>
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className={`p-6 rounded-2xl border transition-all ${cameraMonitoring ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-900/50 border-white/5'}`}>
+                      <div
+                        className={`p-6 rounded-2xl border transition-all ${cameraMonitoring ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-900/50 border-white/5'}`}
+                      >
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${cameraMonitoring ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                            <div
+                              className={`h-10 w-10 rounded-lg flex items-center justify-center ${cameraMonitoring ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}
+                            >
                               <Camera size={20} />
                             </div>
                             <div>
-                              <h4 className="text-sm font-semibold text-white">Camera Monitoring</h4>
-                              <p className="text-[11px] text-zinc-500 italic">Periodic activity snapshots</p>
+                              <h4 className="text-sm font-semibold text-white">
+                                Camera Monitoring
+                              </h4>
+                              <p className="text-[11px] text-zinc-500 italic">
+                                Periodic activity snapshots
+                              </p>
                             </div>
                           </div>
                           <button
                             onClick={() => {
-                              const newValue = !cameraMonitoring;
-                              setCameraMonitoring(newValue);
-                              localStorage.setItem('novax_camera_monitoring', String(newValue));
+                              const newValue = !cameraMonitoring
+                              setCameraMonitoring(newValue)
+                              localStorage.setItem('novax_camera_monitoring', String(newValue))
                             }}
                             className={`w-12 h-6 rounded-full relative transition-colors duration-200 cursor-pointer ${cameraMonitoring ? 'bg-emerald-500' : 'bg-zinc-700'}`}
                           >
-                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 ${cameraMonitoring ? 'left-7' : 'left-1'}`} />
+                            <div
+                              className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 ${cameraMonitoring ? 'left-7' : 'left-1'}`}
+                            />
                           </button>
                         </div>
                         <p className="text-[11px] text-zinc-400 leading-relaxed">
-                          Analyzes your physical environment to detect mood, tasks, and presence. 
+                          Analyzes your physical environment to detect mood, tasks, and presence.
                           Uses Gemini Vision for high-fidelity description.
                         </p>
                       </div>
 
-                      <div className={`p-6 rounded-2xl border transition-all ${screenMonitoring ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-900/50 border-white/5'}`}>
+                      <div
+                        className={`p-6 rounded-2xl border transition-all ${screenMonitoring ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-900/50 border-white/5'}`}
+                      >
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${screenMonitoring ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                            <div
+                              className={`h-10 w-10 rounded-lg flex items-center justify-center ${screenMonitoring ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}
+                            >
                               <Monitor size={20} />
                             </div>
                             <div>
-                              <h4 className="text-sm font-semibold text-white">Screen Monitoring</h4>
-                              <p className="text-[11px] text-zinc-500 italic">Context-aware task tracking</p>
+                              <h4 className="text-sm font-semibold text-white">
+                                Screen Monitoring
+                              </h4>
+                              <p className="text-[11px] text-zinc-500 italic">
+                                Context-aware task tracking
+                              </p>
                             </div>
                           </div>
                           <button
                             onClick={() => {
-                              const newValue = !screenMonitoring;
-                              setScreenMonitoring(newValue);
-                              localStorage.setItem('novax_screen_monitoring', String(newValue));
+                              const newValue = !screenMonitoring
+                              setScreenMonitoring(newValue)
+                              localStorage.setItem('novax_screen_monitoring', String(newValue))
                             }}
                             className={`w-12 h-6 rounded-full relative transition-colors duration-200 cursor-pointer ${screenMonitoring ? 'bg-emerald-500' : 'bg-zinc-700'}`}
                           >
-                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 ${screenMonitoring ? 'left-7' : 'left-1'}`} />
+                            <div
+                              className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200 ${screenMonitoring ? 'left-7' : 'left-1'}`}
+                            />
                           </button>
                         </div>
                         <p className="text-[11px] text-zinc-400 leading-relaxed">
-                          Periodically captures the screen to understand your workflow, active apps, 
+                          Periodically captures the screen to understand your workflow, active apps,
                           and coding tasks for better cognitive support.
                         </p>
                       </div>
@@ -1202,8 +1302,8 @@ export default function SettingsView({ isSystemActive }: SettingsProps): JSX.Ele
                           Privacy & Local Trust
                         </strong>
                         <p className="text-[11px] text-zinc-300 leading-relaxed">
-                          Capturing these streams increases cognitive awareness but consumes more 
-                          API tokens (Gemini Vision). Snapshots are discarded after analysis, and 
+                          Capturing these streams increases cognitive awareness but consumes more
+                          API tokens (Gemini Vision). Snapshots are discarded after analysis, and
                           descriptions are stored in your local activity memory.
                         </p>
                       </div>

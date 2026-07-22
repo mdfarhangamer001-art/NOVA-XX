@@ -46,7 +46,9 @@ export function registerVisionHandlers(): void {
               mimeType: mimeType
             }
           },
-          { text: "analyze screen workflow. Identify the active application, detect text and code components, check if there are any visual anomalies, and summarize the user's workflow context." }
+          {
+            text: "analyze screen workflow. Identify the active application, detect text and code components, check if there are any visual anomalies, and summarize the user's workflow context."
+          }
         ]
       })
 

@@ -23,7 +23,7 @@ export const AGENTS_DATA: Agent[] = [
     systemLogs: [
       'SYSTEM: Scratch Agent initialized.',
       'UPLINK: Connected to custom tool execution layer.',
-      'Ready for Boss\'s instructions...'
+      "Ready for Boss's instructions..."
     ]
   },
   {

@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Brain, Trash2, Clock, ShieldCheck, Cpu, Search, Plus, Sparkles, AlertCircle } from 'lucide-react'
+import {
+  Brain,
+  Trash2,
+  Clock,
+  ShieldCheck,
+  Cpu,
+  Search,
+  Plus,
+  Sparkles,
+  AlertCircle
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface MemoryItem {
@@ -76,7 +86,7 @@ export default function MemoryView(): JSX.Element {
           fact: newFactText.trim(),
           timestamp: Date.now()
         }
-        
+
         const updatedFactMemories = [...factMemories, newFactItem]
         const res = await window.electron.ipcRenderer.invoke('set-memories', {
           factMemory: updatedFactMemories,
@@ -101,9 +111,11 @@ export default function MemoryView(): JSX.Element {
   }
 
   return (
-    <div id="cognitive-vault-panel" className="p-8 h-full overflow-y-auto custom-scrollbar bg-black/25">
+    <div
+      id="cognitive-vault-panel"
+      className="p-8 h-full overflow-y-auto custom-scrollbar bg-black/25"
+    >
       <div className="max-w-4xl mx-auto">
-        
         {/* Memory Header */}
         <header className="mb-8 relative">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
@@ -138,7 +150,9 @@ export default function MemoryView(): JSX.Element {
             </AnimatePresence>
           </div>
           <p className="text-zinc-400 text-sm mt-3 leading-relaxed max-w-2xl">
-            This module stores cognitive fragments about the human operator. By referencing permanent user profiles and short-term conversational context layers, the core intelligence prevents topic repetition and adjusts interactions dynamically.
+            This module stores cognitive fragments about the human operator. By referencing
+            permanent user profiles and short-term conversational context layers, the core
+            intelligence prevents topic repetition and adjusts interactions dynamically.
           </p>
         </header>
 
@@ -220,7 +234,8 @@ export default function MemoryView(): JSX.Element {
                 <ShieldCheck className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
                 <h3 className="text-white font-bold mb-1">Permanent Layer Clear</h3>
                 <p className="text-zinc-500 text-sm">
-                  Start conversing with NOVA-X or add custom facts to build your long-term cognitive base.
+                  Start conversing with NOVA-X or add custom facts to build your long-term cognitive
+                  base.
                 </p>
               </div>
             ) : (
@@ -244,7 +259,9 @@ export default function MemoryView(): JSX.Element {
                             <Clock className="w-3 h-3" />
                             {new Date(item.timestamp).toLocaleString()}
                           </span>
-                          <span className="text-emerald-500/60 italic font-bold">Synaptic Node Verified</span>
+                          <span className="text-emerald-500/60 italic font-bold">
+                            Synaptic Node Verified
+                          </span>
                         </div>
                       </div>
                       <button
@@ -259,52 +276,53 @@ export default function MemoryView(): JSX.Element {
                 ))}
               </AnimatePresence>
             )
+          ) : // Working Memory Layer (Transient conversational buffer)
+          workingMemories.length === 0 ? (
+            <div className="p-16 border border-white/5 bg-zinc-900/40 rounded-3xl text-center">
+              <AlertCircle className="w-12 h-12 text-zinc-700 mx-auto mb-4 animate-pulse" />
+              <h3 className="text-white font-bold mb-1">Working Context Empty</h3>
+              <p className="text-zinc-500 text-sm">
+                Send messages to populate active working context, enabling contextual avoidance
+                loops.
+              </p>
+            </div>
           ) : (
-            // Working Memory Layer (Transient conversational buffer)
-            workingMemories.length === 0 ? (
-              <div className="p-16 border border-white/5 bg-zinc-900/40 rounded-3xl text-center">
-                <AlertCircle className="w-12 h-12 text-zinc-700 mx-auto mb-4 animate-pulse" />
-                <h3 className="text-white font-bold mb-1">Working Context Empty</h3>
-                <p className="text-zinc-500 text-sm">
-                  Send messages to populate active working context, enabling contextual avoidance loops.
-                </p>
-              </div>
-            ) : (
-              <AnimatePresence mode="popLayout">
-                {workingMemories.map((contextItem, idx) => (
-                  <motion.div
-                    key={`working-${idx}`}
-                    layout
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="group relative p-5 bg-zinc-900/60 border border-white/5 rounded-xl hover:border-emerald-500/20 transition-all shadow-md backdrop-blur-md"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="text-zinc-300 text-xs font-mono leading-relaxed bg-black/30 p-3 rounded-lg border border-white/5">
-                          {contextItem}
-                        </p>
-                        <div className="mt-3.5 flex items-center gap-4 text-[9px] font-mono uppercase tracking-widest text-zinc-500">
-                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded">
-                            <Clock className="w-3 h-3" />
-                            Active Context Cycle
-                          </span>
-                          <span className="text-amber-500/60 italic font-bold">Repetition Avoidance Flag Active</span>
-                        </div>
+            <AnimatePresence mode="popLayout">
+              {workingMemories.map((contextItem, idx) => (
+                <motion.div
+                  key={`working-${idx}`}
+                  layout
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="group relative p-5 bg-zinc-900/60 border border-white/5 rounded-xl hover:border-emerald-500/20 transition-all shadow-md backdrop-blur-md"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="text-zinc-300 text-xs font-mono leading-relaxed bg-black/30 p-3 rounded-lg border border-white/5">
+                        {contextItem}
+                      </p>
+                      <div className="mt-3.5 flex items-center gap-4 text-[9px] font-mono uppercase tracking-widest text-zinc-500">
+                        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded">
+                          <Clock className="w-3 h-3" />
+                          Active Context Cycle
+                        </span>
+                        <span className="text-amber-500/60 italic font-bold">
+                          Repetition Avoidance Flag Active
+                        </span>
                       </div>
-                      <button
-                        onClick={() => handleDelete('working', idx)}
-                        className="p-2.5 bg-zinc-800/40 text-zinc-500 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all border border-transparent hover:border-red-500/20"
-                        title="Purge Active Context"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            )
+                    <button
+                      onClick={() => handleDelete('working', idx)}
+                      className="p-2.5 bg-zinc-800/40 text-zinc-500 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all border border-transparent hover:border-red-500/20"
+                      title="Purge Active Context"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           )}
         </div>
       </div>

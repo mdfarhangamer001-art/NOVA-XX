@@ -1,6 +1,6 @@
-const fs = require('fs');
-const file = 'server.ts';
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const file = 'server.ts'
+let content = fs.readFileSync(file, 'utf8')
 
 const declarations = `
 const agentDeclarations = [
@@ -65,11 +65,14 @@ const agentDeclarations = [
     }
   }
 ];
-`;
+`
 
-content = content.replace("const extractAndStoreMemoriesWeb", declarations + "\n          const extractAndStoreMemoriesWeb");
+content = content.replace(
+  'const extractAndStoreMemoriesWeb',
+  declarations + '\n          const extractAndStoreMemoriesWeb'
+)
 
-const toolConfig = `tools: [{ googleSearch: {} }, { functionDeclarations: agentDeclarations }]`;
-content = content.replace(/tools: \[\{ googleSearch: \{\} \}\]/g, toolConfig);
+const toolConfig = `tools: [{ googleSearch: {} }, { functionDeclarations: agentDeclarations }]`
+content = content.replace(/tools: \[\{ googleSearch: \{\} \}\]/g, toolConfig)
 
-fs.writeFileSync(file, content);
+fs.writeFileSync(file, content)

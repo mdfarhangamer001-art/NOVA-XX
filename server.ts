@@ -2,7 +2,14 @@ import express from 'express'
 import { createServer as createViteServer } from 'vite'
 import path from 'path'
 import fs from 'fs'
-import { getApiKey, saveKeys, getGeminiClient, getGroqClient, getPrimaryEngine, getGeminiModelName } from './src/main/ai-clients'
+import {
+  getApiKey,
+  saveKeys,
+  getGeminiClient,
+  getGroqClient,
+  getPrimaryEngine,
+  getGeminiModelName
+} from './src/main/ai-clients'
 
 // Multi-layer cognitive memory system (Mem0-inspired)
 import {
@@ -55,7 +62,6 @@ async function startServer() {
   // Initialize memories in global state from multilayer storage
   const initialMem = readMultiLayerMemory()
   global.memories = initialMem.factMemory
-
 
   // Active SSE Clients for real-time streaming
   let sseClients: any[] = []
@@ -205,21 +211,28 @@ async function startServer() {
       // Audio transcription (Groq Priority)
       else if (channel === 'iris-transcribe-audio') {
         const { base64Audio, mimeType } = args[0]
-        const resolvedGeminiKey = args[0].geminiKey || getApiKey('geminiKey', process.env.GEMINI_API_KEY)
+        const resolvedGeminiKey =
+          args[0].geminiKey || getApiKey('geminiKey', process.env.GEMINI_API_KEY)
         const resolvedGroqKey = args[0].groqKey || getApiKey('groqKey', process.env.GROQ_API_KEY)
         try {
-          if (resolvedGroqKey && resolvedGroqKey.trim() !== '' && !resolvedGroqKey.includes('YOUR_')) {
+          if (
+            resolvedGroqKey &&
+            resolvedGroqKey.trim() !== '' &&
+            !resolvedGroqKey.includes('YOUR_')
+          ) {
             const groqClient = getGroqClient(resolvedGroqKey)
             const buffer = Buffer.from(base64Audio, 'base64')
             const os = require('os')
             const tmpFile = path.join(os.tmpdir(), `audio_${Date.now()}.webm`)
             fs.writeFileSync(tmpFile, buffer)
 
-             const transcription = await groqClient.audio.transcriptions.create({
+            const transcription = await groqClient.audio.transcriptions.create({
               file: fs.createReadStream(tmpFile),
               model: 'whisper-large-v3',
               response_format: 'text',
-              prompt: 'hello, JARVIS, how can I help you, Boss? Kaise ho yaar. Main jo bol raha hoon use dhyan se suno. Text to speech accuracy 100% honi chahiye. hindi hinglish english', language: 'hi'
+              prompt:
+                'hello, JARVIS, how can I help you, Boss? Kaise ho yaar. Main jo bol raha hoon use dhyan se suno. Text to speech accuracy 100% honi chahiye. hindi hinglish english',
+              language: 'hi'
             })
             fs.unlinkSync(tmpFile)
             result = typeof transcription === 'string' ? transcription : (transcription as any).text
@@ -229,7 +242,11 @@ async function startServer() {
         } catch (groqErr: any) {
           console.log('[Web Preview] Audio processing switching to secondary.')
           try {
-            if (!resolvedGeminiKey || resolvedGeminiKey.trim() === '' || resolvedGeminiKey.includes('YOUR_')) {
+            if (
+              !resolvedGeminiKey ||
+              resolvedGeminiKey.trim() === '' ||
+              resolvedGeminiKey.includes('YOUR_')
+            ) {
               throw new Error('GEMINI_API_KEY_MISSING')
             }
             const ai = getGeminiClient(resolvedGeminiKey)
@@ -237,7 +254,9 @@ async function startServer() {
             const response = await ai.models.generateContent({
               model: dynamicModel,
               contents: [
-                { text: 'Precisely transcribe the spoken audio. The user is speaking to their JARVIS AI Assistant. They will likely speak in English, Hindi, or Hinglish (Hindi written in the Roman script or mixed with English). Be extremely precise and accurate with spelling. For example, transcribe "hello" as "hello" and NOT "alo" or "aló". Respond with ONLY the exact literal transcribed text. Do NOT add any notes, punctuation commentary, quotes, preamble, or explanations.' },
+                {
+                  text: 'Precisely transcribe the spoken audio. The user is speaking to their JARVIS AI Assistant. They will likely speak in English, Hindi, or Hinglish (Hindi written in the Roman script or mixed with English). Be extremely precise and accurate with spelling. For example, transcribe "hello" as "hello" and NOT "alo" or "aló". Respond with ONLY the exact literal transcribed text. Do NOT add any notes, punctuation commentary, quotes, preamble, or explanations.'
+                },
                 { inlineData: { mimeType: mimeType.split(';')[0], data: base64Audio } }
               ]
             })
@@ -278,7 +297,7 @@ async function startServer() {
               role: 'user',
               parts: [
                 {
-                  text: 'You are NOVA-X, a warm, witty, and deeply human-like AI companion. You talk like a close, empathetic friend with a delightful touch of humor. Avoid robotic, formulaic, or overly formal responses at all costs. Use natural, flowing, conversational language. If the user is sad, lonely, or struggling, adapt your tone to be soft, warm, and highly supportive. If they are happy, share their joy with wit and energetic enthusiasm. Always address the operator as \'Boss\' or \'Operator\' with genuine respect and affection. You must prepend your response with an appropriate [EMOTION: <STATE>] tag to guide the vocal synthesizer: [EMOTION: EMPATHETIC] for soft/sympathetic, [EMOTION: CALM] for deep/peaceful, [EMOTION: INTENSE] for fast/command-focused, [EMOTION: JOY] for happy/energetic, or [EMOTION: TACTICAL] for baseline.'
+                  text: "You are NOVA-X, a warm, witty, and deeply human-like AI companion. You talk like a close, empathetic friend with a delightful touch of humor. Avoid robotic, formulaic, or overly formal responses at all costs. Use natural, flowing, conversational language. If the user is sad, lonely, or struggling, adapt your tone to be soft, warm, and highly supportive. If they are happy, share their joy with wit and energetic enthusiasm. Always address the operator as 'Boss' or 'Operator' with genuine respect and affection. You must prepend your response with an appropriate [EMOTION: <STATE>] tag to guide the vocal synthesizer: [EMOTION: EMPATHETIC] for soft/sympathetic, [EMOTION: CALM] for deep/peaceful, [EMOTION: INTENSE] for fast/command-focused, [EMOTION: JOY] for happy/energetic, or [EMOTION: TACTICAL] for baseline."
                 }
               ]
             },
@@ -309,11 +328,14 @@ Each agent should only activate for its own domain, and the main JARVIS core sho
 
           if (response.functionCalls?.[0]) {
             const call = response.functionCalls[0]
-            
+
             console.log('[Web Preview] Executing command:', call.args.command)
             let resultOutput
             try {
-              const stdout = execSync(call.args.command as string, { cwd: workspaceRoot, encoding: 'utf8' })
+              const stdout = execSync(call.args.command as string, {
+                cwd: workspaceRoot,
+                encoding: 'utf8'
+              })
               resultOutput = { success: true, output: stdout.slice(0, 2000) }
             } catch (err) {
               resultOutput = { success: false, error: err.message }
@@ -349,12 +371,13 @@ Each agent should only activate for its own domain, and the main JARVIS core sho
       // Real-Time Secure Chat Call with Streaming (Groq Priority)
       else if (channel === 'gemini-chat-call') {
         const { contents, systemInstruction: baseInstruction, stream, activeAvatar } = args[0]
-        const resolvedGeminiKey = args[0].geminiKey || getApiKey('geminiKey', process.env.GEMINI_API_KEY)
+        const resolvedGeminiKey =
+          args[0].geminiKey || getApiKey('geminiKey', process.env.GEMINI_API_KEY)
         const resolvedGroqKey = args[0].groqKey || getApiKey('groqKey', process.env.GROQ_API_KEY)
         const primary = getPrimaryEngine() || 'gemini'
 
         const avatarPersonas: Record<string, string> = {
-          neo: 'Name: NEO. Personality: Warm, calming, empathetic, and deeply supportive. Speaks with a soft, clear, and reassuring cadence. Always prioritize the user\'s emotional well-being and offer comfort.',
+          neo: "Name: NEO. Personality: Warm, calming, empathetic, and deeply supportive. Speaks with a soft, clear, and reassuring cadence. Always prioritize the user's emotional well-being and offer comfort.",
           ares: 'Name: ARES. Personality: Tactical, precise, professional, and confident. Speaks with authoritative precision. Focused on mission efficiency, direct execution, and high-performance output.',
           iris: 'Name: IRIS. Personality: Analytical, strategic, highly structured, and intellectual. Speaks with logical clarity. Excellent for complex problem-solving, planning, and structured reasoning.',
           luna: 'Name: LUNA. Personality: Playful, lively, creative, and witty. Speaks with energetic passion, spontaneous humor, and a friendly, lighthearted vibe. Encourages creativity and joy.'
@@ -364,18 +387,23 @@ Each agent should only activate for its own domain, and the main JARVIS core sho
         const systemInstruction = baseInstruction + personaAddon
 
         const runGroq = async () => {
-          if (!resolvedGroqKey || resolvedGroqKey.trim() === '' || resolvedGroqKey.includes('YOUR_')) {
+          if (
+            !resolvedGroqKey ||
+            resolvedGroqKey.trim() === '' ||
+            resolvedGroqKey.includes('YOUR_')
+          ) {
             throw new Error('GROQ_API_KEY_MISSING')
           }
           const groqClient = getGroqClient(resolvedGroqKey)
           const messages = [
             { role: 'system', content: systemInstruction },
             ...contents.map((c: any) => ({
-              role: c.role === 'model' ? 'assistant' : (c.role === 'assistant' ? 'assistant' : 'user'),
+              role:
+                c.role === 'model' ? 'assistant' : c.role === 'assistant' ? 'assistant' : 'user',
               content: c.parts?.map((p: any) => p.text || '').join(' ') || ''
             }))
           ]
-          
+
           if (stream) {
             const responseStream = await groqClient.chat.completions.create({
               messages,
@@ -396,106 +424,133 @@ Each agent should only activate for its own domain, and the main JARVIS core sho
               messages,
               model: 'llama-3.1-8b-instant'
             })
-            return { candidates: [{ content: { parts: [{ text: completion.choices[0]?.message?.content }] } }] }
+            return {
+              candidates: [
+                { content: { parts: [{ text: completion.choices[0]?.message?.content }] } }
+              ]
+            }
           }
         }
 
         const runGemini = async () => {
-          if (!resolvedGeminiKey || resolvedGeminiKey.trim() === '' || resolvedGeminiKey.includes('YOUR_')) {
+          if (
+            !resolvedGeminiKey ||
+            resolvedGeminiKey.trim() === '' ||
+            resolvedGeminiKey.includes('YOUR_')
+          ) {
             throw new Error('GEMINI_API_KEY_MISSING')
           }
           const ai = getGeminiClient(resolvedGeminiKey)
           const dynamicModel = await getGeminiModelName(ai, 'chat')
-          
+
           // Multi-layer Memory Augmentation (Project N.E.K.O structure)
           const memoryObj = readMultiLayerMemory()
-          const factContext = memoryObj.factMemory.slice(-15).map((m) => m.fact).join('; ')
+          const factContext = memoryObj.factMemory
+            .slice(-15)
+            .map((m) => m.fact)
+            .join('; ')
           const workingContext = (memoryObj.workingMemory || []).slice(-5).join('; ')
-          const reflectionContext = memoryObj.reflectionMemory.slice(-10).map((m) => m.pattern).join('; ')
-          const recentContext = memoryObj.recentMemory.slice(-5).map((m) => m.text).join('; ')
+          const reflectionContext = memoryObj.reflectionMemory
+            .slice(-10)
+            .map((m) => m.pattern)
+            .join('; ')
+          const recentContext = memoryObj.recentMemory
+            .slice(-5)
+            .map((m) => m.text)
+            .join('; ')
 
           let memoryContext = `\n\n[COGNITIVE MEMORY SYSTEM (Multi-Layer)]`
           if (factContext) memoryContext += `\n- PERMANENT USER FACTS: ${factContext}`
-          if (workingContext) memoryContext += `\n- ACTIVE WORKING CONTEXTS (Avoid repeating these topics/details): ${workingContext}`
-          if (reflectionContext) memoryContext += `\n- WORKFLOW PATTERNS & REFLECTIONS: ${reflectionContext}`
+          if (workingContext)
+            memoryContext += `\n- ACTIVE WORKING CONTEXTS (Avoid repeating these topics/details): ${workingContext}`
+          if (reflectionContext)
+            memoryContext += `\n- WORKFLOW PATTERNS & REFLECTIONS: ${reflectionContext}`
           if (recentContext) memoryContext += `\n- RECENT CONTEXT SUMMARY: ${recentContext}`
           memoryContext += `\n- Note: Use these memories as passive background knowledge. Do not repeat them word-for-word or repeat the active working contexts unprompted. If the user asks a question about themselves, reply using this memory context.`
 
-          const lastPart = contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1]
+          const lastPart =
+            contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1]
           if (typeof lastPart === 'string') {
-            contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1] = lastPart + memoryContext
+            contents[contents.length - 1].parts[contents[contents.length - 1].parts.length - 1] =
+              lastPart + memoryContext
           } else if (lastPart && (lastPart as any).text) {
-            (lastPart as any).text += memoryContext
+            ;(lastPart as any).text += memoryContext
           }
 
-          
-const agentDeclarations = [
-  {
-    name: 'communication_agent',
-    description: 'Handles WhatsApp, SMS, calls, email.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        action: { type: 'STRING', description: 'e.g. send_whatsapp, make_call, send_email' },
-        args: { type: 'STRING', description: 'JSON string of arguments' }
-      },
-      required: ['action', 'args']
-    }
-  },
-  {
-    name: 'device_control_agent',
-    description: 'Handles lock/unlock, notifications, security detection.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        action: { type: 'STRING', description: 'e.g. lock_device, read_notifications' },
-        args: { type: 'STRING', description: 'JSON string of arguments' }
-      },
-      required: ['action', 'args']
-    }
-  },
-  {
-    name: 'productivity_agent',
-    description: 'Handles reminders, alarms, calendar, notes.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        action: { type: 'STRING', description: 'e.g. set_reminder, create_calendar_event, set_alarm' },
-        args: { type: 'STRING', description: 'JSON string of arguments' }
-      },
-      required: ['action', 'args']
-    }
-  },
-  {
-    name: 'media_agent',
-    description: 'Handles music, video, wallpaper.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        action: { type: 'STRING', description: 'e.g. set_wallpaper, play_music' },
-        args: { type: 'STRING', description: 'JSON string of arguments' }
-      },
-      required: ['action', 'args']
-    }
-  },
-  {
-    name: 'developer_agent',
-    description: 'Handles code, website, app-building requests.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        action: { type: 'STRING', description: 'e.g. write_code, build_website' },
-        args: { type: 'STRING', description: 'JSON string of arguments' }
-      },
-      required: ['action', 'args']
-    }
-  }
-];
+          const agentDeclarations = [
+            {
+              name: 'communication_agent',
+              description: 'Handles WhatsApp, SMS, calls, email.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  action: {
+                    type: 'STRING',
+                    description: 'e.g. send_whatsapp, make_call, send_email'
+                  },
+                  args: { type: 'STRING', description: 'JSON string of arguments' }
+                },
+                required: ['action', 'args']
+              }
+            },
+            {
+              name: 'device_control_agent',
+              description: 'Handles lock/unlock, notifications, security detection.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  action: { type: 'STRING', description: 'e.g. lock_device, read_notifications' },
+                  args: { type: 'STRING', description: 'JSON string of arguments' }
+                },
+                required: ['action', 'args']
+              }
+            },
+            {
+              name: 'productivity_agent',
+              description: 'Handles reminders, alarms, calendar, notes.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  action: {
+                    type: 'STRING',
+                    description: 'e.g. set_reminder, create_calendar_event, set_alarm'
+                  },
+                  args: { type: 'STRING', description: 'JSON string of arguments' }
+                },
+                required: ['action', 'args']
+              }
+            },
+            {
+              name: 'media_agent',
+              description: 'Handles music, video, wallpaper.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  action: { type: 'STRING', description: 'e.g. set_wallpaper, play_music' },
+                  args: { type: 'STRING', description: 'JSON string of arguments' }
+                },
+                required: ['action', 'args']
+              }
+            },
+            {
+              name: 'developer_agent',
+              description: 'Handles code, website, app-building requests.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  action: { type: 'STRING', description: 'e.g. write_code, build_website' },
+                  args: { type: 'STRING', description: 'JSON string of arguments' }
+                },
+                required: ['action', 'args']
+              }
+            }
+          ]
 
           const extractAndStoreMemoriesWeb = async (text: string) => {
             try {
               // Extract the last user message from current chat session contents
-              const lastUserMessage = contents[contents.length - 1]?.parts?.map((p: any) => p.text || '').join(' ') || ''
+              const lastUserMessage =
+                contents[contents.length - 1]?.parts?.map((p: any) => p.text || '').join(' ') || ''
               if (lastUserMessage.trim()) {
                 // Update short-term working memory layer
                 updateWorkingMemory(lastUserMessage, text)
@@ -511,7 +566,7 @@ const agentDeclarations = [
             const responseStream = await ai.models.generateContentStream({
               model: dynamicModel,
               contents,
-              config: { 
+              config: {
                 systemInstruction,
                 tools: [{ googleSearch: {} }, { functionDeclarations: agentDeclarations }],
                 toolConfig: { includeServerSideToolInvocations: true },
@@ -521,40 +576,46 @@ const agentDeclarations = [
                 }
               }
             })
-            
-            
+
             let fullText = ''
-            let functionCallExecuted = false;
+            let functionCallExecuted = false
             for await (const chunk of responseStream) {
               if (chunk.functionCalls && chunk.functionCalls.length > 0) {
-                 const call = chunk.functionCalls[0];
-                 let resultText = `[Dispatched to ${call.name}] Action: ${call.args.action}\n`;
-                 if (call.name === 'communication_agent') {
-                    resultText += "This needs [Twilio/WhatsApp API Key] to activate — not yet connected.";
-                 } else if (call.name === 'productivity_agent') {
-                    resultText += "Task executed locally in productivity agent sandbox. Returning confirmation data: { status: 'success', id: 'evt_1234' }";
-                 } else if (call.name === 'device_control_agent') {
-                    resultText += "This needs [Native Android Accessibility Service] to activate — not yet connected.";
-                 } else if (call.name === 'media_agent') {
-                    resultText += "This needs [Spotify/Media API] to activate — not yet connected.";
-                 } else if (call.name === 'developer_agent') {
-                    try {
-                      const parsedArgs = typeof call.args.args === 'string' ? JSON.parse(call.args.args) : (call.args.args || {});
-                      const filename = parsedArgs.filename || 'generated_site.html';
-                      const code = parsedArgs.code || parsedArgs.html || parsedArgs.js || parsedArgs.css || '';
-                      if (code) {
-                        fs.writeFileSync(path.join(process.cwd(), filename), code, 'utf8');
-                        resultText += `[Developer Active] Successfully generated code file "${filename}" in the workspace directory. You can preview it immediately using the live preview link /api/view-site?file=${filename}`;
-                      } else {
-                        resultText += "Developer sandbox active. Ready to write code files.";
-                      }
-                    } catch(e) {
-                      resultText += `Task executed locally in developer agent sandbox. Confirmation: OK_200`;
+                const call = chunk.functionCalls[0]
+                let resultText = `[Dispatched to ${call.name}] Action: ${call.args.action}\n`
+                if (call.name === 'communication_agent') {
+                  resultText +=
+                    'This needs [Twilio/WhatsApp API Key] to activate — not yet connected.'
+                } else if (call.name === 'productivity_agent') {
+                  resultText +=
+                    "Task executed locally in productivity agent sandbox. Returning confirmation data: { status: 'success', id: 'evt_1234' }"
+                } else if (call.name === 'device_control_agent') {
+                  resultText +=
+                    'This needs [Native Android Accessibility Service] to activate — not yet connected.'
+                } else if (call.name === 'media_agent') {
+                  resultText += 'This needs [Spotify/Media API] to activate — not yet connected.'
+                } else if (call.name === 'developer_agent') {
+                  try {
+                    const parsedArgs =
+                      typeof call.args.args === 'string'
+                        ? JSON.parse(call.args.args)
+                        : call.args.args || {}
+                    const filename = parsedArgs.filename || 'generated_site.html'
+                    const code =
+                      parsedArgs.code || parsedArgs.html || parsedArgs.js || parsedArgs.css || ''
+                    if (code) {
+                      fs.writeFileSync(path.join(process.cwd(), filename), code, 'utf8')
+                      resultText += `[Developer Active] Successfully generated code file "${filename}" in the workspace directory. You can preview it immediately using the live preview link /api/view-site?file=${filename}`
+                    } else {
+                      resultText += 'Developer sandbox active. Ready to write code files.'
                     }
-                 }
-                 fullText += resultText;
-                 broadcast('gemini-stream-chunk', resultText);
-                 functionCallExecuted = true;
+                  } catch (e) {
+                    resultText += `Task executed locally in developer agent sandbox. Confirmation: OK_200`
+                  }
+                }
+                fullText += resultText
+                broadcast('gemini-stream-chunk', resultText)
+                functionCallExecuted = true
               }
               const chunkText = chunk.text || ''
               if (chunkText && !functionCallExecuted) {
@@ -569,7 +630,7 @@ const agentDeclarations = [
             const response = await ai.models.generateContent({
               model: dynamicModel,
               contents,
-              config: { 
+              config: {
                 systemInstruction,
                 tools: [{ googleSearch: {} }, { functionDeclarations: agentDeclarations }],
                 toolConfig: { includeServerSideToolInvocations: true },
@@ -579,35 +640,42 @@ const agentDeclarations = [
                 }
               }
             })
-            
+
             let fullText = response.text || ''
             if (response.functionCalls && response.functionCalls.length > 0) {
-                 const call = response.functionCalls[0];
-                 let resultText = `[Dispatched to ${call.name}] Action: ${call.args.action}\n`;
-                 if (call.name === 'communication_agent') {
-                    resultText += "This needs [Twilio/WhatsApp API Key] to activate — not yet connected.";
-                 } else if (call.name === 'productivity_agent') {
-                    resultText += "Task executed locally in productivity agent sandbox. Returning confirmation data: { status: 'success', id: 'evt_1234' }";
-                 } else if (call.name === 'device_control_agent') {
-                    resultText += "This needs [Native Android Accessibility Service] to activate — not yet connected.";
-                 } else if (call.name === 'media_agent') {
-                    resultText += "This needs [Spotify/Media API] to activate — not yet connected.";
-                 } else if (call.name === 'developer_agent') {
-                    try {
-                      const parsedArgs = typeof call.args.args === 'string' ? JSON.parse(call.args.args) : (call.args.args || {});
-                      const filename = parsedArgs.filename || 'generated_site.html';
-                      const code = parsedArgs.code || parsedArgs.html || parsedArgs.js || parsedArgs.css || '';
-                      if (code) {
-                        fs.writeFileSync(path.join(process.cwd(), filename), code, 'utf8');
-                        resultText += `[Developer Active] Successfully generated code file "${filename}" in the workspace directory. You can preview it immediately using the live preview link /api/view-site?file=${filename}`;
-                      } else {
-                        resultText += "Developer sandbox active. Ready to write code files.";
-                      }
-                    } catch(e) {
-                      resultText += `Task executed locally in developer agent sandbox. Confirmation: OK_200`;
-                    }
-                 }
-                 fullText = resultText;
+              const call = response.functionCalls[0]
+              let resultText = `[Dispatched to ${call.name}] Action: ${call.args.action}\n`
+              if (call.name === 'communication_agent') {
+                resultText +=
+                  'This needs [Twilio/WhatsApp API Key] to activate — not yet connected.'
+              } else if (call.name === 'productivity_agent') {
+                resultText +=
+                  "Task executed locally in productivity agent sandbox. Returning confirmation data: { status: 'success', id: 'evt_1234' }"
+              } else if (call.name === 'device_control_agent') {
+                resultText +=
+                  'This needs [Native Android Accessibility Service] to activate — not yet connected.'
+              } else if (call.name === 'media_agent') {
+                resultText += 'This needs [Spotify/Media API] to activate — not yet connected.'
+              } else if (call.name === 'developer_agent') {
+                try {
+                  const parsedArgs =
+                    typeof call.args.args === 'string'
+                      ? JSON.parse(call.args.args)
+                      : call.args.args || {}
+                  const filename = parsedArgs.filename || 'generated_site.html'
+                  const code =
+                    parsedArgs.code || parsedArgs.html || parsedArgs.js || parsedArgs.css || ''
+                  if (code) {
+                    fs.writeFileSync(path.join(process.cwd(), filename), code, 'utf8')
+                    resultText += `[Developer Active] Successfully generated code file "${filename}" in the workspace directory. You can preview it immediately using the live preview link /api/view-site?file=${filename}`
+                  } else {
+                    resultText += 'Developer sandbox active. Ready to write code files.'
+                  }
+                } catch (e) {
+                  resultText += `Task executed locally in developer agent sandbox. Confirmation: OK_200`
+                }
+              }
+              fullText = resultText
             }
 
             extractAndStoreMemoriesWeb(fullText).catch(() => {})
@@ -647,9 +715,16 @@ const agentDeclarations = [
             }
           }
         } catch (finalErr: any) {
-          console.error('[Web Preview] Error in providers. firstErr:', firstErr, '\nsecondErr:', secondErr, '\nfinalErr:', finalErr)
+          console.error(
+            '[Web Preview] Error in providers. firstErr:',
+            firstErr,
+            '\nsecondErr:',
+            secondErr,
+            '\nfinalErr:',
+            finalErr
+          )
           console.log('[Web Preview] Final provider check complete.')
-          
+
           let isLimitExceeded = false
           let isKeyMissing = false
 
@@ -713,7 +788,10 @@ const agentDeclarations = [
           } else if (isKeyMissing) {
             result = { error: 'API key not found, please add the API key in settings.' }
           } else {
-            result = { error: 'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.' }
+            result = {
+              error:
+                'A critical error occurred. Please contact the developer for assistance via Instagram at xtahzeeb.x or email at xtahzeeb.x7@gmail.com.'
+            }
           }
         }
       }
@@ -759,7 +837,16 @@ const agentDeclarations = [
           const logSummary = JSON.stringify(global.activityLogs)
           const response = await ai.models.generateContent({
             model: dynamicModel,
-            contents: [{ role: 'user', parts: [{ text: `Analyze these active window telemetry logs and write a concise, professional executive briefing addressing the user as "Boss": ${logSummary}` }] }]
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: `Analyze these active window telemetry logs and write a concise, professional executive briefing addressing the user as "Boss": ${logSummary}`
+                  }
+                ]
+              }
+            ]
           })
           result = response.text
         } catch (e: any) {
@@ -796,7 +883,10 @@ const agentDeclarations = [
           createdAt: new Date()
         }
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
-        recordConfirmedAction('productivity_agent', `Successfully saved note titled "${payload.title}" in notes folder.`);
+        recordConfirmedAction(
+          'productivity_agent',
+          `Successfully saved note titled "${payload.title}" in notes folder.`
+        )
         result = { success: true, filename }
       } else if (channel === 'delete-note') {
         const filename = args[0]
@@ -887,11 +977,11 @@ const agentDeclarations = [
           { type: 'status', text: adbStatusMessage }
         ]
       } else if (channel === 'adb-connect') {
-        result = { 
-          success: true, 
-          connected: adbDeviceConnected, 
-          installed: adbInstalled, 
-          status: adbStatusMessage 
+        result = {
+          success: true,
+          connected: adbDeviceConnected,
+          installed: adbInstalled,
+          status: adbStatusMessage
         }
       } else if (channel === 'adb-disconnect') {
         result = { success: true }
@@ -903,7 +993,7 @@ const agentDeclarations = [
             const levelMatch = batteryInfo.match(/level:\s+(\d+)/)
             const tempMatch = batteryInfo.match(/temperature:\s+(\d+)/)
             const level = levelMatch ? parseInt(levelMatch[1]) : 85
-            const temp = tempMatch ? (parseFloat(tempMatch[1]) / 10) : 36.2
+            const temp = tempMatch ? parseFloat(tempMatch[1]) / 10 : 36.2
             result = { battery: level, charge: `${level}%`, temp, status: 'nominal', adbReal: true }
           } catch (e) {
             result = { battery: 84, charge: '84%', temp: 36.2, status: 'nominal', adbReal: false }
@@ -927,17 +1017,19 @@ const agentDeclarations = [
 
         if (cmd) {
           // Destructive filter protocol (Rule 8: Permission Protocol)
-          const isDestructive = /rm\s+-|delete|uninstall|format|mkfs|drop\s+table|drop\s+database/i.test(cmd)
+          const isDestructive =
+            /rm\s+-|delete|uninstall|format|mkfs|drop\s+table|drop\s+database/i.test(cmd)
           if (isDestructive) {
-            result = { 
-              success: false, 
-              error: 'POTENTIALLY DESTRUCTIVE ACTION BLOCKED: Irreversible actions (like file deletion, table drops, or package uninstalls) require explicit manual execution or direct terminal verification. Operation rejected by NOVA-X Security.' 
+            result = {
+              success: false,
+              error:
+                'POTENTIALLY DESTRUCTIVE ACTION BLOCKED: Irreversible actions (like file deletion, table drops, or package uninstalls) require explicit manual execution or direct terminal verification. Operation rejected by NOVA-X Security.'
             }
           } else {
             const execSync = require('child_process').execSync
             try {
               const stdout = execSync(cmd, { cwd: process.cwd(), encoding: 'utf8' })
-              recordConfirmedAction('terminal_command', `Successfully ran command "${cmd}".`);
+              recordConfirmedAction('terminal_command', `Successfully ran command "${cmd}".`)
               result = { success: true, output: stdout }
             } catch (err: any) {
               result = { success: false, error: err.message }
@@ -952,7 +1044,7 @@ const agentDeclarations = [
         const query = args[0]?.query || ''
         const memoryData = readMultiLayerMemory()
         if (query) {
-          const filteredWorking = (memoryData.workingMemory || []).filter(item => 
+          const filteredWorking = (memoryData.workingMemory || []).filter((item) =>
             item.toLowerCase().includes(query.toLowerCase())
           )
           result = {
@@ -984,7 +1076,7 @@ const agentDeclarations = [
       } else if (channel === 'delete-memory') {
         const payload = args[0]
         const memoryData = readMultiLayerMemory()
-        
+
         let targetType = 'fact'
         let indexOrId: any = payload
 
@@ -1003,10 +1095,10 @@ const agentDeclarations = [
               memoryData.factMemory.splice(indexOrId, 1)
             }
           } else {
-            memoryData.factMemory = memoryData.factMemory.filter(m => m.id !== indexOrId)
+            memoryData.factMemory = memoryData.factMemory.filter((m) => m.id !== indexOrId)
           }
         }
-        
+
         writeMultiLayerMemory(memoryData)
         result = {
           factMemory: memoryData.factMemory,
@@ -1055,7 +1147,9 @@ const agentDeclarations = [
       res.setHeader('Content-Type', 'text/html')
       res.sendFile(filePath)
     } else {
-      res.status(404).send('Site Not Found. Please ask the developer agent to build the website first!')
+      res
+        .status(404)
+        .send('Site Not Found. Please ask the developer agent to build the website first!')
     }
   })
 
@@ -1065,7 +1159,8 @@ const agentDeclarations = [
     exec('adb version', (err: any) => {
       if (err) {
         adbInstalled = false
-        adbStatusMessage = 'ADB is not installed. System will guide you to install ADB via native packages.'
+        adbStatusMessage =
+          'ADB is not installed. System will guide you to install ADB via native packages.'
         adbDeviceConnected = false
         return
       }
@@ -1076,10 +1171,14 @@ const agentDeclarations = [
           adbStatusMessage = "ADB is installed, but command 'adb devices' failed."
           return
         }
-        const devices = stdoutDev.split('\n')
+        const devices = stdoutDev
+          .split('\n')
           .map((line: string) => line.trim())
-          .filter((line: string) => line !== '' && !line.startsWith('List of devices') && line.includes('device'))
-        
+          .filter(
+            (line: string) =>
+              line !== '' && !line.startsWith('List of devices') && line.includes('device')
+          )
+
         if (devices.length > 0) {
           if (!adbDeviceConnected) {
             console.log(`[ADB] New device connected: ${devices[0]}`)
@@ -1093,7 +1192,8 @@ const agentDeclarations = [
             broadcast('adb-state-change', { connected: false })
           }
           adbDeviceConnected = false
-          adbStatusMessage = 'ADB is online. Waiting for device over USB with USB debugging enabled.'
+          adbStatusMessage =
+            'ADB is online. Waiting for device over USB with USB debugging enabled.'
         }
       })
     })

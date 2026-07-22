@@ -1,6 +1,6 @@
-const fs = require('fs');
-const file = 'server.ts';
-let content = fs.readFileSync(file, 'utf8');
+const fs = require('fs')
+const file = 'server.ts'
+let content = fs.readFileSync(file, 'utf8')
 
 const fcHandling = `
             let fullText = ''
@@ -30,7 +30,7 @@ const fcHandling = `
                 broadcast('gemini-stream-chunk', chunkText)
               }
             }
-`;
+`
 
 const fcHandlingNonStream = `
             let fullText = response.text || ''
@@ -50,7 +50,7 @@ const fcHandlingNonStream = `
                  }
                  fullText = resultText;
             }
-`;
+`
 
 // Replace streaming loop
 const targetStreamLoop = `let fullText = ''
@@ -60,11 +60,11 @@ const targetStreamLoop = `let fullText = ''
                 fullText += chunkText
                 broadcast('gemini-stream-chunk', chunkText)
               }
-            }`;
-content = content.replace(targetStreamLoop, fcHandling);
+            }`
+content = content.replace(targetStreamLoop, fcHandling)
 
 // Replace non-streaming
-const targetNonStream = `const fullText = response.text || ''`;
-content = content.replace(targetNonStream, fcHandlingNonStream);
+const targetNonStream = `const fullText = response.text || ''`
+content = content.replace(targetNonStream, fcHandlingNonStream)
 
-fs.writeFileSync(file, content);
+fs.writeFileSync(file, content)

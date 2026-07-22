@@ -5,11 +5,11 @@ import { getGeminiClient, getGeminiModelName } from '../ai-clients'
 const MEMORY_FILE = path.join(process.cwd(), 'notes', 'novax_multilayer_memory.json')
 
 export interface MultiLayerMemory {
-  workingMemory: string[];
-  recentMemory: { text: string; timestamp: number }[];
-  factMemory: { id: string; fact: string; timestamp: number }[];
-  reflectionMemory: { id: string; pattern: string; timestamp: number }[];
-  personalityMemory: { activeAvatar: string };
+  workingMemory: string[]
+  recentMemory: { text: string; timestamp: number }[]
+  factMemory: { id: string; fact: string; timestamp: number }[]
+  reflectionMemory: { id: string; pattern: string; timestamp: number }[]
+  personalityMemory: { activeAvatar: string }
 }
 
 // Read multi-layer memory from disk
@@ -26,7 +26,11 @@ export function readMultiLayerMemory(): MultiLayerMemory {
     workingMemory: [],
     recentMemory: [],
     factMemory: [
-      { id: '1', fact: 'Operator preference is a dark slate futuristic UI with minimal telemetry.', timestamp: Date.now() }
+      {
+        id: '1',
+        fact: 'Operator preference is a dark slate futuristic UI with minimal telemetry.',
+        timestamp: Date.now()
+      }
     ],
     reflectionMemory: [],
     personalityMemory: { activeAvatar: 'neo' }
@@ -43,7 +47,7 @@ export function writeMultiLayerMemory(mem: MultiLayerMemory) {
     fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem, null, 2), 'utf8')
     // Synchronize global memory reference if it exists
     if ((global as any).memories) {
-      (global as any).memories = mem.factMemory
+      ;(global as any).memories = mem.factMemory
     }
   } catch (e) {
     console.warn('[Mem0 Cognitive Engine] Error writing multilayer memory file:', e)
@@ -54,7 +58,11 @@ export function writeMultiLayerMemory(mem: MultiLayerMemory) {
  * 1. Fact-Extraction Pipeline
  * Runs in the background after a conversation turn. Extracts explicit user facts or workflow preferences.
  */
-export async function extractAndStoreFacts(userMessage: string, assistantMessage: string, geminiKey?: string): Promise<void> {
+export async function extractAndStoreFacts(
+  userMessage: string,
+  assistantMessage: string,
+  geminiKey?: string
+): Promise<void> {
   try {
     const ai = getGeminiClient(geminiKey)
     const model = await getGeminiModelName(ai, 'chat')
@@ -87,7 +95,10 @@ Do not include markdown tags like \`\`\`json or any conversational prefix. Outpu
       extractedFacts = JSON.parse(text)
     } catch {
       // Fallback: strip markdown json blocks if model returned them
-      const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim()
+      const cleanJson = text
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim()
       extractedFacts = JSON.parse(cleanJson)
     }
 
@@ -97,11 +108,12 @@ Do not include markdown tags like \`\`\`json or any conversational prefix. Outpu
 
       for (const fact of extractedFacts) {
         if (!fact || typeof fact !== 'string' || fact.trim() === '') continue
-        
+
         // Prevent near-duplicate insertions
         const isDuplicate = memory.factMemory.some(
-          m => m.fact.toLowerCase().includes(fact.toLowerCase().trim()) || 
-               fact.toLowerCase().trim().includes(m.fact.toLowerCase())
+          (m) =>
+            m.fact.toLowerCase().includes(fact.toLowerCase().trim()) ||
+            fact.toLowerCase().trim().includes(m.fact.toLowerCase())
         )
         if (!isDuplicate) {
           memory.factMemory.push({
@@ -161,7 +173,7 @@ export function recordConfirmedAction(actionType: string, description: string): 
   try {
     const memory = readMultiLayerMemory()
     const text = `Successfully executed action [${actionType}]: ${description}`
-    
+
     // Add to recent memory with a strict timestamp
     memory.recentMemory.push({
       text,
@@ -184,10 +196,13 @@ export function recordConfirmedAction(actionType: string, description: string): 
  * 3. Multi-Signal Retrieval & 4. Temporal Reasoning Layer
  * Matches cognitive records combining keyword intersection, entity overlap, and temporal constraints.
  */
-export function retrieveMemories(query: string, limit = 10): { id: string; text: string; score: number; type: string; timestamp: number }[] {
+export function retrieveMemories(
+  query: string,
+  limit = 10
+): { id: string; text: string; score: number; type: string; timestamp: number }[] {
   const memory = readMultiLayerMemory()
   const lowercaseQuery = query.toLowerCase()
-  
+
   // Temporal reasoning: extract target timeframe based on query relative terms
   let startTime = 0
   let endTime = Infinity
@@ -200,21 +215,31 @@ export function retrieveMemories(query: string, limit = 10): { id: string; text:
     startTime = new Date().setHours(0, 0, 0, 0) - MS_PER_DAY
     endTime = new Date().setHours(23, 59, 59, 999) - MS_PER_DAY
   } else if (lowercaseQuery.includes('this week')) {
-    startTime = now - (7 * MS_PER_DAY)
+    startTime = now - 7 * MS_PER_DAY
   } else if (lowercaseQuery.includes('recently') || lowercaseQuery.includes('abbi')) {
-    startTime = now - (2 * MS_PER_DAY)
+    startTime = now - 2 * MS_PER_DAY
   }
 
   const results: { id: string; text: string; score: number; type: string; timestamp: number }[] = []
 
   // Combine fact memory and recent verified action memories
   const allCandidates = [
-    ...memory.factMemory.map(f => ({ id: f.id, text: f.fact, timestamp: f.timestamp, type: 'fact' })),
-    ...memory.recentMemory.map((r, idx) => ({ id: `act-${idx}`, text: r.text, timestamp: r.timestamp, type: 'action' }))
+    ...memory.factMemory.map((f) => ({
+      id: f.id,
+      text: f.fact,
+      timestamp: f.timestamp,
+      type: 'fact'
+    })),
+    ...memory.recentMemory.map((r, idx) => ({
+      id: `act-${idx}`,
+      text: r.text,
+      timestamp: r.timestamp,
+      type: 'action'
+    }))
   ]
 
   // Extract query tokens for term matching
-  const queryTokens = lowercaseQuery.split(/[\s,?.!]+/).filter(t => t.length > 3)
+  const queryTokens = lowercaseQuery.split(/[\s,?.!]+/).filter((t) => t.length > 3)
 
   for (const item of allCandidates) {
     let score = 0
@@ -254,7 +279,5 @@ export function retrieveMemories(query: string, limit = 10): { id: string; text:
   }
 
   // Sort by score first, then recency
-  return results
-    .sort((a, b) => b.score - a.score || b.timestamp - a.timestamp)
-    .slice(0, limit)
+  return results.sort((a, b) => b.score - a.score || b.timestamp - a.timestamp).slice(0, limit)
 }
