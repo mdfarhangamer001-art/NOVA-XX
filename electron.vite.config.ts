@@ -45,9 +45,8 @@ export default defineConfig({
               if (id.includes('lucide-react')) return 'vendor-lucide'
               if (id.includes('react-icons')) return 'vendor-icons'
               if (id.includes('gsap')) return 'vendor-gsap'
-              if (id.includes('react-router')) return 'vendor-router'
-              if (id.includes('react-dom')) return 'vendor-react-dom'
-              if (id.match(/\/node_modules\/react\//)) return 'vendor-react'
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router'))
+                return 'vendor-react'
               return 'vendor'
             }
           }
