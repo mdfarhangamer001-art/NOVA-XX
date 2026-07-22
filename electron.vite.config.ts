@@ -35,21 +35,7 @@ export default defineConfig({
         output: {
           chunkFileNames: 'assets/[hash].js',
           entryFileNames: 'assets/[hash].js',
-          assetFileNames: 'assets/[hash][extname]',
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('three')) return 'vendor-three'
-              if (id.includes('@react-three')) return 'vendor-react-three'
-              if (id.includes('firebase')) return 'vendor-firebase'
-              if (id.includes('framer-motion')) return 'vendor-motion'
-              if (id.includes('lucide-react')) return 'vendor-lucide'
-              if (id.includes('react-icons')) return 'vendor-icons'
-              if (id.includes('gsap')) return 'vendor-gsap'
-              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router'))
-                return 'vendor-react'
-              return 'vendor'
-            }
-          }
+          assetFileNames: 'assets/[hash][extname]'
         }
       }
     }
