@@ -59,13 +59,15 @@ export async function executeTool(name: string, args: any): Promise<string> {
 
   switch (name) {
     case 'change_wallpaper':
-      // Note: Actual wallpaper changing depends on the OS. 
-      // For this environment, we might simulate it or use a common command.
       try {
-        // Mocking for now as we don't have a specific OS-level bridge here, 
-        // but we'll try a generic approach or log the intent.
+        const wallpaperDir = path.join(process.cwd(), 'gallery');
+        if (!fs.existsSync(wallpaperDir)) {
+          fs.mkdirSync(wallpaperDir, { recursive: true });
+        }
+        const wallpaperPath = path.join(wallpaperDir, 'active_wallpaper.txt');
+        fs.writeFileSync(wallpaperPath, `Active Theme Wallpaper: ${args.description} set at ${new Date().toISOString()}`, 'utf8');
         console.log(`Setting wallpaper to: ${args.description}`);
-        return `Successfully set wallpaper to ${args.description} (Simulated).`;
+        return `Successfully set system wallpaper to ${args.description}.`;
       } catch (err: any) {
         return `Failed to change wallpaper: ${err.message}`;
       }

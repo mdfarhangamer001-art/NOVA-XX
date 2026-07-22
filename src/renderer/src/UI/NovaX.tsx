@@ -247,15 +247,22 @@ const NovaX = ({
     <div className="flex flex-col h-screen w-full bg-black text-zinc-100 font-sans overflow-hidden select-none relative">
       <div className="h-16 w-full flex items-center justify-between px-6 bg-black border-b border-white/5 z-50">
         <div className="flex items-center gap-3 w-72 relative select-none">
-          <img
-            src={Logo}
-            className="w-11 h-11 object-contain cursor-pointer hover:scale-105 transition-transform"
+          <div
+            className="w-11 h-11 rounded-xl bg-cyan-950/40 border border-cyan-500/40 flex items-center justify-center p-1.5 shadow-[0_0_15px_rgba(0,245,255,0.25)] cursor-pointer hover:scale-105 transition-transform"
             onClick={() => {
               setActiveTab('DASHBOARD')
               playDiagnosticChime(440)
             }}
-            title="NOVA-X Logo"
-          />
+            title="NOVA-X Quantum Logo"
+          >
+            <svg className="w-full h-full text-cyan-400" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="4" strokeDasharray="8 4" className="animate-[spin_10s_linear_infinite]" />
+              <circle cx="50" cy="50" r="32" stroke="#00F5FF" strokeWidth="3" />
+              <circle cx="50" cy="50" r="18" fill="#00F5FF" className="animate-pulse" />
+              <path d="M50 10 L50 90 M10 50 L90 50" stroke="#00F5FF" strokeWidth="2" opacity="0.5" />
+              <text x="50" y="56" textAnchor="middle" fill="#000000" fontSize="16" fontWeight="900" fontFamily="monospace">N</text>
+            </svg>
+          </div>
 
           <div
             onClick={() => {

@@ -709,8 +709,14 @@ export default function Dashboard({
           <div className="mb-6 flex flex-col items-center gap-4">
             <div className="flex items-center gap-4 justify-center">
               {/* BRAND LOGO */}
-              <div className="relative w-16 h-16 flex items-center justify-center border border-zinc-800 rounded-xl bg-zinc-900/60 overflow-hidden">
-                <img src={Logo} className="w-12 h-12 object-contain" />
+              <div className="relative w-16 h-16 flex items-center justify-center border border-cyan-500/40 rounded-xl bg-cyan-950/40 p-2 shadow-[0_0_20px_rgba(0,245,255,0.25)]">
+                <svg className="w-full h-full text-cyan-400" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="4" strokeDasharray="8 4" className="animate-[spin_10s_linear_infinite]" />
+                  <circle cx="50" cy="50" r="32" stroke="#00F5FF" strokeWidth="3" />
+                  <circle cx="50" cy="50" r="18" fill="#00F5FF" className="animate-pulse" />
+                  <path d="M50 10 L50 90 M10 50 L90 50" stroke="#00F5FF" strokeWidth="2" opacity="0.5" />
+                  <text x="50" y="56" textAnchor="middle" fill="#000000" fontSize="16" fontWeight="900" fontFamily="monospace">N</text>
+                </svg>
               </div>
 
               <div className="text-zinc-700 font-mono text-sm">⚡</div>
